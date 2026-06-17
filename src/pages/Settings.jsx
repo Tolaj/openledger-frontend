@@ -14,6 +14,62 @@ import { useMe, useUpdateUser } from '../hooks/useUser'
 import { useSendFriendRequest, useRespondFriendRequest } from '../hooks/useFriends'
 import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup } from '../hooks/useGroups'
 
+function ColFilterDropdown({ options = [], selected = [], onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const toggle = (val) =>
+    onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val])
+
+  return (
+    <div ref={ref} className="relative flex-shrink-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={`flex-shrink-0 transition-colors ${selected.length > 0 ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-600'}`}
+      >
+        <Filter size={12} />
+      </button>
+      {open && options.length > 0 && (
+        <div className="absolute left-0 top-full mt-1 bg-white border border-zinc-200 rounded-xl shadow-xl z-50 min-w-[150px] py-1">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              onClick={() => toggle(opt)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 text-left"
+            >
+              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+                selected.includes(opt) ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
+              }`}>
+                {selected.includes(opt) && (
+                  <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              <span className="truncate max-w-[120px]">{opt}</span>
+            </button>
+          ))}
+          {selected.length > 0 && (
+            <>
+              <div className="mx-2 my-1 border-t border-zinc-100" />
+              <button onClick={() => { onChange([]); setOpen(false) }} className="w-full px-3 py-1 text-xs text-zinc-400 hover:text-zinc-600 text-left">
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function sharesGroup(groups, friendId) {
   return groups
     .filter((g) => g.name !== 'ISOLATED_GROUP')
@@ -421,6 +477,9 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
   const [nameFilter, setNameFilter] = useState('')
   const [emailFilter, setEmailFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [dropSel, setDropSel] = useState({})
+  const getDrop = (key) => dropSel[key] || []
+  const setDrop = (key, vals) => setDropSel((prev) => ({ ...prev, [key]: vals }))
 
   const myId = me?._id
 
@@ -438,15 +497,24 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
 
   const friends = me?.friends || []
 
-  const rows = friends
+  const allRows = friends
     .map((f) => friendRow(f, myId))
-    // Hide rows I initiated that aren't accepted yet (sender doesn't see pending/rejected)
     .filter((r) => !r.iSent || r.status === 'ACCEPTED')
-    .filter((r) =>
-      r.name.toLowerCase().includes(nameFilter.toLowerCase()) &&
-      r.email.toLowerCase().includes(emailFilter.toLowerCase()) &&
-      r.status.toLowerCase().includes(statusFilter.toLowerCase())
-    )
+
+  const dropOpts = {
+    name:   [...new Set(allRows.map((r) => r.name).filter(Boolean))],
+    email:  [...new Set(allRows.map((r) => r.email).filter(Boolean))],
+    status: [...new Set(allRows.map((r) => r.status).filter(Boolean))],
+  }
+
+  const rows = allRows.filter((r) =>
+    r.name.toLowerCase().includes(nameFilter.toLowerCase()) &&
+    r.email.toLowerCase().includes(emailFilter.toLowerCase()) &&
+    r.status.toLowerCase().includes(statusFilter.toLowerCase()) &&
+    (getDrop('name').length === 0 || getDrop('name').includes(r.name)) &&
+    (getDrop('email').length === 0 || getDrop('email').includes(r.email)) &&
+    (getDrop('status').length === 0 || getDrop('status').includes(r.status))
+  )
 
   return (
     <div className="flex flex-col gap-4">
@@ -500,7 +568,7 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
                     <div className="flex items-center gap-1.5">
                       <input value={val} onChange={(e) => set(e.target.value)} placeholder="Filter…"
                         className="flex-1 text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 placeholder-zinc-400 transition-colors" />
-                      <Filter size={12} className="text-zinc-400 flex-shrink-0" />
+                      <ColFilterDropdown options={dropOpts[key] || []} selected={getDrop(key)} onChange={(vals) => setDrop(key, vals)} />
                     </div>
                   )}
                 </td>
@@ -570,15 +638,19 @@ function GroupsTab({ openAddRef }) {
     .map((r) => ({ id: r.id, name: r.name, email: r.email }))
 
   const [nameFilter, setNameFilter] = useState('')
+  const [groupDropSel, setGroupDropSel] = useState([])
 
   const openAdd  = () => { setEditingGroup(null); setGroupForm(true) }
   const openEdit = (g) => { setEditingGroup(g); setGroupForm(true) }
 
   useEffect(() => { if (openAddRef) openAddRef.current = openAdd }, [])
 
-  const sharedGroups = groups
-    .filter((g) => g.name !== 'ISOLATED_GROUP')
+  const allGroups = groups.filter((g) => g.name !== 'ISOLATED_GROUP')
+  const groupNameOpts = [...new Set(allGroups.map((g) => g.name).filter(Boolean))]
+
+  const sharedGroups = allGroups
     .filter((g) => g.name.toLowerCase().includes(nameFilter.toLowerCase()))
+    .filter((g) => groupDropSel.length === 0 || groupDropSel.includes(g.name))
 
   if (isLoading) return <Spinner className="py-12" />
 
@@ -626,7 +698,7 @@ function GroupsTab({ openAddRef }) {
                         placeholder="Filter…"
                         className="flex-1 text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 placeholder-zinc-400 transition-colors"
                       />
-                      <Filter size={12} className="text-zinc-400 flex-shrink-0" />
+                      <ColFilterDropdown options={groupNameOpts} selected={groupDropSel} onChange={setGroupDropSel} />
                     </div>
                   )}
                 </td>
