@@ -7,6 +7,7 @@ import useAuthStore from '../../store/authStore'
 import { useGroup } from '../../hooks/useGroups'
 import { useCreateOrder } from '../../hooks/useOrders'
 import { useCreateWishlist } from '../../hooks/useWishlists'
+import { useCreateInventory } from '../../hooks/useInventory'
 import Button from '../ui/Button'
 
 // ── SplitDropdown ─────────────────────────────────────────────────────────────
@@ -208,6 +209,7 @@ export default function CartPanel() {
   const { data: group } = useGroup(activeGroupId)
   const { mutate: createOrder, isPending: placingOrder } = useCreateOrder()
   const { mutate: createWishlist, isPending: savingWishlist } = useCreateWishlist()
+  const { mutate: upsertInventory } = useCreateInventory()
 
   const members = (group?.members || []).filter((m) => m._id || m)
   const total = getTotal()
@@ -279,6 +281,19 @@ export default function CartPanel() {
     console.log('[CartPanel] place order payload:', payload)
     createOrder(payload, {
       onSuccess: () => {
+        // upsert inventory for items that are tracked
+        const trackedItems = items.filter((i) => i.inventory)
+        if (trackedItems.length) {
+          upsertInventory({
+            groupId: activeGroupId,
+            inventoryData: trackedItems.map((i) => ({
+              product: i._id,
+              price: i._price,
+              splitAmong: i._splitAmong,
+              quantityAvailable: i.quantity,
+            })),
+          })
+        }
         clearCart()
         closeCart()
         try { localStorage.removeItem('openledger_cart_checkout') } catch {}

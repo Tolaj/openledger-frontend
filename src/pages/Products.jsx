@@ -13,6 +13,7 @@ import { useProducts, useDeleteProduct } from '../hooks/useProducts'
 import { useCategories, useDeleteCategory } from '../hooks/useCategories'
 import { useOrders, useDeleteOrder } from '../hooks/useOrders'
 import { useWishlists, useDeleteWishlist, useUpdateWishlist } from '../hooks/useWishlists'
+import { useInventory, useDeleteInventory } from '../hooks/useInventory'
 import useCartStore from '../store/cartStore'
 import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
@@ -336,36 +337,67 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
 
 // ── Category tab ──────────────────────────────────────────────────────────────
 function CategoryTab({ categories, products, loading, onEdit, onDelete }) {
+  const [filters, setFilters] = useState({ name: '' })
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+
   if (loading) return <Spinner className="py-12" />
   if (categories.length === 0) return (
     <EmptyState icon={Tag} title="No categories yet" description="Create a category to organise your products" />
   )
+
+  const filtered = categories.filter((c) =>
+    c.name.toLowerCase().includes(filters.name.toLowerCase())
+  )
+
   return (
-    <div className="flex flex-col gap-2 md:grid md:grid-cols-2 lg:grid-cols-3">
-      {categories.map((c) => (
-        <div key={c._id} className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-            style={{ backgroundColor: `${c.color}22` }}
-          >
-            {c.icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-zinc-900">{c.name}</p>
-            <p className="text-xs text-zinc-400">
-              {products.filter((p) => p.category?._id === c._id || p.category === c._id).length} products
-            </p>
-          </div>
-          <div className="flex gap-1 flex-shrink-0">
-            <button onClick={() => onEdit(c)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
-              <Pencil size={15} />
-            </button>
-            <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
-              <Trash2 size={15} />
-            </button>
-          </div>
-        </div>
-      ))}
+    <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b border-zinc-200">
+            {['Icon', 'Name', 'Products', 'Action'].map((h, i, arr) => (
+              <th key={h} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+            ))}
+          </tr>
+          <tr className="border-b border-zinc-200 bg-zinc-50">
+            {[null, 'name', null, null].map((key, i, arr) => (
+              <td key={i} className={`px-3 py-2 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>
+                {key && (
+                  <input value={filters[key] ?? ''} onChange={(e) => setFilter(key, e.target.value)} placeholder="Filter…"
+                    className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 placeholder-zinc-400" />
+                )}
+              </td>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.length === 0 ? (
+            <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">No categories match the filter</td></tr>
+          ) : filtered.map((c) => {
+            const productCount = products.filter((p) => p.category?._id === c._id || p.category === c._id).length
+            return (
+              <tr key={c._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+                <td className="px-4 py-3 border-r border-zinc-100">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: c.color }}>
+                    {c.icon}
+                  </div>
+                </td>
+                <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{c.name}</td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{productCount}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1.5">
+                    <button onClick={() => onEdit(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit">
+                      <Pencil size={14} />
+                    </button>
+                    <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -709,6 +741,118 @@ function OrdersTab({ orders = [], loading, onDelete }) {
   )
 }
 
+// ── Inventory tab ─────────────────────────────────────────────────────────────
+function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDelete }) {
+  const { addItem } = useCartStore()
+  const [filters, setFilters] = useState({ name: '', price: '', unit: '' })
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+
+  const memberName = (id) => {
+    const m = groupMemberObjects.find((m) => String(m._id) === String(id))
+    return m?.name || m?.email || String(id)
+  }
+
+  if (loading) return <div className="flex justify-center py-16"><Spinner /></div>
+  if (!inventory.length) return (
+    <EmptyState icon={Package} title="Nothing in stock" description="Items with 'Track In Inventory' will appear here after ordering" />
+  )
+
+  const filtered = inventory.filter((inv) => {
+    const name = inv.product?.name || ''
+    const unit = inv.product?.unit || ''
+    return (
+      name.toLowerCase().includes(filters.name.toLowerCase()) &&
+      String(inv.price || '').includes(filters.price) &&
+      unit.toLowerCase().includes(filters.unit.toLowerCase())
+    )
+  })
+
+  const COLS = ['qty', 'name', 'description', 'category', 'price', 'unit', 'splitAmong', 'manufacturer', 'Action']
+  const FILTER_KEYS = [null, 'name', null, null, 'price', 'unit', null, null, null]
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-zinc-200 bg-white">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b border-zinc-200">
+            {COLS.map((h, i, arr) => (
+              <th key={h} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+            ))}
+          </tr>
+          <tr className="border-b border-zinc-200 bg-zinc-50">
+            {FILTER_KEYS.map((key, i, arr) => (
+              <td key={i} className={`px-3 py-2 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>
+                {key && (
+                  <input value={filters[key] ?? ''} onChange={(e) => setFilter(key, e.target.value)} placeholder="Filter…"
+                    className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 placeholder-zinc-400" />
+                )}
+              </td>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.length === 0 ? (
+            <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-zinc-400">No inventory items match the filter</td></tr>
+          ) : filtered.map((inv) => {
+            const p = inv.product || {}
+            const catColor = p.category?.color
+            const iconBg = catColor && catColor.startsWith('#') ? `${catColor}22` : '#f4f4f5'
+            return (
+              <tr key={inv._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+                <td className="px-4 py-3 border-r border-zinc-100">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-zinc-900 text-white text-xs font-bold">{inv.quantityAvailable}</span>
+                </td>
+                <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{p.name || '—'}</td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 text-xs max-w-[120px] truncate">{p.description || '—'}</td>
+                <td className="px-4 py-3 border-r border-zinc-100">
+                  {p.category ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium" style={{ backgroundColor: iconBg }}>
+                      {p.category.icon} {p.category.name}
+                    </span>
+                  ) : <span className="text-zinc-400">—</span>}
+                </td>
+                <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{inv.price}</td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{p.unit || '—'}</td>
+                <td className="px-4 py-3 border-r border-zinc-100">
+                  <div className="flex flex-wrap gap-1">
+                    {(inv.splitAmong || []).map((u) => {
+                      const id = typeof u === 'object' ? u._id : u
+                      const name = u?.name || u?.email || memberName(id)
+                      return (
+                        <span key={id} className="inline-block px-2 py-0.5 rounded-lg bg-zinc-900 text-white text-xs font-semibold">{name}</span>
+                      )
+                    })}
+                  </div>
+                </td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 text-xs">{p.manufacturer || '—'}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => addItem({ ...p, price: inv.price }, p.unit, 'equal',
+                        (inv.splitAmong || []).map((u) => typeof u === 'object' ? String(u._id) : String(u)),
+                        (inv.splitAmong || []).map((u) => typeof u === 'object' ? String(u._id) : String(u))
+                      )}
+                      className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart"
+                    >
+                      <ShoppingBasket size={14} />
+                    </button>
+                    <button
+                      onClick={() => { if (confirm(`Delete this inventory entry?`)) onDelete(inv._id) }}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 const TABS = [
   { key: 'products',   label: 'Products List' },
@@ -731,6 +875,8 @@ export default function Products() {
   const groupMembers = (group?.members || []).map((m) => String(m._id || m))
   const groupMemberObjects = (group?.members || []).filter((m) => m._id)
   const { data: wishlists = [], isLoading: loadingWishlists } = useWishlists()
+  const { data: inventory = [], isLoading: loadingInventory } = useInventory()
+  const { mutate: deleteInventoryItem } = useDeleteInventory()
 
   const [tab, setTab] = useState('products')
   const [productSheet, setProductSheet] = useState(false)
@@ -819,7 +965,12 @@ export default function Products() {
         )}
 
         {tab === 'inventory' && (
-          <EmptyState icon={Package} title="Nothing in stock" description="Stock levels will appear here" />
+          <InventoryTab
+            inventory={inventory}
+            loading={loadingInventory}
+            groupMemberObjects={groupMemberObjects}
+            onDelete={(id) => deleteInventoryItem(id)}
+          />
         )}
 
         {tab === 'orders' && (

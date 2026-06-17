@@ -1,5 +1,5 @@
 import { useEffect, useId } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import useGroupStore from '../../store/groupStore'
 import { useCreateProduct, useUpdateProduct } from '../../hooks/useProducts'
 import { useCategories } from '../../hooks/useCategories'
@@ -16,7 +16,8 @@ export default function ProductForm({ open, onClose, editing }) {
   const { mutate: create, isPending: creating } = useCreateProduct()
   const { mutate: update, isPending: updating } = useUpdateProduct()
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm()
+  const { register, handleSubmit, reset, control, formState: { errors } } = useForm()
+  const trackInventory = useWatch({ control, name: 'inventory', defaultValue: false })
 
   useEffect(() => {
     if (editing) {
@@ -27,9 +28,10 @@ export default function ProductForm({ open, onClose, editing }) {
         category: editing.category?._id || editing.category,
         description: editing.description || '',
         manufacturer: editing.manufacturer || '',
+        inventory: editing.inventory ?? false,
       })
     } else {
-      reset({ name: '', price: '', unit: 'pcs', category: '', description: '', manufacturer: '' })
+      reset({ name: '', price: '', unit: 'pcs', category: '', description: '', manufacturer: '', inventory: false })
     }
   }, [editing, open])
 
@@ -108,6 +110,18 @@ export default function ProductForm({ open, onClose, editing }) {
           placeholder="Brand or maker"
           {...register('manufacturer')}
         />
+
+        <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
+          <div>
+            <p className="text-sm font-medium text-zinc-900">Track In Inventory</p>
+            <p className="text-xs text-zinc-400">Quantity will be updated when orders are placed</p>
+          </div>
+          <div className="relative flex-shrink-0">
+            <input type="checkbox" className="sr-only" {...register('inventory')} />
+            <div className={`w-11 h-6 rounded-full transition-colors ${trackInventory ? 'bg-zinc-900' : 'bg-zinc-200'}`} />
+            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${trackInventory ? 'translate-x-6' : 'translate-x-1'}`} />
+          </div>
+        </label>
       </form>
     </BottomSheet>
   )
