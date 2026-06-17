@@ -1,0 +1,68 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import queryClient from './lib/queryClient'
+import { getSession } from './api/auth'
+import useAuthStore from './store/authStore'
+
+import AppShell from './components/layout/AppShell'
+import ProtectedRoute from './components/layout/ProtectedRoute'
+
+import Login from './pages/Login'
+import Register from './pages/Register'
+import Onboarding from './pages/Onboarding'
+import Dashboard from './pages/Dashboard'
+import Products from './pages/Products'
+import Finance from './pages/Finance'
+import Settings from './pages/Settings'
+
+function SessionLoader({ children }) {
+  const { setSession, clearSession } = useAuthStore()
+
+  useEffect(() => {
+    getSession()
+      .then((res) => setSession(res.data.user))
+      .catch(() => clearSession())
+  }, [])
+
+  return children
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <SessionLoader>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute>
+                  <Onboarding />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppShell />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/finance" element={<Finance />} />
+              <Route path="/settings" element={<Settings />} />
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </SessionLoader>
+      </BrowserRouter>
+    </QueryClientProvider>
+  )
+}
