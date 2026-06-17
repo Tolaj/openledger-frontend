@@ -21,6 +21,7 @@ function sharesGroup(groups, friendId) {
 }
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
+import PageActions from '../components/layout/PageActions'
 import BottomSheet from '../components/ui/BottomSheet'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -729,16 +730,13 @@ export default function Settings() {
           </div>
 
           <div className="pb-3">
-            {tab === 'friends' && !showAddFriend && (
-              <Button size="sm" onClick={() => setShowAddFriend(true)}>
-                <UserPlus size={15} /> Add friend
-              </Button>
-            )}
-            {tab === 'groups' && (
-              <Button size="sm" onClick={() => openGroupAdd.current?.()}>
-                <Plus size={15} /> New group
-              </Button>
-            )}
+            <PageActions add={
+              tab === 'friends' && !showAddFriend
+                ? <Button size="sm" onClick={() => setShowAddFriend(true)}><UserPlus size={15} /> Add friend</Button>
+                : tab === 'groups'
+                ? <Button size="sm" onClick={() => openGroupAdd.current?.()}><Plus size={15} /> New group</Button>
+                : null
+            } />
           </div>
         </div>
 

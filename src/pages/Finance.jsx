@@ -1,6 +1,7 @@
 import { ShoppingCart } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
+import PageActions from '../components/layout/PageActions'
 import EmptyState from '../components/ui/EmptyState'
 
 export default function Finance() {
@@ -8,7 +9,7 @@ export default function Finance() {
     <>
       <TopBar title="Finance" />
       <div className="px-4 py-5 md:px-0 md:py-0">
-        <PageHeader title="Finance" subtitle="Orders, spending and splits" />
+        <PageHeader title="Finance" subtitle="Orders, spending and splits" action={<PageActions />} />
         <EmptyState
           icon={ShoppingCart}
           title="No orders yet"

@@ -1,5 +1,6 @@
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
+import PageActions from '../components/layout/PageActions'
 import useAuthStore from '../store/authStore'
 
 const stats = [
@@ -23,6 +24,7 @@ export default function Dashboard() {
         <PageHeader
           title={`Hey, ${firstName} 👋`}
           subtitle="Here's your household overview"
+          action={<PageActions />}
         />
 
         {/* Mobile greeting */}

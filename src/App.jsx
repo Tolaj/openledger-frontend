@@ -4,6 +4,8 @@ import { useEffect } from 'react'
 import queryClient from './lib/queryClient'
 import { getSession } from './api/auth'
 import useAuthStore from './store/authStore'
+import useGroupStore from './store/groupStore'
+import useCartStore from './store/cartStore'
 
 import AppShell from './components/layout/AppShell'
 import ProtectedRoute from './components/layout/ProtectedRoute'
@@ -18,10 +20,20 @@ import Settings from './pages/Settings'
 
 function SessionLoader({ children }) {
   const { setSession, clearSession } = useAuthStore()
+  const { initGroup } = useGroupStore()
+  const { hydrate } = useCartStore()
 
   useEffect(() => {
     getSession()
-      .then((res) => setSession(res.data.user))
+      .then((res) => {
+        const user = res.data.user
+        setSession(user)
+        // initialise active group — prefers stored value, falls back to user's isolated group
+        initGroup(user?.groupId)
+        // hydrate cart for the resolved active group
+        const activeGroupId = localStorage.getItem('openledger_activeGroup') || user?.groupId
+        if (activeGroupId) hydrate(activeGroupId)
+      })
       .catch(() => clearSession())
   }, [])
 

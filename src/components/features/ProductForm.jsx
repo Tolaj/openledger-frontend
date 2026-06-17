@@ -1,6 +1,6 @@
 import { useEffect, useId } from 'react'
 import { useForm } from 'react-hook-form'
-import useAuthStore from '../../store/authStore'
+import useGroupStore from '../../store/groupStore'
 import { useCreateProduct, useUpdateProduct } from '../../hooks/useProducts'
 import { useCategories } from '../../hooks/useCategories'
 import BottomSheet from '../ui/BottomSheet'
@@ -11,7 +11,7 @@ const UNITS = ['kg', 'g', 'L', 'mL', 'pcs', 'pack', 'dozen', 'box']
 
 export default function ProductForm({ open, onClose, editing }) {
   const formId = useId()
-  const groupId = useAuthStore((s) => s.groupId)
+  const groupId = useGroupStore((s) => s.activeGroupId)
   const { data: categories = [] } = useCategories()
   const { mutate: create, isPending: creating } = useCreateProduct()
   const { mutate: update, isPending: updating } = useUpdateProduct()

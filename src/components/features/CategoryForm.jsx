@@ -2,7 +2,7 @@ import { useEffect, useId, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { ChevronDown } from 'lucide-react'
-import useAuthStore from '../../store/authStore'
+import useGroupStore from '../../store/groupStore'
 import { useCreateCategory, useUpdateCategory } from '../../hooks/useCategories'
 import BottomSheet from '../ui/BottomSheet'
 import Input from '../ui/Input'
@@ -171,7 +171,7 @@ function ColorPicker({ value, onChange }) {
 
 export default function CategoryForm({ open, onClose, editing }) {
   const formId = useId()
-  const groupId = useAuthStore((s) => s.groupId)
+  const groupId = useGroupStore((s) => s.activeGroupId)
   const { mutate: create, isPending: creating } = useCreateCategory()
   const { mutate: update, isPending: updating } = useUpdateCategory()
 
