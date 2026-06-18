@@ -285,6 +285,25 @@ function ProfileTab() {
             </Button>
           </form>
         </div>
+
+        {/* Currency */}
+        <div className="border-t border-zinc-100 p-4">
+          <p className="text-sm font-semibold text-zinc-900 mb-3">Currency</p>
+          <select
+            defaultValue={me?.currency || 'INR'}
+            onChange={(e) => updateUser({ id: me._id, data: { currency: e.target.value } })}
+            className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
+          >
+            {[
+              { code: 'INR', label: '₹ INR — Indian Rupee' },
+              { code: 'USD', label: '$ USD — US Dollar' },
+              { code: 'EUR', label: '€ EUR — Euro' },
+              { code: 'GBP', label: '£ GBP — British Pound' },
+              { code: 'JPY', label: '¥ JPY — Japanese Yen' },
+              { code: 'AUD', label: 'A$ AUD — Australian Dollar' },
+            ].map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+          </select>
+        </div>
       </div>
 
       <BottomSheet
