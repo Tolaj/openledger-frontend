@@ -8,6 +8,7 @@ import {
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
 import PageActions from '../components/layout/PageActions'
+import { DataTableFilterIcon } from '../components/ui/DataTable'
 import BottomSheet from '../components/ui/BottomSheet'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
@@ -125,6 +126,43 @@ function PeriodPicker({ period, setPeriod, custom, setCustom }) {
             className="flex-1 text-xs border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900"
           />
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── Mobile Filter Panel ───────────────────────────────────────────────────────
+function FinanceMobileFilters({ open, period, setPeriod, custom, setCustom, typeFilter, setTypeFilter, showTypeFilter = false }) {
+  if (!open) return null
+  const hasActive = period !== 'month' || (showTypeFilter && typeFilter)
+  return (
+    <div className="md:hidden mb-3 bg-white rounded-2xl border border-zinc-200 p-3 flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Period</label>
+        <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
+      </div>
+      {showTypeFilter && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide">Type</label>
+          <div className="flex gap-1.5 flex-wrap">
+            <button onClick={() => setTypeFilter('')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${!typeFilter ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
+              All
+            </button>
+            {Object.entries(TYPE_META).map(([key, meta]) => (
+              <button key={key} onClick={() => setTypeFilter(key === typeFilter ? '' : key)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${typeFilter === key ? `${meta.bg} ${meta.color} ${meta.border}` : 'bg-white text-zinc-500 border-zinc-200'}`}>
+                {meta.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {hasActive && (
+        <button onClick={() => { setPeriod('month'); setTypeFilter?.('') }}
+          className="text-xs text-zinc-400 hover:text-zinc-600 text-left">
+          Clear filters
+        </button>
       )}
     </div>
   )
@@ -375,13 +413,18 @@ function BudgetForm({ open, onClose, editing, groupId }) {
 }
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, budgets, recentTxns }) {
+function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, budgets, recentTxns, mobileFiltersOpen }) {
   const dates = getPeriodDates(period, custom)
   const { data: summary, isLoading } = useFinanceSummary({ groupId, ...dates })
 
   return (
     <div className="flex flex-col gap-4">
-      <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
+      {/* Mobile: filter panel */}
+      <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} setTypeFilter={() => {}} />
+      {/* Desktop: inline period picker */}
+      <div className="hidden md:block">
+        <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
+      </div>
 
       {/* Net balance */}
       <div className="bg-zinc-900 text-white rounded-2xl p-5">
@@ -459,7 +502,7 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
 }
 
 // ── Transactions Tab ──────────────────────────────────────────────────────────
-function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose }) {
+function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen }) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
 
@@ -474,20 +517,25 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
 
   return (
     <div className="flex flex-col gap-3">
-      <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
+      {/* Mobile: filter panel behind filter icon */}
+      <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod}
+        custom={custom} setCustom={setCustom} typeFilter={typeFilter} setTypeFilter={setTypeFilter} showTypeFilter />
 
-      {/* Type filter pills */}
-      <div className="flex gap-1.5 flex-wrap">
-        <button onClick={() => setTypeFilter('')}
-          className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${!typeFilter ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
-          All
-        </button>
-        {Object.entries(TYPE_META).map(([key, meta]) => (
-          <button key={key} onClick={() => setTypeFilter(key === typeFilter ? '' : key)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${typeFilter === key ? `${meta.bg} ${meta.color} ${meta.border}` : 'bg-white text-zinc-500 border-zinc-200'}`}>
-            {meta.label}
+      {/* Desktop: inline filters */}
+      <div className="hidden md:flex flex-col gap-3">
+        <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
+        <div className="flex gap-1.5 flex-wrap">
+          <button onClick={() => setTypeFilter('')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${!typeFilter ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
+            All
           </button>
-        ))}
+          {Object.entries(TYPE_META).map(([key, meta]) => (
+            <button key={key} onClick={() => setTypeFilter(key === typeFilter ? '' : key)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${typeFilter === key ? `${meta.bg} ${meta.color} ${meta.border}` : 'bg-white text-zinc-500 border-zinc-200'}`}>
+              {meta.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
@@ -687,6 +735,9 @@ export default function Finance() {
   const [custom, setCustom] = useState({ start: '', end: '' })
   const [showAddTxn, setShowAddTxn]       = useState(false)
   const [showAddBudget, setShowAddBudget] = useState(false)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+
+  const handleTabChange = (key) => { setTab(key); setMobileFiltersOpen(false) }
 
   const { activeGroupId } = useGroupStore()
   const { data: me }      = useMe()
@@ -702,12 +753,16 @@ export default function Finance() {
   const { data: allTxns = [] }  = useFinance({ groupId: activeGroupId, ...dates })
   const { data: budgets = [], isLoading: budgetsLoading } = useBudgets({ groupId: activeGroupId })
 
-  const handleTabChange = (key) => setTab(key)
+  const filterTabs = ['overview', 'transactions']
+  const activeCount = period !== 'month' ? 1 : 0
 
   return (
     <>
       <TopBar
         title="Finance"
+        filterIcon={filterTabs.includes(tab) && (
+          <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} activeCount={activeCount} />
+        )}
         right={
           <div className="flex items-center">
             {tab === 'transactions' && (
@@ -767,12 +822,14 @@ export default function Finance() {
         <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
           {tab === 'overview' && (
             <OverviewTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
-              custom={custom} setCustom={setCustom} symbol={symbol} budgets={budgets} recentTxns={allTxns} />
+              custom={custom} setCustom={setCustom} symbol={symbol} budgets={budgets} recentTxns={allTxns}
+              mobileFiltersOpen={mobileFiltersOpen} />
           )}
           {tab === 'transactions' && (
             <TransactionsTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} groupMembers={groupMembers} categories={categories}
-              externalOpen={showAddTxn} onExternalClose={() => setShowAddTxn(false)} />
+              externalOpen={showAddTxn} onExternalClose={() => setShowAddTxn(false)}
+              mobileFiltersOpen={mobileFiltersOpen} />
           )}
           {tab === 'budgets' && (
             <BudgetsTab groupId={activeGroupId} symbol={symbol} budgets={budgets} isLoading={budgetsLoading}
