@@ -684,10 +684,10 @@ function TemplatesTab() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'profile',   label: 'My Profile' },
-  { key: 'friends',   label: 'Friends'    },
-  { key: 'groups',    label: 'Groups'     },
-  { key: 'templates', label: 'Templates'  },
+  { key: 'profile',   label: 'My Profile', mobileLabel: 'Profile'   },
+  { key: 'friends',   label: 'Friends',    mobileLabel: 'Friends'   },
+  { key: 'groups',    label: 'Groups',     mobileLabel: 'Groups'    },
+  { key: 'templates', label: 'Templates',  mobileLabel: 'Templates' },
 ]
 
 export default function Settings() {
@@ -724,8 +724,40 @@ export default function Settings() {
           </div>
         }
       />
-      <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-<div className="flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
+      <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
+        {/* Mobile sticky pill tab bar */}
+        <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
+          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
+            {TABS.slice(0, 2).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => handleTabChange(t.key)}
+                className={[
+                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
+                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
+                ].join(' ')}
+              >
+                {t.mobileLabel}
+              </button>
+            ))}
+          </div>
+          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
+            {TABS.slice(2).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => handleTabChange(t.key)}
+                className={[
+                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
+                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
+                ].join(' ')}
+              >
+                {t.mobileLabel}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Desktop underline tab bar */}
+        <div className="hidden md:flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
           <div className="flex flex-wrap gap-x-6">
             {TABS.map((t) => (
               <button
