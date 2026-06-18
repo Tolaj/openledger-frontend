@@ -728,7 +728,7 @@ export default function Settings() {
         {/* Mobile sticky pill tab bar */}
         <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
           <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(0, 2).map((t) => (
+            {TABS.slice(0, 3).map((t) => (
               <button
                 key={t.key}
                 onClick={() => handleTabChange(t.key)}
@@ -742,7 +742,7 @@ export default function Settings() {
             ))}
           </div>
           <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(2).map((t) => (
+            {TABS.slice(3).map((t) => (
               <button
                 key={t.key}
                 onClick={() => handleTabChange(t.key)}
