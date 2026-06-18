@@ -162,8 +162,8 @@ export default function DataTable({
 
   return (
     <div className="hidden md:flex md:flex-col md:flex-1 md:min-h-0 md:gap-2">
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-clip rounded-2xl border border-zinc-200 bg-white">
-        <table className="w-full text-sm border-separate border-spacing-0">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden rounded-2xl border border-zinc-200 bg-white">
+        <table className="w-full table-fixed text-sm border-separate border-spacing-0">
           <thead className="sticky top-0 z-10 bg-white">
             {/* Column headers */}
             <tr className="border-b border-zinc-200 bg-white">
@@ -171,7 +171,7 @@ export default function DataTable({
               {columns.map((col, i) => (
                 <th
                   key={col.key ?? col.label ?? i}
-                  className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap border-b border-zinc-200 ${col.width ?? ''} ${i < columns.length - 1 ? 'border-r border-zinc-200' : ''}`}
+                  className={`px-3 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide border-b border-zinc-200 ${col.width ?? ''} ${i < columns.length - 1 ? 'border-r border-zinc-200' : ''}`}
                 >
                   {col.label}
                 </th>
