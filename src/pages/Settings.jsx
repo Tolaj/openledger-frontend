@@ -6,7 +6,7 @@ import {
   LogOut, Users, UserPlus, Check, X, Trash2, Plus,
   Filter, ChevronDown, Pencil, LayoutTemplate,
 } from 'lucide-react'
-import DataTable from '../components/ui/DataTable'
+import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import { useForm, Controller } from 'react-hook-form'
 import { logout } from '../api/auth'
 import api from '../lib/axios'
@@ -413,7 +413,7 @@ function FriendCard({ r, myId, respond, canReject }) {
 }
 
 // ── Friends Tab ───────────────────────────────────────────────────────────────
-function FriendsTab({ showAddForm, setShowAddForm }) {
+function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { data: me, isLoading } = useMe()
   const { data: groups = [] } = useGroups()
   const { mutate: sendReq, isPending: sending } = useSendFriendRequest()
@@ -461,8 +461,15 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
     (getDrop('status').length === 0 || getDrop('status').includes(r.status))
   )
 
+  const FRIEND_COLS = [
+    { key: 'name', label: 'name', filterable: true },
+    { key: 'email', label: 'email', filterable: true },
+    { key: 'status', label: 'request', filterable: true },
+  ]
+
   return (
     <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
+      <DataTableMobileFilters columns={FRIEND_COLS} filters={{ name: nameFilter, email: emailFilter, status: statusFilter }} onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val); else if (key === 'email') setEmailFilter(val); else if (key === 'status') setStatusFilter(val) }} dropOpts={dropOpts} dropSel={dropSel} onDropChange={(key, vals) => setDrop(key, vals)} open={mobileFiltersOpen} />
       {showAddForm && (
         <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex flex-col gap-3">
           <p className="text-sm font-semibold text-zinc-900">Add a friend</p>
@@ -475,22 +482,6 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
           </form>
         </div>
       )}
-
-      {/* Mobile accordion */}
-      <div className="flex flex-col gap-3 md:hidden">
-        {rows.length === 0
-          ? <EmptyState icon={Users} title="No friends yet" description="Send a request using their email" />
-          : rows.map((r) => (
-              <FriendCard
-                key={r.id}
-                r={r}
-                myId={myId}
-                respond={respond}
-                canReject={!sharesGroup(groups, r.id)}
-              />
-            ))
-        }
-      </div>
 
       <DataTable
         columns={[
@@ -547,13 +538,31 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
           </tr>
         )}
         emptyMessage="No friends yet"
+        mobileFiltersOpen={mobileFiltersOpen}
+        onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
+
+      {/* Mobile cards */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {rows.length === 0
+          ? <EmptyState icon={Users} title="No friends yet" description="Send a request using their email" />
+          : rows.map((r) => (
+              <FriendCard
+                key={r.id}
+                r={r}
+                myId={myId}
+                respond={respond}
+                canReject={!sharesGroup(groups, r.id)}
+              />
+            ))
+        }
+      </div>
     </div>
   )
 }
 
 // ── Groups Tab ────────────────────────────────────────────────────────────────
-function GroupsTab({ openAddRef }) {
+function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { data: me } = useMe()
   const { data: groups = [], isLoading } = useGroups()
   const { mutate: deleteGroup } = useDeleteGroup()
@@ -586,27 +595,7 @@ function GroupsTab({ openAddRef }) {
 
   return (
     <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
-
-      {/* Mobile cards */}
-      <div className="flex flex-col gap-3 md:hidden">
-        {sharedGroups.length === 0 ? (
-          <EmptyState icon={Users} title="No shared groups" description="Create a group to share expenses with friends" />
-        ) : sharedGroups.map((g) => (
-          <div key={g._id} className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
-              <Users size={18} className="text-zinc-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-zinc-900">{g.name}</p>
-              <p className="text-xs text-zinc-500">{g.members?.length || 0} members</p>
-            </div>
-            <div className="flex gap-1">
-              <button onClick={() => openEdit(g)} className="p-2 rounded-xl text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={15} /></button>
-              <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-2 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={15} /></button>
-            </div>
-          </div>
-        ))}
-      </div>
+      <DataTableMobileFilters columns={[{ key: 'name', label: 'name', filterable: true }]} filters={{ name: nameFilter }} onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }} dropOpts={{ name: groupNameOpts }} dropSel={{ name: groupDropSel }} onDropChange={(key, vals) => { if (key === 'name') setGroupDropSel(vals) }} open={mobileFiltersOpen} />
 
       <DataTable
         columns={[
@@ -650,7 +639,30 @@ function GroupsTab({ openAddRef }) {
           </tr>
         )}
         emptyMessage="No groups yet"
+        mobileFiltersOpen={mobileFiltersOpen}
+        onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
+
+      {/* Mobile cards */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {sharedGroups.length === 0 ? (
+          <EmptyState icon={Users} title="No shared groups" description="Create a group to share expenses with friends" />
+        ) : sharedGroups.map((g) => (
+          <div key={g._id} className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
+              <Users size={18} className="text-zinc-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-zinc-900">{g.name}</p>
+              <p className="text-xs text-zinc-500">{g.members?.length || 0} members</p>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={() => openEdit(g)} className="p-2 rounded-xl text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={15} /></button>
+              <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-2 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={15} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       <GroupForm
         open={groupForm}
@@ -681,16 +693,22 @@ const TABS = [
 export default function Settings() {
   const [tab, setTab] = useState('profile')
   const [showAddFriend, setShowAddFriend] = useState(false)
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const openGroupAdd = useRef(null)
 
   const handleTabChange = (key) => {
     setTab(key)
     setShowAddFriend(false)
+    setMobileFiltersOpen(false)
   }
 
   return (
     <>
-      <TopBar title="Settings" />
+      <TopBar title="Settings" right={
+        (tab === 'friends' || tab === 'groups') && (
+          <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />
+        )
+      } />
       <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
 <div className="flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
           <div className="flex flex-wrap gap-x-6">
@@ -723,8 +741,8 @@ export default function Settings() {
 
         <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
           {tab === 'profile'   && <ProfileTab />}
-          {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} />}
-          {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} />}
+          {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
+          {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
           {tab === 'templates' && <TemplatesTab />}
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Plus, Tag, Heart, Package, ShoppingCart, Pencil, Trash2, ShoppingBasket, ChevronDown, Check, ClipboardList, Filter } from 'lucide-react'
-import DataTable from '../components/ui/DataTable'
+import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
@@ -131,7 +131,7 @@ function SplitDropdown({ members = [], splitAmong, onChange }) {
 }
 
 // ── Products List tab ─────────────────────────────────────────────────────────
-function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects }) {
+function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { addItem, items } = useCartStore()
   const [qty, setQty] = useState({})
   const [prices, setPrices] = useState({})
@@ -196,8 +196,18 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
     setMobileUnits((prev) => ({ ...prev, [p._id]: next }))
   }
 
+  const PRODUCTS_COLS = [
+    { key: 'name', label: 'name', filterable: true },
+    { key: 'description', label: 'description', filterable: true, noDropdown: true },
+    { key: 'category', label: 'category', filterable: true },
+    { key: 'price', label: 'price', filterable: true },
+    { key: 'unit', label: 'unit', filterable: true },
+    { key: 'manufacturer', label: 'manufacturer', filterable: true },
+  ]
+
   return (
     <>
+      <DataTableMobileFilters columns={PRODUCTS_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((p) => {
@@ -389,13 +399,15 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
           </tr>
         )}
         emptyMessage="No products yet"
+        mobileFiltersOpen={mobileFiltersOpen}
+        onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
     </>
   )
 }
 
 // ── Category tab ──────────────────────────────────────────────────────────────
-function CategoryTab({ categories, products, loading, onEdit, onDelete }) {
+function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const [filters, setFilters] = useState({ name: '' })
   const [dropSel, setDropSel] = useState({})
   const [expanded, setExpanded] = useState({})
@@ -416,8 +428,11 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete }) {
     c.name.toLowerCase().includes(filters.name.toLowerCase()) && inDrop('name', c.name)
   )
 
+  const CAT_COLS = [{ key: 'name', label: 'name', filterable: true }]
+
   return (
     <>
+      <DataTableMobileFilters columns={CAT_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((c) => {
@@ -520,6 +535,8 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete }) {
           )
         }}
         emptyMessage="No categories yet"
+        mobileFiltersOpen={mobileFiltersOpen}
+        onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
     </>
   )
@@ -623,7 +640,7 @@ function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
 }
 
 // ── Wish List tab ─────────────────────────────────────────────────────────────
-function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelete }) {
+function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { openEdit } = useWishlistStore()
   const { addItem } = useCartStore()
 
@@ -676,8 +693,17 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
     })
   }
 
+  const WISH_COLS = [
+    { key: 'name', label: 'name', filterable: true },
+    { key: 'totalPrice', label: 'total price', filterable: true },
+    { key: 'date', label: 'date', filterable: true },
+    { key: 'paidBy', label: 'paid by', filterable: true },
+    { key: 'createdBy', label: 'created by', filterable: true },
+  ]
+
   return (
     <>
+      <DataTableMobileFilters columns={WISH_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((w) => (
@@ -770,6 +796,8 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
           </React.Fragment>
         )}
         emptyMessage="Wishlist is empty"
+        mobileFiltersOpen={mobileFiltersOpen}
+        onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
     </>
   )
@@ -863,7 +891,7 @@ function OrderMobileCard({ o, onDelete }) {
 }
 
 // ── Orders tab ────────────────────────────────────────────────────────────────
-function OrdersTab({ orders = [], loading, onDelete }) {
+function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ name: '', totalPrice: '', date: '', paidBy: '', createdBy: '' })
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
@@ -902,8 +930,17 @@ function OrdersTab({ orders = [], loading, onDelete }) {
     )
   })
 
+  const ORDER_COLS = [
+    { key: 'name', label: 'name', filterable: true },
+    { key: 'totalPrice', label: 'total price', filterable: true },
+    { key: 'date', label: 'date', filterable: true },
+    { key: 'paidBy', label: 'paid by', filterable: true },
+    { key: 'createdBy', label: 'created by', filterable: true },
+  ]
+
   return (
     <>
+      <DataTableMobileFilters columns={ORDER_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((o) => (
@@ -982,6 +1019,8 @@ function OrdersTab({ orders = [], loading, onDelete }) {
           </React.Fragment>
         )}
         emptyMessage="No orders yet"
+        mobileFiltersOpen={mobileFiltersOpen}
+        onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
     </>
   )
@@ -1068,7 +1107,7 @@ function InventoryMobileCard({ inv, p, iconBg, splitIds, memberName, onAddToCart
 }
 
 // ── Inventory tab ─────────────────────────────────────────────────────────────
-function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDelete }) {
+function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { addItem } = useCartStore()
   const [filters, setFilters] = useState({ name: '', description: '', category: '', price: '', unit: '', manufacturer: '' })
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
@@ -1117,8 +1156,18 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
     )
   })
 
+  const INV_COLS = [
+    { key: 'name', label: 'name', filterable: true },
+    { key: 'description', label: 'description', filterable: true, noDropdown: true },
+    { key: 'category', label: 'category', filterable: true },
+    { key: 'price', label: 'price', filterable: true },
+    { key: 'unit', label: 'unit', filterable: true },
+    { key: 'manufacturer', label: 'manufacturer', filterable: true },
+  ]
+
   return (
     <>
+      <DataTableMobileFilters columns={INV_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((inv) => {
@@ -1217,6 +1266,8 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
           )
         }}
         emptyMessage="Nothing in stock"
+        mobileFiltersOpen={mobileFiltersOpen}
+        onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
     </>
   )
@@ -1265,15 +1316,19 @@ export default function Products() {
       : null
 
   const mobileAddFn = tab === 'products' ? openAddProduct : tab === 'category' ? openAddCategory : null
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   return (
     <>
       <TopBar title="Products" right={
-        mobileAddFn && (
-          <button onClick={mobileAddFn} className="p-2 rounded-xl active:bg-zinc-100">
-            <Plus size={20} />
-          </button>
-        )
+        <div className="flex items-center">
+          <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />
+          {mobileAddFn && (
+            <button onClick={mobileAddFn} className="p-2 rounded-xl active:bg-zinc-100">
+              <Plus size={20} />
+            </button>
+          )}
+        </div>
       } />
 
       <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
@@ -1310,6 +1365,8 @@ export default function Products() {
               onDelete={(id) => deleteProduct(id)}
               groupMembers={groupMembers}
               groupMemberObjects={groupMemberObjects}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onMobileFiltersOpenChange={setMobileFiltersOpen}
             />
           )}
 
@@ -1320,6 +1377,8 @@ export default function Products() {
               loading={loadingCats}
               onEdit={openEditCategory}
               onDelete={(id) => deleteCategory(id)}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onMobileFiltersOpenChange={setMobileFiltersOpen}
             />
           )}
 
@@ -1329,6 +1388,8 @@ export default function Products() {
               groupMembers={groupMembers}
               groupMemberObjects={groupMemberObjects}
               onDelete={(id) => deleteWishlist(id)}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onMobileFiltersOpenChange={setMobileFiltersOpen}
             />
           )}
 
@@ -1338,6 +1399,8 @@ export default function Products() {
               loading={loadingInventory}
               groupMemberObjects={groupMemberObjects}
               onDelete={(id) => deleteInventoryItem(id)}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onMobileFiltersOpenChange={setMobileFiltersOpen}
             />
           )}
 
@@ -1346,6 +1409,8 @@ export default function Products() {
               orders={orders}
               loading={loadingOrders}
               onDelete={(id) => deleteOrder(id)}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onMobileFiltersOpenChange={setMobileFiltersOpen}
             />
           )}
         </div>
