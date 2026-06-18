@@ -230,21 +230,21 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                 <div className="flex-1 min-w-0" onClick={() => toggleExpand(p._id)}>
                   <p className="text-sm font-semibold text-zinc-900 truncate">{p.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-sm font-medium text-zinc-700">$ {parseFloat(p.price).toFixed(2)}</span>
+                    <span className="text-xs font-medium text-zinc-700">$ {parseFloat(p.price).toFixed(2)}</span>
                     <span className="text-xs text-zinc-400">| {p.unit}</span>
                   </div>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                <div className="flex gap-0 flex-shrink-0" >
+                  <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <ShoppingBasket size={15} />
                   </button>
-                  <button onClick={() => onEdit(p)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                  <button onClick={() => onEdit(p)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <Pencil size={15} />
                   </button>
-                  <button onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+                  <button onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
                     <Trash2 size={15} />
                   </button>
-                  <button onClick={() => toggleExpand(p._id)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+                  <button onClick={() => toggleExpand(p._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100">
                     <ChevronDown size={15} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
                   </button>
                 </div>
@@ -452,14 +452,14 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFi
                   <p className="text-sm font-semibold text-zinc-900">{c.name}</p>
                   <p className="text-xs text-zinc-400 mt-0.5">{productCount} products</p>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button onClick={() => onEdit(c)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                <div className="flex gap-0 flex-shrink-0" >
+                  <button onClick={() => onEdit(c)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <Pencil size={15} />
                   </button>
-                  <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+                  <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
                     <Trash2 size={15} />
                   </button>
-                  <button onClick={() => toggleExpand(c._id)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+                  <button onClick={() => toggleExpand(c._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100">
                     <ChevronDown size={15} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
                   </button>
                 </div>
@@ -559,17 +559,17 @@ function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
           <p className="text-sm font-semibold text-zinc-900 truncate">{w.name}</p>
           <p className="text-xs text-zinc-400 mt-0.5">$ {w.totalPrice} &nbsp;|&nbsp; {w.date ? new Date(w.date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) : '—'}</p>
         </div>
-        <div className="flex gap-1 flex-shrink-0">
-          <button onClick={() => onAddToCart(w)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+        <div className="flex gap-0 flex-shrink-0" >
+          <button onClick={() => onAddToCart(w)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
             <ShoppingBasket size={15} />
           </button>
-          <button onClick={() => onEdit(w._id)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+          <button onClick={() => onEdit(w._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
             <Pencil size={15} />
           </button>
-          <button onClick={() => { if (confirm(`Delete "${w.name}"?`)) onDelete(w._id) }} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+          <button onClick={() => { if (confirm(`Delete "${w.name}"?`)) onDelete(w._id) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
             <Trash2 size={15} />
           </button>
-          <button onClick={() => setIsOpen((o) => !o)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+          <button onClick={() => setIsOpen((o) => !o)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100">
             <ChevronDown size={15} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
           </button>
         </div>
@@ -821,11 +821,11 @@ function OrderMobileCard({ o, onDelete }) {
           <p className="text-sm font-semibold text-zinc-900 truncate">{o.name}</p>
           <p className="text-xs text-zinc-400 mt-0.5">$ {o.totalPrice} &nbsp;|&nbsp; {fmtDate(o.date)}</p>
         </div>
-        <div className="flex gap-1 flex-shrink-0">
-          <button onClick={() => { if (confirm(`Delete "${o.name}"?`)) onDelete(o._id) }} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+        <div className="flex gap-0 flex-shrink-0" >
+          <button onClick={() => { if (confirm(`Delete "${o.name}"?`)) onDelete(o._id) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
             <Trash2 size={15} />
           </button>
-          <button onClick={() => setIsOpen((v) => !v)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+          <button onClick={() => setIsOpen((v) => !v)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100">
             <ChevronDown size={15} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
           </button>
         </div>
@@ -1043,14 +1043,14 @@ function InventoryMobileCard({ inv, p, iconBg, splitIds, memberName, onAddToCart
           <p className="text-sm font-semibold text-zinc-900 truncate">{p.name || '—'}</p>
           <p className="text-xs text-zinc-400 mt-0.5">$ {inv.price} &nbsp;|&nbsp; {p.unit || '—'}</p>
         </div>
-        <div className="flex gap-1 flex-shrink-0">
-          <button onClick={onAddToCart} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+        <div className="flex gap-0 flex-shrink-0" >
+          <button onClick={onAddToCart} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
             <ShoppingBasket size={15} />
           </button>
-          <button onClick={onDelete} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+          <button onClick={onDelete} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
             <Trash2 size={15} />
           </button>
-          <button onClick={() => setIsOpen((o) => !o)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+          <button onClick={() => setIsOpen((o) => !o)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100">
             <ChevronDown size={15} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
           </button>
         </div>
@@ -1331,17 +1331,17 @@ export default function Products() {
         )}
       />
 
-      <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
+      <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Tab bar row — tabs left, GROUP + ADD + CART right */}
-        {/* Mobile: pill segmented control — two rows */}
-        <div className="md:hidden mb-4 flex-shrink-0 flex flex-col gap-1.5">
-          <div className="bg-zinc-100 rounded-2xl p-1 flex">
+        {/* Mobile: pill segmented control — sticky two rows */}
+        <div className="md:hidden sticky top-14 z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1">
+          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
             {TABS.slice(0, 3).map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={[
-                  'flex-1 py-2 text-sm font-semibold rounded-xl transition-all duration-200 whitespace-nowrap',
+                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
                   tab === t.key
                     ? 'bg-white text-zinc-900 shadow-sm'
                     : 'text-zinc-400 active:bg-zinc-200',
@@ -1351,13 +1351,13 @@ export default function Products() {
               </button>
             ))}
           </div>
-          <div className="bg-zinc-100 rounded-2xl p-1 flex">
+          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
             {TABS.slice(3).map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
                 className={[
-                  'flex-1 py-2 text-sm font-semibold rounded-xl transition-all duration-200 whitespace-nowrap',
+                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
                   tab === t.key
                     ? 'bg-white text-zinc-900 shadow-sm'
                     : 'text-zinc-400 active:bg-zinc-200',

@@ -374,7 +374,7 @@ function FriendCard({ r, myId, respond, canReject }) {
           ) : r.status === 'ACCEPTED' ? (
             <>
               <RejectBtn canReject={canReject} size={14} className="p-2 rounded-xl" onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
-              <button onClick={() => { if (confirm('Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-2 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={16} /></button>
+              <button onClick={() => { if (confirm('Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={16} /></button>
             </>
           ) : (
             <>
@@ -656,9 +656,9 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
               <p className="text-sm font-semibold text-zinc-900">{g.name}</p>
               <p className="text-xs text-zinc-500">{g.members?.length || 0} members</p>
             </div>
-            <div className="flex gap-1">
-              <button onClick={() => openEdit(g)} className="p-2 rounded-xl text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={15} /></button>
-              <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-2 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={15} /></button>
+            <div className="flex gap-0">
+              <button onClick={() => openEdit(g)} className="p-1 rounded-xl text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={15} /></button>
+              <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-1 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={15} /></button>
             </div>
           </div>
         ))}
