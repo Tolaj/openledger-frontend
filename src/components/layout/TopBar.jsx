@@ -9,7 +9,7 @@ export default function TopBar({ title, back = false, right, filterIcon }) {
   const totalItems = getItemCount()
 
   return (
-    <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-zinc-100 md:hidden">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-100 md:hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="flex items-center h-14 px-4 max-w-md mx-auto gap-2">
         {back && (
           <button

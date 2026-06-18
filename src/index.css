@@ -8,12 +8,13 @@
   * {
     -webkit-tap-highlight-color: transparent;
     box-sizing: border-box;
+    -webkit-touch-callout: none;
   }
 
   html {
     font-size: 16px;
-    background-color: #ffffff;
     color: #18181b;
+    height: 100%;
   }
 
   body {
@@ -21,6 +22,23 @@
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
+    height: 100%;
+    -webkit-user-select: none;
+    user-select: none;
+    /* Prevent iOS rubber-band scroll on the body */
+    overflow: hidden;
+  }
+
+  /* Re-enable text selection for inputs */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  #root {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
   }
 }
 

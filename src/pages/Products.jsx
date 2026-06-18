@@ -1334,7 +1334,7 @@ export default function Products() {
       <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Tab bar row — tabs left, GROUP + ADD + CART right */}
         {/* Mobile: pill segmented control — sticky two rows */}
-        <div className="md:hidden sticky top-14 z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1">
+        <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
           <div className="bg-zinc-100 rounded-xl p-0.5 flex">
             {TABS.slice(0, 3).map((t) => (
               <button
