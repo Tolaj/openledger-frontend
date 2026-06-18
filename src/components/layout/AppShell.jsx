@@ -6,11 +6,11 @@ import WishlistCartPanel from '../features/WishlistCartPanel'
 
 export default function AppShell() {
   return (
-    <div className="min-h-screen bg-zinc-50">
+    <div className="h-screen flex flex-col bg-zinc-50">
       <Sidebar />
 
-      <div className="md:pl-60">
-        <main className="max-w-md mx-auto pb-nav md:max-w-none md:pb-0 md:p-8">
+      <div className="md:pl-60 flex-1 min-h-0">
+        <main className="h-full max-w-md mx-auto pb-nav md:max-w-none md:pb-0 md:p-8 md:flex md:flex-col">
           <Outlet />
         </main>
       </div>

@@ -6,6 +6,7 @@ import {
   LogOut, Users, UserPlus, Check, X, Trash2, Plus,
   Filter, ChevronDown, Pencil, LayoutTemplate,
 } from 'lucide-react'
+import DataTable from '../components/ui/DataTable'
 import { useForm, Controller } from 'react-hook-form'
 import { logout } from '../api/auth'
 import api from '../lib/axios'
@@ -13,62 +14,6 @@ import useAuthStore from '../store/authStore'
 import { useMe, useUpdateUser } from '../hooks/useUser'
 import { useSendFriendRequest, useRespondFriendRequest } from '../hooks/useFriends'
 import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup } from '../hooks/useGroups'
-
-function ColFilterDropdown({ options = [], selected = [], onChange }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [open])
-
-  const toggle = (val) =>
-    onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val])
-
-  return (
-    <div ref={ref} className="relative flex-shrink-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className={`flex-shrink-0 transition-colors ${selected.length > 0 ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-600'}`}
-      >
-        <Filter size={12} />
-      </button>
-      {open && options.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 bg-white border border-zinc-200 rounded-xl shadow-xl z-50 min-w-[150px] py-1">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => toggle(opt)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 text-left"
-            >
-              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-                selected.includes(opt) ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
-              }`}>
-                {selected.includes(opt) && (
-                  <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span className="truncate max-w-[120px]">{opt}</span>
-            </button>
-          ))}
-          {selected.length > 0 && (
-            <>
-              <div className="mx-2 my-1 border-t border-zinc-100" />
-              <button onClick={() => { onChange([]); setOpen(false) }} className="w-full px-3 py-1 text-xs text-zinc-400 hover:text-zinc-600 text-left">
-                Clear
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function sharesGroup(groups, friendId) {
   return groups
@@ -517,7 +462,7 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
   )
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
       {showAddForm && (
         <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex flex-col gap-3">
           <p className="text-sm font-semibold text-zinc-900">Add a friend</p>
@@ -547,77 +492,62 @@ function FriendsTab({ showAddForm, setShowAddForm }) {
         }
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block bg-white rounded-2xl border border-zinc-200 overflow-hidden">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200">
-              {['name', 'email', 'request', 'Action'].map((h, i, a) => (
-                <th key={h} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide ${i < a.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
-              ))}
-            </tr>
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              {[
-                { key: 'name', val: nameFilter, set: setNameFilter },
-                { key: 'email', val: emailFilter, set: setEmailFilter },
-                { key: 'status', val: statusFilter, set: setStatusFilter },
-                { key: null },
-              ].map(({ key, val, set }, i, a) => (
-                <td key={i} className={`px-3 py-2 ${i < a.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {key && (
-                    <div className="flex items-center gap-1.5">
-                      <input value={val} onChange={(e) => set(e.target.value)} placeholder="Filter…"
-                        className="flex-1 text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 placeholder-zinc-400 transition-colors" />
-                      <ColFilterDropdown options={dropOpts[key] || []} selected={getDrop(key)} onChange={(vals) => setDrop(key, vals)} />
-                    </div>
-                  )}
-                </td>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">No friends yet</td></tr>
-            ) : rows.map((r) => (
-              <tr key={r.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-                <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{r.name}</td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[200px] truncate">{r.email}</td>
-                <td className="px-4 py-3 border-r border-zinc-100">
-                  <span className={[
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold',
-                    r.status === 'ACCEPTED' ? 'bg-zinc-900 text-white' : 'bg-amber-100 text-amber-800',
-                  ].join(' ')}>
-                    {r.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const cr = !sharesGroup(groups, r.id)
-                      return r.status === 'PENDING' ? (
-                        <>
-                          <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>
-                          <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
-                        </>
-                      ) : r.status === 'ACCEPTED' ? (
-                        <>
-                          <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
-                          <button onClick={() => { if (confirm('Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={14} /></button>
-                        </>
-                      ) : (
-                        <>
-                          <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>
-                          <button onClick={() => { if (confirm('Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
-                        </>
-                      )
-                    })()}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={[
+          { key: 'name', label: 'name', filterable: true },
+          { key: 'email', label: 'email', filterable: true },
+          { key: 'status', label: 'request', filterable: true },
+          { key: 'action', label: 'Action' },
+        ]}
+        data={rows}
+        filters={{ name: nameFilter, email: emailFilter, status: statusFilter }}
+        onFilterChange={(key, val) => {
+          if (key === 'name') setNameFilter(val)
+          else if (key === 'email') setEmailFilter(val)
+          else if (key === 'status') setStatusFilter(val)
+        }}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDrop(key, vals)}
+        renderRow={(r) => (
+          <tr key={r.id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+            <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{r.name}</td>
+            <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[200px] truncate">{r.email}</td>
+            <td className="px-4 py-3 border-r border-zinc-100">
+              <span className={[
+                'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold',
+                r.status === 'ACCEPTED' ? 'bg-zinc-900 text-white' : 'bg-amber-100 text-amber-800',
+              ].join(' ')}>
+                {r.status}
+              </span>
+            </td>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const cr = !sharesGroup(groups, r.id)
+                  return r.status === 'PENDING' ? (
+                    <>
+                      <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>
+                      <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
+                    </>
+                  ) : r.status === 'ACCEPTED' ? (
+                    <>
+                      <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
+                      <button onClick={() => { if (confirm('Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={14} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>
+                      <button onClick={() => { if (confirm('Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                    </>
+                  )
+                })()}
+              </div>
+            </td>
+          </tr>
+        )}
+        emptyMessage="No friends yet"
+      />
     </div>
   )
 }
@@ -655,7 +585,7 @@ function GroupsTab({ openAddRef }) {
   if (isLoading) return <Spinner className="py-12" />
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
@@ -678,68 +608,49 @@ function GroupsTab({ openAddRef }) {
         ))}
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block bg-white rounded-2xl border border-zinc-200 overflow-hidden">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200">
-              {['name', 'members', 'Action'].map((h, i, a) => (
-                <th key={h} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide ${i < a.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
-              ))}
-            </tr>
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              {[true, false, false].map((filterable, i, a) => (
-                <td key={i} className={`px-3 py-2 ${i < a.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {filterable && (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        value={nameFilter}
-                        onChange={(e) => setNameFilter(e.target.value)}
-                        placeholder="Filter…"
-                        className="flex-1 text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 placeholder-zinc-400 transition-colors"
-                      />
-                      <ColFilterDropdown options={groupNameOpts} selected={groupDropSel} onChange={setGroupDropSel} />
-                    </div>
-                  )}
-                </td>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sharedGroups.length === 0 ? (
-              <tr><td colSpan={3} className="px-4 py-8 text-center text-sm text-zinc-400">No groups yet</td></tr>
-            ) : sharedGroups.map((g) => (
-              <tr key={g._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-                <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{g.name}</td>
-                <td className="px-4 py-3 border-r border-zinc-100">
-                  <div className="flex flex-wrap gap-1">
-                    {(g.members || []).slice(0, 4).map((m, i) => {
-                      const name = m?.name || m?.email || '?'
-                      return (
-                        <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 text-xs text-zinc-700">
-                          <span className="w-4 h-4 rounded-full bg-zinc-300 flex items-center justify-center text-[10px] font-bold">
-                            {name[0]?.toUpperCase()}
-                          </span>
-                          {name}
-                        </span>
-                      )
-                    })}
-                    {(g.members?.length || 0) > 4 && (
-                      <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-xs text-zinc-500">+{g.members.length - 4} more</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
-                    <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={[
+          { key: 'name', label: 'name', filterable: true },
+          { key: 'members', label: 'members' },
+          { key: 'action', label: 'Action' },
+        ]}
+        data={sharedGroups}
+        filters={{ name: nameFilter }}
+        onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }}
+        dropOpts={{ name: groupNameOpts }}
+        dropSel={{ name: groupDropSel }}
+        onDropChange={(key, vals) => { if (key === 'name') setGroupDropSel(vals) }}
+        renderRow={(g) => (
+          <tr key={g._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+            <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{g.name}</td>
+            <td className="px-4 py-3 border-r border-zinc-100">
+              <div className="flex flex-wrap gap-1">
+                {(g.members || []).slice(0, 4).map((m, i) => {
+                  const name = m?.name || m?.email || '?'
+                  return (
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 text-xs text-zinc-700">
+                      <span className="w-4 h-4 rounded-full bg-zinc-300 flex items-center justify-center text-[10px] font-bold">
+                        {name[0]?.toUpperCase()}
+                      </span>
+                      {name}
+                    </span>
+                  )
+                })}
+                {(g.members?.length || 0) > 4 && (
+                  <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-xs text-zinc-500">+{g.members.length - 4} more</span>
+                )}
+              </div>
+            </td>
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-2">
+                <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
+                <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+              </div>
+            </td>
+          </tr>
+        )}
+        emptyMessage="No groups yet"
+      />
 
       <GroupForm
         open={groupForm}
@@ -780,10 +691,8 @@ export default function Settings() {
   return (
     <>
       <TopBar title="Settings" />
-      <div className="px-4 py-5 md:px-0 md:py-0">
-        <PageHeader title="Settings" subtitle="Manage your account, friends and groups" />
-
-        <div className="flex items-end justify-between border-b border-zinc-200 mb-5">
+      <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
+<div className="flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
           <div className="flex flex-wrap gap-x-6">
             {TABS.map((t) => (
               <button
@@ -812,10 +721,12 @@ export default function Settings() {
           </div>
         </div>
 
-        {tab === 'profile'   && <ProfileTab />}
-        {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} />}
-        {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} />}
-        {tab === 'templates' && <TemplatesTab />}
+        <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
+          {tab === 'profile'   && <ProfileTab />}
+          {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} />}
+          {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} />}
+          {tab === 'templates' && <TemplatesTab />}
+        </div>
       </div>
     </>
   )

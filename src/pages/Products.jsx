@@ -1,65 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-
-// ── ColFilterDropdown ──────────────────────────────────────────────────────────
-function ColFilterDropdown({ options = [], selected = [], onChange }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!open) return
-    const h = (e) => { if (!ref.current?.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [open])
-
-  const toggle = (val) =>
-    onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val])
-
-  const active = selected.length > 0
-
-  return (
-    <div ref={ref} className="relative flex-shrink-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className={`flex-shrink-0 transition-colors ${active ? 'text-zinc-900' : 'text-zinc-400 hover:text-zinc-600'}`}
-        title="Filter options"
-      >
-        <Filter size={12} />
-      </button>
-      {open && options.length > 0 && (
-        <div className="absolute left-0 top-full mt-1 bg-white border border-zinc-200 rounded-xl shadow-xl z-50 min-w-[150px] py-1">
-          {options.map((opt) => (
-            <button
-              key={opt}
-              onClick={() => toggle(opt)}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 text-left"
-            >
-              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${selected.includes(opt) ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
-                }`}>
-                {selected.includes(opt) && (
-                  <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-              <span className="truncate max-w-[120px]">{opt}</span>
-            </button>
-          ))}
-          {selected.length > 0 && (
-            <>
-              <div className="mx-2 my-1 border-t border-zinc-100" />
-              <button onClick={() => { onChange([]); setOpen(false) }} className="w-full px-3 py-1 text-xs text-zinc-400 hover:text-zinc-600 text-left">
-                Clear
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 import { createPortal } from 'react-dom'
 import { Plus, Tag, Heart, Package, ShoppingCart, Pencil, Trash2, ShoppingBasket, ChevronDown, Check, ClipboardList, Filter } from 'lucide-react'
+import DataTable from '../components/ui/DataTable'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
@@ -351,134 +293,103 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
         })}
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block rounded-2xl border border-zinc-200 bg-white">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200">
-              {[
-                { key: 'name', label: 'name' },
-                { key: 'description', label: 'description' },
-                { key: 'category', label: 'category' },
-                { key: 'price', label: 'price' },
-                { key: 'unit', label: 'unit' },
-                { key: null, label: 'splitAmong' },
-                { key: 'manufacturer', label: 'manufacturer' },
-                { key: null, label: 'Action' },
-              ].map(({ label }, i, arr) => (
-                <th
-                  key={label}
-                  className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}
+      <DataTable
+        columns={[
+          { key: 'name', label: 'name', filterable: true },
+          { key: 'description', label: 'description', filterable: true, noDropdown: true },
+          { key: 'category', label: 'category', filterable: true },
+          { key: 'price', label: 'price', filterable: true },
+          { key: 'unit', label: 'unit', filterable: true },
+          { key: 'splitAmong', label: 'splitAmong' },
+          { key: 'manufacturer', label: 'manufacturer', filterable: true },
+          { key: 'action', label: 'action' },
+        ]}
+        data={filtered}
+        filters={filters}
+        onFilterChange={setFilter}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDrop(key, vals)}
+        renderRow={(p) => (
+          <tr key={p._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+            {/* name */}
+            <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900 max-w-[140px] truncate">{p.name}</td>
+            {/* description */}
+            <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[160px] truncate">{p.description || '—'}</td>
+            {/* category */}
+            <td className="px-4 py-3 border-r border-zinc-100">
+              {p.category ? (
+                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span
+                    className="w-6 h-6 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                    style={{ backgroundColor: p.category.color ? `${p.category.color}22` : '#f4f4f5' }}
+                  >
+                    {p.category.icon}
+                  </span>
+                  <span className="text-zinc-700 text-xs">{p.category.name}</span>
+                </span>
+              ) : '—'}
+            </td>
+            {/* price with temp stepper + inline edit */}
+            <td className="px-4 py-3 border-r border-zinc-100">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                <button
+                  onClick={() => adjPrice(p, -0.05)}
+                  className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center text-sm font-bold leading-none"
+                >−</button>
+                <InlineNumber
+                  value={getPrice(p)}
+                  onCommit={(v) => setPrices((prev) => ({ ...prev, [p._id]: v }))}
+                  format={(v) => v.toFixed(2)}
+                />
+                <button
+                  onClick={() => adjPrice(p, 0.05)}
+                  className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center text-sm font-bold leading-none"
+                >+</button>
+              </div>
+            </td>
+            {/* unit — plain text */}
+            <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{p.unit}</td>
+            {/* splitAmong */}
+            <td className="px-4 py-3 border-r border-zinc-100">
+              <SplitDropdown
+                members={groupMemberObjects}
+                splitAmong={getSplit(p)}
+                onChange={(arr) => setSplit(p, arr)}
+              />
+            </td>
+            {/* manufacturer */}
+            <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[120px] truncate">{p.manufacturer || '—'}</td>
+            {/* actions */}
+            <td className="px-4 py-3">
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                <button
+                  onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
+                  className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
+                  title="Add to cart"
                 >
-                  {label}
-                </th>
-              ))}
-            </tr>
-            {/* Filter row */}
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              {['name', 'description', 'category', 'price', 'unit', null, 'manufacturer', null].map((key, i, arr) => (
-                <td key={i} className={`px-3 py-2 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {key && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        value={filters[key]}
-                        onChange={(e) => setFilter(key, e.target.value)}
-                        placeholder="Filter…"
-                        className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 placeholder-zinc-400"
-                      />
-                      {dropOpts[key] && <ColFilterDropdown options={dropOpts[key]} selected={getDrop(key)} onChange={(v) => setDrop(key, v)} />}
-                    </div>
-                  )}
-                </td>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-sm text-zinc-400">No products match the filter</td>
-              </tr>
-            ) : filtered.map((p) => (
-              <tr key={p._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-                {/* name */}
-                <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900 max-w-[140px] truncate">{p.name}</td>
-                {/* description */}
-                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[160px] truncate">{p.description || '—'}</td>
-                {/* category */}
-                <td className="px-4 py-3 border-r border-zinc-100">
-                  {p.category ? (
-                    <span className="flex items-center gap-1.5 whitespace-nowrap">
-                      <span
-                        className="w-6 h-6 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
-                        style={{ backgroundColor: p.category.color ? `${p.category.color}22` : '#f4f4f5' }}
-                      >
-                        {p.category.icon}
-                      </span>
-                      <span className="text-zinc-700 text-xs">{p.category.name}</span>
-                    </span>
-                  ) : '—'}
-                </td>
-                {/* price with temp stepper + inline edit */}
-                <td className="px-4 py-3 border-r border-zinc-100">
-                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <button
-                      onClick={() => adjPrice(p, -0.05)}
-                      className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center text-sm font-bold leading-none"
-                    >−</button>
-                    <InlineNumber
-                      value={getPrice(p)}
-                      onCommit={(v) => setPrices((prev) => ({ ...prev, [p._id]: v }))}
-                      format={(v) => v.toFixed(2)}
-                    />
-                    <button
-                      onClick={() => adjPrice(p, 0.05)}
-                      className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center text-sm font-bold leading-none"
-                    >+</button>
-                  </div>
-                </td>
-                {/* unit — plain text */}
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{p.unit}</td>
-                {/* splitAmong */}
-                <td className="px-4 py-3 border-r border-zinc-100">
-                  <SplitDropdown
-                    members={groupMemberObjects}
-                    splitAmong={getSplit(p)}
-                    onChange={(arr) => setSplit(p, arr)}
-                  />
-                </td>
-                {/* manufacturer */}
-                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[120px] truncate">{p.manufacturer || '—'}</td>
-                {/* actions */}
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <button
-                      onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
-                      className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
-                      title="Add to cart"
-                    >
-                      <ShoppingBasket size={14} />
-                    </button>
-                    <button
-                      onClick={() => onEdit(p)}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
-                      title="Edit"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                    <button
-                      onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"
-                      title="Delete"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <ShoppingBasket size={14} />
+                </button>
+                <button
+                  onClick={() => onEdit(p)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
+                  title="Edit"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"
+                  title="Delete"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </td>
+          </tr>
+        )}
+        emptyMessage="No products yet"
+      />
     </>
   )
 }
@@ -571,59 +482,45 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete }) {
         })}
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block rounded-2xl border border-zinc-200 bg-white">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200">
-              {['Icon', 'Name', 'Products', 'Action'].map((h, i, arr) => (
-                <th key={h} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
-              ))}
+      <DataTable
+        columns={[
+          { key: 'icon', label: 'Icon' },
+          { key: 'name', label: 'Name', filterable: true },
+          { key: 'products', label: 'Products' },
+          { key: 'action', label: 'Action' },
+        ]}
+        data={filtered}
+        filters={filters}
+        onFilterChange={setFilter}
+        dropOpts={{ name: dropOpts.name }}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDrop(key, vals)}
+        renderRow={(c) => {
+          const productCount = products.filter((p) => p.category?._id === c._id || p.category === c._id).length
+          return (
+            <tr key={c._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+              <td className="px-4 py-3 border-r border-zinc-100">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: c.color }}>
+                  {c.icon}
+                </div>
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{c.name}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{productCount}</td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => onEdit(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </td>
             </tr>
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              {[null, 'name', null, null].map((key, i, arr) => (
-                <td key={i} className={`px-3 py-2 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {key && (
-                    <div className="flex items-center gap-1">
-                      <input value={filters[key] ?? ''} onChange={(e) => setFilter(key, e.target.value)} placeholder="Filter…"
-                        className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 placeholder-zinc-400" />
-                      <ColFilterDropdown options={dropOpts[key] || []} selected={getDrop(key)} onChange={(v) => setDrop(key, v)} />
-                    </div>
-                  )}
-                </td>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-sm text-zinc-400">No categories match the filter</td></tr>
-            ) : filtered.map((c) => {
-              const productCount = products.filter((p) => p.category?._id === c._id || p.category === c._id).length
-              return (
-                <tr key={c._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-                  <td className="px-4 py-3 border-r border-zinc-100">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: c.color }}>
-                      {c.icon}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{c.name}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{productCount}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => onEdit(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit">
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+          )
+        }}
+        emptyMessage="No categories yet"
+      />
     </>
   )
 }
@@ -795,97 +692,85 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
         ))}
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block rounded-2xl border border-zinc-200 bg-white">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200">
-              <th className="w-8 px-3 py-3 border-r border-zinc-200" />
-              {['name', 'items', 'totalPrice', 'date', 'paidBy', 'createdBy', 'Action'].map((h, i, arr) => (
-                <th key={h} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
-              ))}
+      <DataTable
+        columns={[
+          { key: 'name', label: 'name', filterable: true },
+          { key: 'items', label: 'items' },
+          { key: 'totalPrice', label: 'totalPrice', filterable: true },
+          { key: 'date', label: 'date', filterable: true },
+          { key: 'paidBy', label: 'paidBy', filterable: true },
+          { key: 'createdBy', label: 'createdBy', filterable: true },
+          { key: 'action', label: 'Action' },
+        ]}
+        data={filtered}
+        filters={filters}
+        onFilterChange={setFilter}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDrop(key, vals)}
+        leadingCol={true}
+        renderRow={(w) => (
+          <React.Fragment key={w._id}>
+            <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggle(w._id)}>
+              <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+                <ChevronDown size={14} className={`transition-transform ${expanded[w._id] ? '' : '-rotate-90'}`} />
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{w.name}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.items?.length ?? 0}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{w.totalPrice}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500">{w.date}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.paidBy?.name || w.paidBy?.email || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.createdBy?.name || w.createdBy?.email || '—'}</td>
+              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => addAllToCart(w)} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart">
+                    <ShoppingBasket size={14} />
+                  </button>
+                  <button onClick={() => openEdit(w._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={() => { if (confirm(`Delete "${w.name}"?`)) onDelete(w._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </td>
             </tr>
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              <td className="border-r border-zinc-200" />
-              {['name', 'items', 'totalPrice', 'date', 'paidBy', 'createdBy', null].map((key, i, arr) => (
-                <td key={i} className={`px-3 py-2 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {key && key !== 'items' && (
-                    <div className="flex items-center gap-1">
-                      <input value={filters[key] ?? ''} onChange={(e) => setFilter(key, e.target.value)} placeholder="Filter…"
-                        className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 placeholder-zinc-400" />
-                      <ColFilterDropdown options={dropOpts[key] || []} selected={getDrop(key)} onChange={(v) => setDrop(key, v)} />
-                    </div>
-                  )}
+            {expanded[w._id] && (
+              <tr key={`${w._id}-items`} className="border-b border-zinc-100 bg-zinc-50">
+                <td />
+                <td colSpan={7} className="px-4 py-3">
+                  <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                    <thead>
+                      <tr className="border-b border-zinc-200">
+                        {['product', 'price', 'count', 'unit', 'splitAmong'].map((h, i, arr) => (
+                          <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(w.items || []).map((item, idx, arr) => (
+                        <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                          <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.price}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
+                          <td className="px-3 py-2 text-zinc-600">
+                            {(item.splitAmong || []).map((u) => {
+                              const id = typeof u === 'object' ? u._id : u
+                              return u?.name || u?.email || memberName(id)
+                            }).join(', ')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </td>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-zinc-400">No wishlists match the filter</td></tr>
-            ) : filtered.map((w) => (
-              <React.Fragment key={w._id}>
-                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggle(w._id)}>
-                  <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
-                    <ChevronDown size={14} className={`transition-transform ${expanded[w._id] ? '' : '-rotate-90'}`} />
-                  </td>
-                  <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{w.name}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.items?.length ?? 0}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{w.totalPrice}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500">{w.date}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.paidBy?.name || w.paidBy?.email || '—'}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.createdBy?.name || w.createdBy?.email || '—'}</td>
-                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-1.5">
-                      <button onClick={() => addAllToCart(w)} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart">
-                        <ShoppingBasket size={14} />
-                      </button>
-                      <button onClick={() => openEdit(w._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit">
-                        <Pencil size={14} />
-                      </button>
-                      <button onClick={() => { if (confirm(`Delete "${w.name}"?`)) onDelete(w._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                {expanded[w._id] && (
-                  <tr key={`${w._id}-items`} className="border-b border-zinc-100 bg-zinc-50">
-                    <td />
-                    <td colSpan={7} className="px-4 py-3">
-                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
-                        <thead>
-                          <tr className="border-b border-zinc-200">
-                            {['product', 'price', 'count', 'unit', 'splitAmong'].map((h, i, arr) => (
-                              <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(w.items || []).map((item, idx, arr) => (
-                            <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
-                              <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
-                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.price}</td>
-                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
-                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
-                              <td className="px-3 py-2 text-zinc-600">
-                                {(item.splitAmong || []).map((u) => {
-                                  const id = typeof u === 'object' ? u._id : u
-                                  return u?.name || u?.email || memberName(id)
-                                }).join(', ')}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              </tr>
+            )}
+          </React.Fragment>
+        )}
+        emptyMessage="Wishlist is empty"
+      />
     </>
   )
 }
@@ -1017,15 +902,6 @@ function OrdersTab({ orders = [], loading, onDelete }) {
     )
   })
 
-  const COLS = [
-    { key: 'name', label: 'name' },
-    { key: 'items', label: 'items' },
-    { key: 'totalPrice', label: 'totalPrice' },
-    { key: 'date', label: 'date' },
-    { key: 'paidBy', label: 'paidBy' },
-    { key: 'createdBy', label: 'createdBy' },
-  ]
-
   return (
     <>
       {/* Mobile cards */}
@@ -1035,104 +911,78 @@ function OrdersTab({ orders = [], loading, onDelete }) {
         ))}
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block rounded-2xl border border-zinc-200 bg-white">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            {/* Header */}
-            <tr className="border-b border-zinc-200">
-              <th className="w-8 px-3 py-3 border-r border-zinc-200" />
-              {COLS.map((c, i) => (
-                <th key={c.key} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap ${i < COLS.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {c.label}
-                </th>
-              ))}
-              <th className="px-4 py-3" />
-            </tr>
-            {/* Filter row */}
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              <td className="border-r border-zinc-200" />
-              {['name', 'items', 'totalPrice', 'date', 'paidBy', 'createdBy'].map((key, i, arr) => (
-                <td key={key} className={`px-3 py-2 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {key !== 'items' && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        value={filters[key] ?? ''}
-                        onChange={(e) => setFilter(key, e.target.value)}
-                        placeholder="Filter…"
-                        className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 placeholder-zinc-400"
-                      />
-                      <ColFilterDropdown
-                        options={dropOpts[key] || []}
-                        selected={getDrop(key)}
-                        onChange={(vals) => setDrop(key, vals)}
-                      />
-                    </div>
-                  )}
-                </td>
-              ))}
-              <td />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-sm text-zinc-400">No orders match the filter</td></tr>
-            ) : filtered.map((o) => (
-              <React.Fragment key={o._id}>
-                <tr
-                  className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer"
-                  onClick={() => toggle(o._id)}
+      <DataTable
+        columns={[
+          { key: 'name', label: 'name', filterable: true },
+          { key: 'items', label: 'items' },
+          { key: 'totalPrice', label: 'totalPrice', filterable: true },
+          { key: 'date', label: 'date', filterable: true },
+          { key: 'paidBy', label: 'paidBy', filterable: true },
+          { key: 'createdBy', label: 'createdBy', filterable: true },
+          { key: 'action', label: 'Action' },
+        ]}
+        data={filtered}
+        filters={filters}
+        onFilterChange={setFilter}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDrop(key, vals)}
+        leadingCol={true}
+        renderRow={(o) => (
+          <React.Fragment key={o._id}>
+            <tr
+              className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer"
+              onClick={() => toggle(o._id)}
+            >
+              <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+                <ChevronDown size={14} className={`transition-transform ${expanded[o._id] ? '' : '-rotate-90'}`} />
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{o.name}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.items?.length ?? 0}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{o.totalPrice}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500">{o.date}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.paidBy?.name || o.paidBy?.email || '—'}</td>
+              <td className="px-4 py-3 text-zinc-700">{o.createdBy?.name || o.createdBy?.email || '—'}</td>
+              <td className="px-4 py-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${o.name}"?`)) onDelete(o._id) }}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"
                 >
-                  <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
-                    <ChevronDown size={14} className={`transition-transform ${expanded[o._id] ? '' : '-rotate-90'}`} />
-                  </td>
-                  <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{o.name}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.items?.length ?? 0}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{o.totalPrice}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500">{o.date}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.paidBy?.name || o.paidBy?.email || '—'}</td>
-                  <td className="px-4 py-3 text-zinc-700">{o.createdBy?.name || o.createdBy?.email || '—'}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${o.name}"?`)) onDelete(o._id) }}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-                {expanded[o._id] && (
-                  <tr key={`${o._id}-items`} className="border-b border-zinc-100 bg-zinc-50">
-                    <td />
-                    <td colSpan={7} className="px-4 py-3">
-                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
-                        <thead>
-                          <tr className="border-b border-zinc-200">
-                            {['product', 'price', 'count', 'unit', 'splitAmong'].map((h, i, arr) => (
-                              <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(o.items || []).map((item, idx, arr) => (
-                            <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
-                              <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
-                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.price}</td>
-                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
-                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
-                              <td className="px-3 py-2 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <Trash2 size={14} />
+                </button>
+              </td>
+            </tr>
+            {expanded[o._id] && (
+              <tr key={`${o._id}-items`} className="border-b border-zinc-100 bg-zinc-50">
+                <td />
+                <td colSpan={7} className="px-4 py-3">
+                  <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                    <thead>
+                      <tr className="border-b border-zinc-200">
+                        {['product', 'price', 'count', 'unit', 'splitAmong'].map((h, i, arr) => (
+                          <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(o.items || []).map((item, idx, arr) => (
+                        <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                          <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.price}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
+                          <td className="px-3 py-2 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            )}
+          </React.Fragment>
+        )}
+        emptyMessage="No orders yet"
+      />
     </>
   )
 }
@@ -1267,9 +1117,6 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
     )
   })
 
-  const COLS = ['qty', 'name', 'description', 'category', 'price', 'unit', 'splitAmong', 'manufacturer', 'Action']
-  const FILTER_KEYS = [null, 'name', 'description', 'category', 'price', 'unit', null, 'manufacturer', null]
-
   return (
     <>
       {/* Mobile cards */}
@@ -1294,96 +1141,83 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
         })}
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block rounded-2xl border border-zinc-200 bg-white">
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200">
-              {COLS.map((h, i, arr) => (
-                <th key={h} className={`px-4 py-3 text-left text-xs font-semibold text-zinc-500 uppercase tracking-wide whitespace-nowrap ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
-              ))}
+      <DataTable
+        columns={[
+          { key: 'qty', label: 'qty' },
+          { key: 'name', label: 'name', filterable: true },
+          { key: 'description', label: 'description', filterable: true, noDropdown: true },
+          { key: 'category', label: 'category', filterable: true },
+          { key: 'price', label: 'price', filterable: true },
+          { key: 'unit', label: 'unit', filterable: true },
+          { key: 'splitAmong', label: 'splitAmong' },
+          { key: 'manufacturer', label: 'manufacturer', filterable: true },
+          { key: 'action', label: 'Action' },
+        ]}
+        data={filtered}
+        filters={filters}
+        onFilterChange={setFilter}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDrop(key, vals)}
+        renderRow={(inv) => {
+          const p = inv.product || {}
+          const catColor = p.category?.color
+          const iconBg = catColor && catColor.startsWith('#') ? `${catColor}22` : '#f4f4f5'
+          return (
+            <tr key={inv._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+              <td className="px-4 py-3 border-r border-zinc-100">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-zinc-900 text-white text-xs font-bold">{inv.quantityAvailable}</span>
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{p.name || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 text-xs max-w-[120px] truncate">{p.description || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100">
+                {p.category ? (
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="w-6 h-6 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ backgroundColor: iconBg }}>
+                      {p.category.icon}
+                    </span>
+                    <span className="text-zinc-700 text-xs">{p.category.name}</span>
+                  </span>
+                ) : <span className="text-zinc-400">—</span>}
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{inv.price}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{p.unit || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100">
+                <div className="flex flex-wrap gap-1">
+                  {(inv.splitAmong || []).map((u) => {
+                    const id = typeof u === 'object' ? u._id : u
+                    const name = u?.name || u?.email || memberName(id)
+                    return (
+                      <span key={id} className="inline-block px-2 py-0.5 rounded-lg bg-zinc-900 text-white text-xs font-semibold">{name}</span>
+                    )
+                  })}
+                </div>
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 text-xs">{p.manufacturer || '—'}</td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => addItem({ ...p, price: inv.price }, p.unit, 'equal',
+                      (inv.splitAmong || []).map((u) => typeof u === 'object' ? String(u._id) : String(u)),
+                      (inv.splitAmong || []).map((u) => typeof u === 'object' ? String(u._id) : String(u))
+                    )}
+                    className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart"
+                  >
+                    <ShoppingBasket size={14} />
+                  </button>
+                  <button
+                    onClick={() => { if (confirm(`Delete this inventory entry?`)) onDelete(inv._id) }}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </td>
             </tr>
-            <tr className="border-b border-zinc-200 bg-zinc-50">
-              {FILTER_KEYS.map((key, i, arr) => (
-                <td key={i} className={`px-3 py-2 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>
-                  {key && (
-                    <div className="flex items-center gap-1">
-                      <input value={filters[key] ?? ''} onChange={(e) => setFilter(key, e.target.value)} placeholder="Filter…"
-                        className="w-full text-xs bg-white border border-zinc-200 rounded-lg px-2 py-1.5 outline-none focus:border-zinc-900 placeholder-zinc-400" />
-                      {key !== 'description' && <ColFilterDropdown
-                        options={dropOpts[key] || []}
-                        selected={getDrop(key)}
-                        onChange={(vals) => setDrop(key, vals)}
-                      />}
-                    </div>
-                  )}
-                </td>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-zinc-400">No inventory items match the filter</td></tr>
-            ) : filtered.map((inv) => {
-              const p = inv.product || {}
-              const catColor = p.category?.color
-              const iconBg = catColor && catColor.startsWith('#') ? `${catColor}22` : '#f4f4f5'
-              return (
-                <tr key={inv._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-                  <td className="px-4 py-3 border-r border-zinc-100">
-                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-zinc-900 text-white text-xs font-bold">{inv.quantityAvailable}</span>
-                  </td>
-                  <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{p.name || '—'}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 text-xs max-w-[120px] truncate">{p.description || '—'}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100">
-                    {p.category ? (
-                      <span className="flex items-center gap-1.5 whitespace-nowrap">
-                        <span className="w-6 h-6 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ backgroundColor: iconBg }}>
-                          {p.category.icon}
-                        </span>
-                        <span className="text-zinc-700 text-xs">{p.category.name}</span>
-                      </span>
-                    ) : <span className="text-zinc-400">—</span>}
-                  </td>
-                  <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{inv.price}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{p.unit || '—'}</td>
-                  <td className="px-4 py-3 border-r border-zinc-100">
-                    <div className="flex flex-wrap gap-1">
-                      {(inv.splitAmong || []).map((u) => {
-                        const id = typeof u === 'object' ? u._id : u
-                        const name = u?.name || u?.email || memberName(id)
-                        return (
-                          <span key={id} className="inline-block px-2 py-0.5 rounded-lg bg-zinc-900 text-white text-xs font-semibold">{name}</span>
-                        )
-                      })}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 text-xs">{p.manufacturer || '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => addItem({ ...p, price: inv.price }, p.unit, 'equal',
-                          (inv.splitAmong || []).map((u) => typeof u === 'object' ? String(u._id) : String(u)),
-                          (inv.splitAmong || []).map((u) => typeof u === 'object' ? String(u._id) : String(u))
-                        )}
-                        className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart"
-                      >
-                        <ShoppingBasket size={14} />
-                      </button>
-                      <button
-                        onClick={() => { if (confirm(`Delete this inventory entry?`)) onDelete(inv._id) }}
-                        className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+          )
+        }}
+        emptyMessage="Nothing in stock"
+      />
     </>
   )
 }
@@ -1442,11 +1276,9 @@ export default function Products() {
         )
       } />
 
-      <div className="px-4 py-5 md:px-0 md:py-0">
-        <PageHeader title="Products" subtitle="Your catalogue" />
-
+      <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Tab bar row — tabs left, GROUP + ADD + CART right */}
-        <div className="flex items-end justify-between border-b border-zinc-200 mb-5">
+        <div className="flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
           <div className="flex flex-wrap gap-x-6">
             {TABS.map((t) => (
               <button
@@ -1468,53 +1300,55 @@ export default function Products() {
           </div>
         </div>
 
-        {tab === 'products' && (
-          <ProductsListTab
-            products={products}
-            categories={categories}
-            loading={loadingProducts}
-            onEdit={openEditProduct}
-            onDelete={(id) => deleteProduct(id)}
-            groupMembers={groupMembers}
-            groupMemberObjects={groupMemberObjects}
-          />
-        )}
+        <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
+          {tab === 'products' && (
+            <ProductsListTab
+              products={products}
+              categories={categories}
+              loading={loadingProducts}
+              onEdit={openEditProduct}
+              onDelete={(id) => deleteProduct(id)}
+              groupMembers={groupMembers}
+              groupMemberObjects={groupMemberObjects}
+            />
+          )}
 
-        {tab === 'category' && (
-          <CategoryTab
-            categories={categories}
-            products={products}
-            loading={loadingCats}
-            onEdit={openEditCategory}
-            onDelete={(id) => deleteCategory(id)}
-          />
-        )}
+          {tab === 'category' && (
+            <CategoryTab
+              categories={categories}
+              products={products}
+              loading={loadingCats}
+              onEdit={openEditCategory}
+              onDelete={(id) => deleteCategory(id)}
+            />
+          )}
 
-        {tab === 'wishlist' && (
-          <WishlistTab
-            wishlists={wishlists}
-            groupMembers={groupMembers}
-            groupMemberObjects={groupMemberObjects}
-            onDelete={(id) => deleteWishlist(id)}
-          />
-        )}
+          {tab === 'wishlist' && (
+            <WishlistTab
+              wishlists={wishlists}
+              groupMembers={groupMembers}
+              groupMemberObjects={groupMemberObjects}
+              onDelete={(id) => deleteWishlist(id)}
+            />
+          )}
 
-        {tab === 'inventory' && (
-          <InventoryTab
-            inventory={inventory}
-            loading={loadingInventory}
-            groupMemberObjects={groupMemberObjects}
-            onDelete={(id) => deleteInventoryItem(id)}
-          />
-        )}
+          {tab === 'inventory' && (
+            <InventoryTab
+              inventory={inventory}
+              loading={loadingInventory}
+              groupMemberObjects={groupMemberObjects}
+              onDelete={(id) => deleteInventoryItem(id)}
+            />
+          )}
 
-        {tab === 'orders' && (
-          <OrdersTab
-            orders={orders}
-            loading={loadingOrders}
-            onDelete={(id) => deleteOrder(id)}
-          />
-        )}
+          {tab === 'orders' && (
+            <OrdersTab
+              orders={orders}
+              loading={loadingOrders}
+              onDelete={(id) => deleteOrder(id)}
+            />
+          )}
+        </div>
       </div>
 
       <ProductForm
