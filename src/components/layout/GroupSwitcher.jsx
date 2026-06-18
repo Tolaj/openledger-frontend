@@ -27,6 +27,14 @@ export default function GroupSwitcher({ compact = false }) {
 
   const active = allGroups.find((g) => g._id === activeGroupId)
 
+  // Auto-select isolated (Personal) group on first login if nothing is stored
+  useEffect(() => {
+    if (!activeGroupId && isolatedGroup) {
+      setActiveGroup(isolatedGroup._id)
+      hydrate(isolatedGroup._id)
+    }
+  }, [activeGroupId, isolatedGroup?._id])
+
   useEffect(() => {
     if (!open) return
     const handler = (e) => {

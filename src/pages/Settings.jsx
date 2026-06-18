@@ -704,11 +704,26 @@ export default function Settings() {
 
   return (
     <>
-      <TopBar title="Settings" right={
-        (tab === 'friends' || tab === 'groups') && (
+      <TopBar
+        title="Settings"
+        filterIcon={(tab === 'friends' || tab === 'groups') && (
           <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />
-        )
-      } />
+        )}
+        right={
+          <div className="flex items-center">
+            {tab === 'friends' && !showAddFriend && (
+              <button onClick={() => setShowAddFriend(true)} className="p-2 rounded-xl active:bg-zinc-100">
+                <UserPlus size={20} className="text-zinc-600" />
+              </button>
+            )}
+            {tab === 'groups' && (
+              <button onClick={() => openGroupAdd.current?.()} className="p-2 rounded-xl active:bg-zinc-100">
+                <Plus size={20} className="text-zinc-600" />
+              </button>
+            )}
+          </div>
+        }
+      />
       <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
 <div className="flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
           <div className="flex flex-wrap gap-x-6">

@@ -3,7 +3,7 @@ import { ArrowLeft, ShoppingCart } from 'lucide-react'
 import GroupSwitcher from './GroupSwitcher'
 import useCartStore from '../../store/cartStore'
 
-export default function TopBar({ title, back = false, right }) {
+export default function TopBar({ title, back = false, right, filterIcon }) {
   const navigate = useNavigate()
   const { openCart, getItemCount } = useCartStore()
   const totalItems = getItemCount()
@@ -23,6 +23,7 @@ export default function TopBar({ title, back = false, right }) {
           {title}
         </h1>
         <GroupSwitcher compact />
+        {filterIcon && <div>{filterIcon}</div>}
         <button
           onClick={openCart}
           className="relative p-2 rounded-xl text-zinc-600 active:bg-zinc-100"

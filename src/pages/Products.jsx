@@ -1275,11 +1275,12 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'products', label: 'Products List' },
-  { key: 'category', label: 'Category' },
-  { key: 'wishlist', label: 'Wish List' },
-  { key: 'inventory', label: 'Inventory' },
-  { key: 'orders', label: 'Orders' },
+  { key: 'products', label: 'Products', mobileLabel: 'Items' },
+  { key: 'category', label: 'Category', mobileLabel: 'Category' },
+  { key: 'wishlist', label: 'Wish List', mobileLabel: 'Wishlist' },
+  { key: 'inventory', label: 'Inventory', mobileLabel: 'Stock' },
+  { key: 'recurring', label: 'Recurring', mobileLabel: 'Recurring' },
+  { key: 'orders', label: 'Orders', mobileLabel: 'Orders' },
 ]
 
 export default function Products() {
@@ -1320,21 +1321,57 @@ export default function Products() {
 
   return (
     <>
-      <TopBar title="Products" right={
-        <div className="flex items-center">
-          <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />
-          {mobileAddFn && (
-            <button onClick={mobileAddFn} className="p-2 rounded-xl active:bg-zinc-100">
-              <Plus size={20} />
-            </button>
-          )}
-        </div>
-      } />
+      <TopBar
+        title="Products"
+        filterIcon={<DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />}
+        right={mobileAddFn && (
+          <button onClick={mobileAddFn} className="p-2 rounded-xl active:bg-zinc-100">
+            <Plus size={20} />
+          </button>
+        )}
+      />
 
       <div className="px-4 py-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Tab bar row — tabs left, GROUP + ADD + CART right */}
-        <div className="flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
-          <div className="flex flex-wrap gap-x-6">
+        {/* Mobile: pill segmented control — two rows */}
+        <div className="md:hidden mb-4 flex-shrink-0 flex flex-col gap-1.5">
+          <div className="bg-zinc-100 rounded-2xl p-1 flex">
+            {TABS.slice(0, 3).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={[
+                  'flex-1 py-2 text-sm font-semibold rounded-xl transition-all duration-200 whitespace-nowrap',
+                  tab === t.key
+                    ? 'bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-400 active:bg-zinc-200',
+                ].join(' ')}
+              >
+                {t.mobileLabel}
+              </button>
+            ))}
+          </div>
+          <div className="bg-zinc-100 rounded-2xl p-1 flex">
+            {TABS.slice(3).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={[
+                  'flex-1 py-2 text-sm font-semibold rounded-xl transition-all duration-200 whitespace-nowrap',
+                  tab === t.key
+                    ? 'bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-400 active:bg-zinc-200',
+                ].join(' ')}
+              >
+                {t.mobileLabel}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop: underline tabs */}
+        <div className="hidden md:flex items-end border-b border-zinc-200 mb-5 flex-shrink-0">
+          <div className="flex gap-x-6 flex-1">
             {TABS.map((t) => (
               <button
                 key={t.key}
@@ -1402,6 +1439,10 @@ export default function Products() {
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
             />
+          )}
+
+          {tab === 'recurring' && (
+            <EmptyState icon={ClipboardList} title="Recurring" description="Coming soon" />
           )}
 
           {tab === 'orders' && (
