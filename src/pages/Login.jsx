@@ -21,7 +21,7 @@ export default function Login() {
   })
 
   return (
-    <div className="min-h-screen flex flex-col justify-center px-6 py-12 max-w-md mx-auto">
+    <div className="flex-1 flex flex-col justify-center px-6 py-12 max-w-md mx-auto w-full">
       <div className="mb-10">
         <div className="w-10 h-10 bg-zinc-900 rounded-2xl mb-6" />
         <h1 className="text-2xl font-bold text-zinc-900">Welcome back</h1>
