@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
+import PageActions from '../components/layout/PageActions'
 import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import { useProducts } from '../hooks/useProducts'
@@ -95,6 +96,7 @@ export default function Dashboard() {
           <PageHeader
             title={`Hey, ${firstName} 👋`}
             subtitle={`${format(now, 'EEEE, d MMMM')} · Here's your overview`}
+            action={<PageActions />}
           />
           <div className="md:hidden">
             <p className="text-xl font-bold text-zinc-900">Hey, {firstName} 👋</p>
