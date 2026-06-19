@@ -92,45 +92,53 @@ function PersonalCartItem({ item, members, onUpdateQty, onUpdatePrice, onUpdateS
   const iconBg = item.category?.color?.startsWith('#') ? `${item.category.color}22` : '#f4f4f5'
 
   return (
-    <div className="flex gap-3 py-4 border-b border-zinc-100 last:border-0">
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 mt-0.5" style={{ backgroundColor: iconBg }}>
+    <div className="flex gap-3 py-3.5 border-b border-zinc-100 last:border-0">
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0 mt-0.5" style={{ backgroundColor: iconBg }}>
         {item.category?.icon || '📦'}
       </div>
+
       <div className="flex-1 min-w-0">
+        {/* Name + total */}
         <div className="flex items-start justify-between gap-2 mb-2">
-          <p className="text-sm font-semibold text-zinc-900 leading-tight">{item.name}</p>
-          <p className="text-sm font-bold text-zinc-900 whitespace-nowrap">{sym}{lineTotal}</p>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {/* Unit */}
-          <div className="flex items-center gap-2 h-5">
-            <span className="text-xs text-zinc-500 w-10">Unit</span>
-            <span className="text-xs font-medium text-zinc-700 flex-1">{item.unit}</span>
-            <span className="text-xs text-zinc-500">Split Among</span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-zinc-900 truncate leading-tight">{item.name}</p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              {[item.category?.name, item.unit].filter(Boolean).join(' · ')}
+            </p>
           </div>
-          {/* Price */}
-          <div className="flex items-center gap-1.5 h-5">
-            <span className="text-xs text-zinc-500 w-10">Price</span>
-            <button onClick={() => onUpdatePrice(item._cartId, item._price - 0.05)}
-              className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">−</button>
-            <InlineNumber value={item._price} onCommit={(v) => onUpdatePrice(item._cartId, v)} format={(v) => v.toFixed(2)} />
-            <button onClick={() => onUpdatePrice(item._cartId, item._price + 0.05)}
-              className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">+</button>
-            <div className="flex-1" />
+          <p className="text-sm font-bold text-zinc-900 whitespace-nowrap flex-shrink-0">{sym}{lineTotal}</p>
+        </div>
+
+        {/* Compact controls */}
+        <div className="flex flex-col gap-1.5">
+          {/* Row 1: Price + Split */}
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-zinc-400 w-8 flex-shrink-0">Price</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => onUpdatePrice(item._cartId, item._price - 0.05)}
+                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">−</button>
+              <InlineNumber value={item._price} onCommit={(v) => onUpdatePrice(item._cartId, v)} format={(v) => v.toFixed(2)} />
+              <button onClick={() => onUpdatePrice(item._cartId, item._price + 0.05)}
+                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">+</button>
+            </div>
+            <span className="text-[11px] text-zinc-400 flex-shrink-0">Split</span>
             <SplitDropdown value={item._splitType} splitAmong={item._splitAmong} members={members} onChange={(s) => onUpdateSplit(item._cartId, s)} />
           </div>
-          {/* Count */}
-          <div className="flex items-center gap-1.5 h-5">
-            <span className="text-xs text-zinc-500 w-10">Count</span>
-            <button onClick={() => onUpdateQty(item._cartId, item.quantity - 1)}
-              className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">
-              {item.quantity === 1 ? <Trash2 size={9} /> : '−'}
-            </button>
-            <InlineNumber value={item.quantity} onCommit={(v) => onUpdateQty(item._cartId, Math.round(v))} format={(v) => String(Math.round(v))} />
-            <button onClick={() => onUpdateQty(item._cartId, item.quantity + 1)}
-              className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">+</button>
+
+          {/* Row 2: Qty + Remove */}
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-zinc-400 w-8 flex-shrink-0">Qty</span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => onUpdateQty(item._cartId, item.quantity - 1)}
+                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">
+                {item.quantity === 1 ? <Trash2 size={8} /> : '−'}
+              </button>
+              <InlineNumber value={item.quantity} onCommit={(v) => onUpdateQty(item._cartId, Math.round(v))} format={(v) => String(Math.round(v))} />
+              <button onClick={() => onUpdateQty(item._cartId, item.quantity + 1)}
+                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">+</button>
+            </div>
             <div className="flex-1" />
-            <button onClick={() => onRemove(item._cartId)} className="text-xs text-red-500 font-medium hover:text-red-600">Remove</button>
+            <button onClick={() => onRemove(item._cartId)} className="text-[11px] text-red-500 font-medium hover:text-red-600">Remove</button>
           </div>
         </div>
       </div>
