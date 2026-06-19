@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package,
   Heart, ClipboardList, ArrowRight, AlertTriangle,
+  Truck, FileText, PackageCheck, ReceiptText,
 } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
@@ -16,6 +17,11 @@ import { useInventory } from '../hooks/useInventory'
 import { useMe } from '../hooks/useUser'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import { useFinanceSummary, useFinance } from '../hooks/useFinance'
+import { usePurchaseOrders } from '../hooks/usePurchaseOrders'
+import { useSalesOrders } from '../hooks/useSalesOrders'
+import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
+import { useSalesInvoices } from '../hooks/useSalesInvoices'
+import { useIsBusiness } from '../hooks/useActiveGroupType'
 import { startOfMonth, endOfMonth, format } from 'date-fns'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -41,6 +47,21 @@ function SectionHeader({ title, to, navigate }) {
   )
 }
 
+// ── KPI Card ─────────────────────────────────────────────────────────────────
+function KpiCard({ label, value, sub, icon: Icon, iconColor, bgColor, to, navigate, danger }) {
+  return (
+    <button onClick={() => to && navigate(to)}
+      className="bg-white rounded-2xl border border-zinc-200 p-4 text-left active:scale-[0.97] transition-transform w-full">
+      <div className={`w-8 h-8 rounded-xl ${bgColor} flex items-center justify-center mb-3`}>
+        <Icon size={16} className={iconColor} />
+      </div>
+      <p className={`text-2xl font-bold ${danger ? 'text-red-500' : 'text-zinc-900'}`}>{value}</p>
+      <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
+      {sub && <p className="text-xs text-zinc-400 mt-0.5">{sub}</p>}
+    </button>
+  )
+}
+
 // ── Dashboard ──────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate   = useNavigate()
@@ -50,11 +71,18 @@ export default function Dashboard() {
   const { activeGroupId } = useGroupStore()
   const { data: me }      = useMe()
   const symbol = useCurrencySymbol()
+  const isBusiness = useIsBusiness()
 
   const { data: products  = [] } = useProducts()
   const { data: orders    = [] } = useOrders()
   const { data: wishlists = [] } = useWishlists()
   const { data: inventory = [] } = useInventory()
+
+  // Business data
+  const { data: purchaseOrders  = [] } = usePurchaseOrders()
+  const { data: salesOrders     = [] } = useSalesOrders()
+  const { data: purchaseInvoices = [] } = usePurchaseInvoices()
+  const { data: salesInvoices   = [] } = useSalesInvoices()
 
   const now = new Date()
   const monthParams = {
@@ -62,13 +90,33 @@ export default function Dashboard() {
     startDate: startOfMonth(now).toISOString(),
     endDate:   endOfMonth(now).toISOString(),
   }
-  const { data: summary }          = useFinanceSummary(monthParams)
+  const { data: summary }           = useFinanceSummary(monthParams)
   const { data: recentFinance = [] } = useFinance({ groupId: activeGroupId, ...monthParams })
 
-  // Derived
+  // ── Derived: personal ──────────────────────────────────────────────────────
   const lowStock = inventory.filter((inv) => inv.quantityAvailable <= 2)
   const recentOrders = [...orders]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5)
+
+  // ── Derived: business ──────────────────────────────────────────────────────
+  const pendingPOs   = purchaseOrders.filter((p) => ['draft', 'sent', 'partial'].includes(p.status))
+  const pendingSOs   = salesOrders.filter((s) => ['draft', 'confirmed', 'partial'].includes(s.status))
+  const unpaidPInv   = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const unpaidSInv   = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const overduePInv  = purchaseInvoices.filter((i) => i.status === 'overdue')
+  const overdueSInv  = salesInvoices.filter((i) => i.status === 'overdue')
+
+  const totalReceivable = unpaidSInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
+  const totalPayable    = unpaidPInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
+  const stockValue      = inventory.reduce((s, inv) => s + (inv.quantityAvailable || 0) * (inv.price || 0), 0)
+
+  const recentSOs = [...salesOrders]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, 5)
+
+  const recentPOs = [...purchaseOrders]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
     .slice(0, 5)
 
   const TYPE_COLOR = {
@@ -78,13 +126,14 @@ export default function Dashboard() {
     investment: 'text-blue-600',
   }
 
-  // Stats
-  const stats = [
-    { label: 'Products',  value: products.length,  icon: Package,      color: 'bg-zinc-100',    to: '/products'  },
-    { label: 'Orders',    value: orders.length,    icon: ShoppingCart, color: 'bg-zinc-100',    to: '/products'  },
-    { label: 'Wishlist',  value: wishlists.length, icon: Heart,        color: 'bg-pink-50',     to: '/products'  },
-    { label: 'Low Stock', value: lowStock.length,  icon: AlertTriangle, color: lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100', to: '/products' },
-  ]
+  const SO_STATUS_COLOR = {
+    draft: 'bg-zinc-100 text-zinc-600', confirmed: 'bg-amber-50 text-amber-600',
+    partial: 'bg-amber-50 text-amber-600', delivered: 'bg-emerald-50 text-emerald-600', cancelled: 'bg-red-50 text-red-500',
+  }
+  const PO_STATUS_COLOR = {
+    draft: 'bg-zinc-100 text-zinc-600', sent: 'bg-amber-50 text-amber-600',
+    partial: 'bg-amber-50 text-amber-600', received: 'bg-emerald-50 text-emerald-600', cancelled: 'bg-red-50 text-red-500',
+  }
 
   return (
     <>
@@ -104,119 +153,249 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Finance hero card */}
-        {activeGroupId && (
-          <button onClick={() => navigate('/finance')} className="w-full text-left bg-zinc-900 text-white rounded-2xl p-5 active:scale-[0.98] transition-transform">
-            <p className="text-xs font-medium text-zinc-400 mb-1">This month · Net balance</p>
-            <p className="text-3xl font-bold mb-4">{fmt(summary?.net, symbol)}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/10 rounded-xl p-3">
-                <p className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1"><TrendingUp size={10} /> Income</p>
-                <p className="text-sm font-semibold text-emerald-400">{fmt(summary?.income, symbol)}</p>
+        {/* ── BUSINESS DASHBOARD ─────────────────────────────────────────── */}
+        {isBusiness ? (
+          <>
+            {/* Revenue hero cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-zinc-900 text-white rounded-2xl p-4">
+                <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1"><TrendingUp size={10} /> Receivable</p>
+                <p className="text-2xl font-bold text-emerald-400">{fmt(totalReceivable, symbol)}</p>
+                <p className="text-xs text-zinc-400 mt-1">{unpaidSInv.length} unpaid invoice{unpaidSInv.length !== 1 ? 's' : ''}</p>
+                {overdueSInv.length > 0 && <p className="text-xs text-red-400 mt-0.5">{overdueSInv.length} overdue</p>}
               </div>
-              <div className="bg-white/10 rounded-xl p-3">
-                <p className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1"><TrendingDown size={10} /> Expense</p>
-                <p className="text-sm font-semibold text-red-400">{fmt(summary?.expense, symbol)}</p>
+              <div className="bg-zinc-900 text-white rounded-2xl p-4">
+                <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1"><TrendingDown size={10} /> Payable</p>
+                <p className="text-2xl font-bold text-red-400">{fmt(totalPayable, symbol)}</p>
+                <p className="text-xs text-zinc-400 mt-1">{unpaidPInv.length} unpaid invoice{unpaidPInv.length !== 1 ? 's' : ''}</p>
+                {overduePInv.length > 0 && <p className="text-xs text-red-400 mt-0.5">{overduePInv.length} overdue</p>}
               </div>
             </div>
-          </button>
-        )}
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {stats.map(({ label, value, icon: Icon, color, to }) => (
-            <button key={label} onClick={() => navigate(to)}
-              className="bg-white rounded-2xl border border-zinc-200 p-4 text-left active:scale-[0.97] transition-transform">
-              <div className={`w-8 h-8 rounded-xl ${color} flex items-center justify-center mb-3`}>
-                <Icon size={16} className="text-zinc-700" />
-              </div>
-              <p className="text-2xl font-bold text-zinc-900">{value}</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
-            </button>
-          ))}
-        </div>
+            {/* Business KPI grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KpiCard label="Pending POs" value={pendingPOs.length} icon={PackageCheck}
+                iconColor="text-blue-600" bgColor="bg-blue-50"
+                sub={`${purchaseOrders.length} total`} to="/purchases" navigate={navigate} />
+              <KpiCard label="Pending SOs" value={pendingSOs.length} icon={Truck}
+                iconColor="text-emerald-600" bgColor="bg-emerald-50"
+                sub={`${salesOrders.length} total`} to="/sales" navigate={navigate} />
+              <KpiCard label="Stock Value" value={fmt(stockValue, symbol)} icon={Package}
+                iconColor="text-zinc-600" bgColor="bg-zinc-100"
+                sub={`${inventory.length} SKUs`} to="/products" navigate={navigate} />
+              <KpiCard label="Low Stock" value={lowStock.length} icon={AlertTriangle}
+                iconColor={lowStock.length > 0 ? 'text-amber-600' : 'text-zinc-400'}
+                bgColor={lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100'}
+                danger={lowStock.length > 0}
+                sub="≤ 2 units" to="/products" navigate={navigate} />
+            </div>
 
-        {/* 2-col layout for orders + low stock */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Recent Orders */}
-          <div className="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-4">
-            <SectionHeader title="Recent Orders" to="/products" navigate={navigate} />
-            {recentOrders.length === 0 ? (
-              <p className="text-sm text-zinc-400">No orders yet — start a shopping trip</p>
-            ) : (
-              <div className="flex flex-col divide-y divide-zinc-100">
-                {recentOrders.map((o) => (
-                  <div key={o._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                    <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
-                      <ShoppingCart size={14} className="text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-900 truncate">{o.name}</p>
-                      <p className="text-xs text-zinc-400">{fmtDate(o.date)} · {o.paidBy?.name || o.paidBy?.email || '—'}</p>
-                    </div>
-                    <p className="text-sm font-semibold text-zinc-900 flex-shrink-0">{symbol}{o.totalPrice}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Low Stock */}
-          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
-            <SectionHeader title="Low Stock" to="/products" navigate={navigate} />
-            {lowStock.length === 0 ? (
-              <p className="text-sm text-zinc-400">All items well stocked</p>
-            ) : (
-              <div className="flex flex-col divide-y divide-zinc-100">
-                {lowStock.slice(0, 5).map((inv) => {
-                  const p = inv.product || {}
-                  const iconBg = p.category?.color ? `${p.category.color}22` : '#f4f4f5'
-                  return (
-                    <div key={inv._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0" style={{ backgroundColor: iconBg }}>
-                        {p.category?.icon || '📦'}
+            {/* Recent SOs + Recent POs */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Recent Sales Orders */}
+              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+                <SectionHeader title="Recent Sales Orders" to="/sales" navigate={navigate} />
+                {recentSOs.length === 0 ? (
+                  <p className="text-sm text-zinc-400">No sales orders yet</p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-zinc-100">
+                    {recentSOs.map((o) => (
+                      <div key={o._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                          <Truck size={14} className="text-emerald-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-zinc-900 truncate">{o.soNumber}</p>
+                          <p className="text-xs text-zinc-400">{o.customer?.name || '—'} · {fmtDate(o.createdAt)}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <p className="text-sm font-semibold text-zinc-900">{fmt(o.grandTotal, symbol)}</p>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${SO_STATUS_COLOR[o.status] || 'bg-zinc-100 text-zinc-600'}`}>{o.status}</span>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-zinc-900 truncate">{p.name || '—'}</p>
-                        <p className="text-xs text-zinc-400">{p.unit || '—'}</p>
-                      </div>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                        inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
-                      }`}>
-                        {inv.quantityAvailable} left
-                      </span>
-                    </div>
-                  )
-                })}
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* Recent Finance transactions */}
-        {recentFinance.length > 0 && (
-          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
-            <SectionHeader title="Recent Transactions" to="/finance" navigate={navigate} />
-            <div className="flex flex-col divide-y divide-zinc-100">
-              {recentFinance.slice(0, 5).map((t) => (
-                <div key={t._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                  <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
-                    {t.type === 'income'     && <TrendingUp  size={14} className="text-emerald-600" />}
-                    {t.type === 'expense'    && <TrendingDown size={14} className="text-red-500" />}
-                    {t.type === 'loan'       && <ClipboardList size={14} className="text-amber-600" />}
-                    {t.type === 'investment' && <TrendingUp  size={14} className="text-blue-600" />}
+              {/* Recent Purchase Orders */}
+              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+                <SectionHeader title="Recent Purchase Orders" to="/purchases" navigate={navigate} />
+                {recentPOs.length === 0 ? (
+                  <p className="text-sm text-zinc-400">No purchase orders yet</p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-zinc-100">
+                    {recentPOs.map((o) => (
+                      <div key={o._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                          <PackageCheck size={14} className="text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-zinc-900 truncate">{o.poNumber}</p>
+                          <p className="text-xs text-zinc-400">{o.vendor?.name || '—'} · {fmtDate(o.createdAt)}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <p className="text-sm font-semibold text-zinc-900">{fmt(o.grandTotal, symbol)}</p>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${PO_STATUS_COLOR[o.status] || 'bg-zinc-100 text-zinc-600'}`}>{o.status}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-900 truncate">{t.description || t.type}</p>
-                    <p className="text-xs text-zinc-400">{fmtDate(t.date)}{t.category?.name ? ` · ${t.category.name}` : ''}</p>
-                  </div>
-                  <p className={`text-sm font-semibold flex-shrink-0 ${TYPE_COLOR[t.type]}`}>
-                    {t.type === 'expense' || t.type === 'loan' ? '-' : '+'}{fmt(t.amount, symbol)}
-                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Low stock */}
+            {lowStock.length > 0 && (
+              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+                <SectionHeader title="Low Stock Alert" to="/products" navigate={navigate} />
+                <div className="flex flex-col divide-y divide-zinc-100">
+                  {lowStock.slice(0, 5).map((inv) => {
+                    const p = inv.product || {}
+                    const iconBg = p.category?.color ? `${p.category.color}22` : '#f4f4f5'
+                    return (
+                      <div key={inv._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0" style={{ backgroundColor: iconBg }}>
+                          {p.category?.icon || '📦'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-zinc-900 truncate">{p.name || '—'}</p>
+                          <p className="text-xs text-zinc-400">{p.unit || '—'}</p>
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                          inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                        }`}>
+                          {inv.quantityAvailable} left
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {/* ── PERSONAL DASHBOARD ───────────────────────────────────────── */}
+
+            {/* Finance hero card */}
+            {activeGroupId && (
+              <button onClick={() => navigate('/finance')} className="w-full text-left bg-zinc-900 text-white rounded-2xl p-5 active:scale-[0.98] transition-transform">
+                <p className="text-xs font-medium text-zinc-400 mb-1">This month · Net balance</p>
+                <p className="text-3xl font-bold mb-4">{fmt(summary?.net, symbol)}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-white/10 rounded-xl p-3">
+                    <p className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1"><TrendingUp size={10} /> Income</p>
+                    <p className="text-sm font-semibold text-emerald-400">{fmt(summary?.income, symbol)}</p>
+                  </div>
+                  <div className="bg-white/10 rounded-xl p-3">
+                    <p className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1"><TrendingDown size={10} /> Expense</p>
+                    <p className="text-sm font-semibold text-red-400">{fmt(summary?.expense, symbol)}</p>
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {/* Personal stats grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'Products',  value: products.length,  icon: Package,       color: 'bg-zinc-100',  to: '/products'  },
+                { label: 'Orders',    value: orders.length,    icon: ShoppingCart,  color: 'bg-zinc-100',  to: '/products'  },
+                { label: 'Wishlist',  value: wishlists.length, icon: Heart,         color: 'bg-pink-50',   to: '/products'  },
+                { label: 'Low Stock', value: lowStock.length,  icon: AlertTriangle, color: lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100', to: '/products' },
+              ].map(({ label, value, icon: Icon, color, to }) => (
+                <button key={label} onClick={() => navigate(to)}
+                  className="bg-white rounded-2xl border border-zinc-200 p-4 text-left active:scale-[0.97] transition-transform">
+                  <div className={`w-8 h-8 rounded-xl ${color} flex items-center justify-center mb-3`}>
+                    <Icon size={16} className="text-zinc-700" />
+                  </div>
+                  <p className="text-2xl font-bold text-zinc-900">{value}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
+                </button>
               ))}
             </div>
-          </div>
+
+            {/* Recent Orders + Low Stock */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-4">
+                <SectionHeader title="Recent Orders" to="/products" navigate={navigate} />
+                {recentOrders.length === 0 ? (
+                  <p className="text-sm text-zinc-400">No orders yet — start a shopping trip</p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-zinc-100">
+                    {recentOrders.map((o) => (
+                      <div key={o._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+                          <ShoppingCart size={14} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-zinc-900 truncate">{o.name}</p>
+                          <p className="text-xs text-zinc-400">{fmtDate(o.date)} · {o.paidBy?.name || o.paidBy?.email || '—'}</p>
+                        </div>
+                        <p className="text-sm font-semibold text-zinc-900 flex-shrink-0">{symbol}{o.totalPrice}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+                <SectionHeader title="Low Stock" to="/products" navigate={navigate} />
+                {lowStock.length === 0 ? (
+                  <p className="text-sm text-zinc-400">All items well stocked</p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-zinc-100">
+                    {lowStock.slice(0, 5).map((inv) => {
+                      const p = inv.product || {}
+                      const iconBg = p.category?.color ? `${p.category.color}22` : '#f4f4f5'
+                      return (
+                        <div key={inv._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0" style={{ backgroundColor: iconBg }}>
+                            {p.category?.icon || '📦'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-zinc-900 truncate">{p.name || '—'}</p>
+                            <p className="text-xs text-zinc-400">{p.unit || '—'}</p>
+                          </div>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                            inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                          }`}>
+                            {inv.quantityAvailable} left
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Finance transactions */}
+            {recentFinance.length > 0 && (
+              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+                <SectionHeader title="Recent Transactions" to="/finance" navigate={navigate} />
+                <div className="flex flex-col divide-y divide-zinc-100">
+                  {recentFinance.slice(0, 5).map((t) => (
+                    <div key={t._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
+                        {t.type === 'income'     && <TrendingUp   size={14} className="text-emerald-600" />}
+                        {t.type === 'expense'    && <TrendingDown  size={14} className="text-red-500" />}
+                        {t.type === 'loan'       && <ClipboardList size={14} className="text-amber-600" />}
+                        {t.type === 'investment' && <TrendingUp   size={14} className="text-blue-600" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-zinc-900 truncate">{t.description || t.type}</p>
+                        <p className="text-xs text-zinc-400">{fmtDate(t.date)}{t.category?.name ? ` · ${t.category.name}` : ''}</p>
+                      </div>
+                      <p className={`text-sm font-semibold flex-shrink-0 ${TYPE_COLOR[t.type]}`}>
+                        {t.type === 'expense' || t.type === 'loan' ? '-' : '+'}{fmt(t.amount, symbol)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

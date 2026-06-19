@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   Home, Tag, CreditCard, Settings,
-  ShoppingCart, TrendingUp,
+  ShoppingCart, TrendingUp, BarChart3,
 } from 'lucide-react'
 import useAuthStore from '../../store/authStore'
 import useGroupStore from '../../store/groupStore'
@@ -11,16 +11,19 @@ const PERSONAL_NAV = [
   { to: '/',         icon: Home,       label: 'Dashboard', exact: true },
   { to: '/products', icon: Tag,        label: 'Products'               },
   { to: '/finance',  icon: CreditCard, label: 'Finance'                },
+  { to: '/reports',  icon: BarChart3,  label: 'Reports'                },
 ]
 
 const BUSINESS_NAV = [
-  { to: '/',          icon: Home,        label: 'Dashboard', exact: true },
-  { to: '/products',  icon: Tag,         label: 'Products'               },
-  { to: '/finance',   icon: CreditCard,  label: 'Finance'                },
+  { to: '/',          icon: Home,         label: 'Dashboard', exact: true },
+  { to: '/products',  icon: Tag,          label: 'Products'               },
   { divider: true, label: 'Purchase' },
-  { to: '/purchases', icon: ShoppingCart, label: 'Purchases'             },
+  { to: '/purchases', icon: ShoppingCart, label: 'Purchases'              },
   { divider: true, label: 'Sales' },
-  { to: '/sales',     icon: TrendingUp,  label: 'Sales'                  },
+  { to: '/sales',     icon: TrendingUp,   label: 'Sales'                  },
+  { divider: true, label: 'Insights' },
+  { to: '/reports',   icon: BarChart3,    label: 'Reports'                },
+  { to: '/finance',   icon: CreditCard,   label: 'Finance'                },
 ]
 
 function NavItem({ to, icon: Icon, label, exact }) {
