@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   LogOut, Users, UserPlus, Check, X, Trash2, Plus,
@@ -9,16 +9,16 @@ import {
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import { useForm, Controller } from 'react-hook-form'
 import { logout } from '../api/auth'
+import { getTemplates } from '../api/templates'
 import api from '../lib/axios'
 import useAuthStore from '../store/authStore'
+import useGroupStore from '../store/groupStore'
 import { useMe, useUpdateUser } from '../hooks/useUser'
 import { useSendFriendRequest, useRespondFriendRequest } from '../hooks/useFriends'
 import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup } from '../hooks/useGroups'
 
 function sharesGroup(groups, friendId) {
-  return groups
-    .filter((g) => g.name !== 'ISOLATED_GROUP')
-    .some((g) => g.members?.some((m) => String(m._id || m) === String(friendId)))
+  return groups.some((g) => g.members?.some((m) => String(m._id || m) === String(friendId)))
 }
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
@@ -127,31 +127,74 @@ function MembersDropdown({ friends = [], value = [], onChange }) {
 
 // ── Group Form (BottomSheet) ───────────────────────────────────────────────────
 function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
-  const { mutate: create, isPending: creating } = useCreateGroup()
   const { mutate: update, isPending: updating } = useUpdateGroup()
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm({
-    defaultValues: { name: '', members: [] },
+  const { setActiveGroup } = useGroupStore()
+  const qc = useQueryClient()
+  const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
+    defaultValues: { name: '', type: 'personal', members: [], templateId: null },
   })
+  const groupType = watch('type')
+  const selectedTemplate = watch('templateId')
+
+  // Fetch templates filtered by type (only when creating)
+  const { data: templatesData } = useQuery({
+    queryKey: ['templates', groupType],
+    queryFn: () => getTemplates(myId, groupType).then((r) => r.data || r),
+    enabled: open && !editing,
+  })
+  const templates = Array.isArray(templatesData) ? templatesData : []
 
   useEffect(() => {
     if (editing) {
       const memberIds = (editing.members || [])
         .map((m) => String(m._id || m))
         .filter((id) => id !== String(myId))
-      reset({ name: editing.name, members: memberIds })
+      reset({ name: editing.displayName || editing.name, type: editing.type || 'personal', members: memberIds, templateId: null })
     } else {
-      reset({ name: '', members: [] })
+      reset({ name: '', type: 'personal', members: [], templateId: null })
     }
   }, [editing, open])
 
-  const onSubmit = (data) => {
+  const [submitting, setSubmitting] = useState(false)
+
+  const onSubmit = async (data) => {
     if (editing) {
-      // deduplicate in case myId slipped in via the form
       const memberIds = [...new Set([String(myId), ...data.members])]
-      update({ id: editing._id, data: { name: data.name, members: memberIds } }, { onSuccess: onClose })
-    } else {
-      // backend adds the creator automatically via userId — don't include myId in members
-      create({ name: data.name, members: data.members, userId: myId }, { onSuccess: onClose })
+      update({ id: editing._id, data: { displayName: data.name, members: memberIds } }, { onSuccess: onClose })
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      // 1. Create the group
+      const groupRes = await api.post('/groups', {
+        name: data.name,
+        displayName: data.name,
+        type: data.type,
+        members: data.members,
+        userId: myId,
+      })
+      const group = groupRes.data
+      const groupId = group._id
+
+      // 2. Switch to the new group immediately
+      setActiveGroup(groupId)
+
+      // 3. Apply template if selected
+      if (data.templateId) {
+        await api.post('/apply-template', { templateId: data.templateId, groupId })
+      }
+
+      // Invalidate all relevant queries so Products/Categories refresh
+      await qc.invalidateQueries({ queryKey: ['groups'] })
+      await qc.invalidateQueries({ queryKey: ['products', groupId] })
+      await qc.invalidateQueries({ queryKey: ['categories', groupId] })
+
+      onClose()
+    } catch (err) {
+      console.error('Group creation failed:', err)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -161,18 +204,52 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
       onClose={onClose}
       title={editing ? 'Edit Group' : 'New Group'}
       footer={
-        <Button type="submit" form="group-form" fullWidth loading={creating || updating}>
+        <Button type="submit" form="group-form" fullWidth loading={submitting || updating}>
           {editing ? 'Save changes' : 'Create group'}
         </Button>
       }
     >
       <form id="group-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+
+        {/* Type selector — only on create, locked on edit */}
+        {!editing ? (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Group type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { key: 'personal', icon: '🏠', label: 'Personal', sub: 'Household, family' },
+                { key: 'business', icon: '🏢', label: 'Business', sub: 'Team, shop, company' },
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => { setValue('type', t.key); setValue('templateId', null) }}
+                  className={['rounded-xl border-2 p-3 text-left transition-all',
+                    groupType === t.key ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 bg-white',
+                  ].join(' ')}
+                >
+                  <span className="text-xl">{t.icon}</span>
+                  <p className="text-sm font-semibold text-zinc-900 mt-1">{t.label}</p>
+                  <p className="text-[10px] text-zinc-400">{t.sub}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200">
+            <span className="text-lg">{editing.type === 'business' ? '🏢' : '🏠'}</span>
+            <p className="text-sm text-zinc-700 font-medium capitalize">{editing.type || 'Personal'}</p>
+            <span className="ml-auto text-[10px] text-zinc-400 bg-zinc-200 px-2 py-0.5 rounded-full">Locked</span>
+          </div>
+        )}
+
         <Input
-          label="Group name"
-          placeholder="e.g. Family, Flatmates"
+          label={groupType === 'business' ? 'Workspace name' : 'Group name'}
+          placeholder={groupType === 'business' ? 'e.g. The Corner Store' : 'e.g. Family, Flatmates'}
           error={errors.name?.message}
           {...register('name', { required: 'Name is required' })}
         />
+
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-zinc-700">Members</label>
           <Controller
@@ -188,6 +265,32 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
           />
           <p className="text-xs text-zinc-400">You are always included as a member.</p>
         </div>
+
+        {/* Template picker — only on create */}
+        {!editing && templates.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Starter template <span className="text-zinc-400 font-normal">(optional)</span></label>
+            <div className="flex flex-col gap-2">
+              {templates.map((t) => (
+                <button
+                  key={t._id}
+                  type="button"
+                  onClick={() => setValue('templateId', selectedTemplate === t._id ? null : t._id)}
+                  className={['flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left transition-all',
+                    selectedTemplate === t._id ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 bg-white',
+                  ].join(' ')}
+                >
+                  <span className="text-xl">{t.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900">{t.name}</p>
+                    {t.description && <p className="text-[10px] text-zinc-400 truncate">{t.description}</p>}
+                  </div>
+                  <p className="text-[10px] text-zinc-400 flex-shrink-0">{t.categories?.length}cat · {t.products?.length}items</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </form>
     </BottomSheet>
   )
@@ -212,6 +315,7 @@ function timeAgo(date) {
 function ProfileTab() {
   const navigate = useNavigate()
   const { clearSession } = useAuthStore()
+  const { clearGroup } = useGroupStore()
   const { data: me, isLoading } = useMe()
   const { data: groups = [] } = useGroups()
   const { mutate: updateUser, isPending: saving } = useUpdateUser()
@@ -235,77 +339,112 @@ function ProfileTab() {
 
   const { mutate: logoutFn, isPending: loggingOut } = useMutation({
     mutationFn: logout,
-    onSuccess: () => { clearSession(); navigate('/login', { replace: true }) },
+    onSuccess: () => { clearGroup(); clearSession(); navigate('/login', { replace: true }) },
   })
 
   const onSave    = (data) => updateUser({ id: me._id, data })
   const onPwdSave = (data) => changePwd({ newPassword: data.newPassword })
 
   const friendCount = (me?.friends || []).filter((f) => f.status === 'ACCEPTED').length
-  const groupCount  = groups.filter((g) => g.name !== 'ISOLATED_GROUP').length
+  const groupCount  = groups.length
+
+  const [editOpen, setEditOpen] = useState(false)
 
   if (isLoading) return <Spinner className="py-12" />
 
+  const initials = me?.name
+    ? me.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()
+    : me?.email?.[0]?.toUpperCase()
+
   return (
-    <div className="flex flex-col gap-4 max-w-lg">
-      {/* Profile card */}
-      <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
-        {/* Avatar + identity */}
-        <div className="flex items-center gap-4 p-5">
-          <div className="w-16 h-16 rounded-full bg-zinc-900 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
-            {me?.name?.[0]?.toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="text-base font-bold text-zinc-900 truncate">{me?.name}</p>
-            <p className="text-sm text-zinc-500 truncate">{me?.email}</p>
-            <p className="text-xs text-zinc-400 mt-0.5">Joined {timeAgo(me?.createdAt)}</p>
-          </div>
-        </div>
+    <div className="flex flex-col gap-4 max-w-md">
 
-        {/* Stats row */}
-        <div className="grid grid-cols-2 border-t border-zinc-100">
-          <div className="flex flex-col items-center py-3 border-r border-zinc-100">
-            <p className="text-xl font-bold text-zinc-900">{friendCount}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">Friends</p>
-          </div>
-          <div className="flex flex-col items-center py-3">
-            <p className="text-xl font-bold text-zinc-900">{groupCount}</p>
-            <p className="text-xs text-zinc-500 mt-0.5">Groups</p>
-          </div>
+      {/* Hero card */}
+      <div className="bg-zinc-900 rounded-2xl p-5 flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">
+          {initials}
         </div>
-
-        {/* Edit name */}
-        <div className="border-t border-zinc-100 p-4">
-          <p className="text-sm font-semibold text-zinc-900 mb-3">Edit profile</p>
-          <form onSubmit={handleSubmit(onSave)} className="flex flex-col gap-3">
-            <Input label="Name" {...register('name', { required: true })} />
-            <Button type="submit" fullWidth loading={saving}>Save changes</Button>
-            <Button type="button" variant="outline" fullWidth onClick={() => setPwdOpen(true)}>
-              Change password
-            </Button>
-          </form>
-        </div>
-
-        {/* Currency */}
-        <div className="border-t border-zinc-100 p-4">
-          <p className="text-sm font-semibold text-zinc-900 mb-3">Currency</p>
-          <select
-            defaultValue={me?.currency || 'INR'}
-            onChange={(e) => updateUser({ id: me._id, data: { currency: e.target.value } })}
-            className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
-          >
-            {[
-              { code: 'INR', label: '₹ INR — Indian Rupee' },
-              { code: 'USD', label: '$ USD — US Dollar' },
-              { code: 'EUR', label: '€ EUR — Euro' },
-              { code: 'GBP', label: '£ GBP — British Pound' },
-              { code: 'JPY', label: '¥ JPY — Japanese Yen' },
-              { code: 'AUD', label: 'A$ AUD — Australian Dollar' },
-            ].map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
-          </select>
+        <div className="flex-1 min-w-0">
+          <p className="text-lg font-bold text-white truncate">{me?.name}</p>
+          <p className="text-sm text-zinc-400 truncate">{me?.email}</p>
+          <p className="text-xs text-zinc-500 mt-0.5">Member since {timeAgo(me?.createdAt)}</p>
         </div>
       </div>
 
+      {/* Stats row */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex flex-col items-center gap-0.5">
+          <p className="text-2xl font-bold text-zinc-900">{friendCount}</p>
+          <p className="text-xs text-zinc-500">Friends</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex flex-col items-center gap-0.5">
+          <p className="text-2xl font-bold text-zinc-900">{groupCount}</p>
+          <p className="text-xs text-zinc-500">Groups</p>
+        </div>
+      </div>
+
+      {/* Action rows */}
+      <div className="bg-white rounded-2xl border border-zinc-200 divide-y divide-zinc-100 overflow-hidden">
+        <button
+          onClick={() => setEditOpen(true)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center">
+              <Pencil size={15} className="text-zinc-600" />
+            </div>
+            <span className="text-sm font-medium text-zinc-900">Edit profile</span>
+          </div>
+          <ChevronDown size={16} className="text-zinc-400 -rotate-90" />
+        </button>
+
+        <button
+          onClick={() => setPwdOpen(true)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center">
+              <span className="text-sm">🔑</span>
+            </div>
+            <span className="text-sm font-medium text-zinc-900">Change password</span>
+          </div>
+          <ChevronDown size={16} className="text-zinc-400 -rotate-90" />
+        </button>
+      </div>
+
+      {/* Sign out */}
+      <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+        <button
+          onClick={() => logoutFn()}
+          disabled={loggingOut}
+          className="w-full flex items-center gap-3 px-5 py-4 hover:bg-red-50 active:bg-red-100 transition-colors"
+        >
+          <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
+            <LogOut size={15} className="text-red-500" />
+          </div>
+          <span className="text-sm font-medium text-red-500">
+            {loggingOut ? 'Signing out…' : 'Sign out'}
+          </span>
+        </button>
+      </div>
+
+      {/* Edit profile sheet */}
+      <BottomSheet
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit profile"
+        footer={
+          <Button form="profile-form" type="submit" fullWidth loading={saving}>
+            Save changes
+          </Button>
+        }
+      >
+        <form id="profile-form" onSubmit={handleSubmit((data) => { onSave(data); setEditOpen(false) })} className="flex flex-col gap-3">
+          <Input label="Name" {...register('name', { required: true })} />
+        </form>
+      </BottomSheet>
+
+      {/* Change password sheet */}
       <BottomSheet
         open={pwdOpen}
         onClose={() => { setPwdOpen(false); resetPwd() }}
@@ -334,13 +473,10 @@ function ProfileTab() {
               validate: (v) => v === watchPwd('newPassword') || 'Passwords do not match',
             })}
           />
-          {pwdError && <p className="text-xs text-red-500">Current password is incorrect.</p>}
+          {pwdError && <p className="text-xs text-red-500">Something went wrong. Please try again.</p>}
         </form>
       </BottomSheet>
 
-      <Button variant="outline" fullWidth loading={loggingOut} onClick={() => logoutFn()}>
-        <LogOut size={15} /> Sign out
-      </Button>
     </div>
   )
 }
@@ -502,7 +638,11 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
         </div>
       )}
 
-      <DataTable
+      {rows.length === 0 ? (
+        <EmptyState icon={Users} title="No friends yet" description="Add friends using their email to share groups and split expenses" />
+      ) : null}
+
+      {rows.length > 0 && <DataTable
         columns={[
           { key: 'name', label: 'name', filterable: true },
           { key: 'email', label: 'email', filterable: true },
@@ -559,7 +699,7 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
         emptyMessage="No friends yet"
         mobileFiltersOpen={mobileFiltersOpen}
         onMobileFiltersOpenChange={onMobileFiltersOpenChange}
-      />
+      />}
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
@@ -603,12 +743,13 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
 
   useEffect(() => { if (openAddRef) openAddRef.current = openAdd }, [])
 
-  const allGroups = groups.filter((g) => g.name !== 'ISOLATED_GROUP')
-  const groupNameOpts = [...new Set(allGroups.map((g) => g.name).filter(Boolean))]
+  const { activeGroupId } = useGroupStore()
+  const allGroups = groups
+  const groupNameOpts = [...new Set(allGroups.map((g) => g.displayName || g.name).filter(Boolean))]
 
   const sharedGroups = allGroups
-    .filter((g) => g.name.toLowerCase().includes(nameFilter.toLowerCase()))
-    .filter((g) => groupDropSel.length === 0 || groupDropSel.includes(g.name))
+    .filter((g) => (g.displayName || g.name).toLowerCase().includes(nameFilter.toLowerCase()))
+    .filter((g) => groupDropSel.length === 0 || groupDropSel.includes(g.displayName || g.name))
 
   if (isLoading) return <Spinner className="py-12" />
 
@@ -616,9 +757,14 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
     <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
       <DataTableMobileFilters columns={[{ key: 'name', label: 'name', filterable: true }]} filters={{ name: nameFilter }} onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }} dropOpts={{ name: groupNameOpts }} dropSel={{ name: groupDropSel }} onDropChange={(key, vals) => { if (key === 'name') setGroupDropSel(vals) }} open={mobileFiltersOpen} />
 
-      <DataTable
+      {sharedGroups.length === 0 ? (
+        <EmptyState icon={Users} title="No groups yet" description="Create a group to share expenses and manage inventory with others" />
+      ) : null}
+
+      {sharedGroups.length > 0 && <DataTable
         columns={[
           { key: 'name', label: 'name', filterable: true },
+          { key: 'type', label: 'type' },
           { key: 'members', label: 'members' },
           { key: 'action', label: 'Action' },
         ]}
@@ -630,7 +776,17 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
         onDropChange={(key, vals) => { if (key === 'name') setGroupDropSel(vals) }}
         renderRow={(g) => (
           <tr key={g._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-            <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{g.name}</td>
+            <td className="px-4 py-3 border-r border-zinc-100">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{g.type === 'business' ? '🏢' : '🏠'}</span>
+                <span className="font-medium text-zinc-900">{g.displayName || g.name}</span>
+              </div>
+            </td>
+            <td className="px-4 py-3 border-r border-zinc-100">
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${g.type === 'business' ? 'bg-blue-50 text-blue-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                {g.type === 'business' ? 'Business' : 'Personal'}
+              </span>
+            </td>
             <td className="px-4 py-3 border-r border-zinc-100">
               <div className="flex flex-wrap gap-1">
                 {(g.members || []).slice(0, 4).map((m, i) => {
@@ -652,7 +808,17 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
             <td className="px-4 py-3">
               <div className="flex items-center gap-2">
                 <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
-                <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                {(() => {
+                  const cantDelete = allGroups.length <= 1 || g._id === activeGroupId
+                  return (
+                    <button
+                      onClick={() => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) }}
+                      disabled={cantDelete}
+                      className={`p-1.5 rounded-lg ${cantDelete ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 hover:text-red-500 active:bg-zinc-100'}`}
+                      title={cantDelete ? (allGroups.length <= 1 ? 'Last group cannot be deleted' : 'Switch away from this group first') : 'Delete'}
+                    ><Trash2 size={14} /></button>
+                  )
+                })()}
               </div>
             </td>
           </tr>
@@ -660,7 +826,7 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
         emptyMessage="No groups yet"
         mobileFiltersOpen={mobileFiltersOpen}
         onMobileFiltersOpenChange={onMobileFiltersOpenChange}
-      />
+      />}
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
@@ -668,16 +834,31 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
           <EmptyState icon={Users} title="No shared groups" description="Create a group to share expenses with friends" />
         ) : sharedGroups.map((g) => (
           <div key={g._id} className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
-              <Users size={18} className="text-zinc-500" />
+            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0 text-xl">
+              {g.type === 'business' ? '🏢' : '🏠'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-zinc-900">{g.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-zinc-900">{g.displayName || g.name}</p>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${g.type === 'business' ? 'bg-blue-50 text-blue-600' : 'bg-zinc-100 text-zinc-500'}`}>
+                  {g.type === 'business' ? 'Business' : 'Personal'}
+                </span>
+              </div>
               <p className="text-xs text-zinc-500">{g.members?.length || 0} members</p>
             </div>
             <div className="flex gap-0">
               <button onClick={() => openEdit(g)} className="p-1 rounded-xl text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={15} /></button>
-              <button onClick={() => { if (confirm(`Delete "${g.name}"?`)) deleteGroup(g._id) }} className="p-1 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={15} /></button>
+              {(() => {
+                const cantDelete = allGroups.length <= 1 || g._id === activeGroupId
+                return (
+                  <button
+                    onClick={() => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) }}
+                    disabled={cantDelete}
+                    className={`p-1 rounded-xl ${cantDelete ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 hover:text-red-500 active:bg-zinc-100'}`}
+                    title={cantDelete ? (allGroups.length <= 1 ? 'Last group' : 'Active group') : 'Delete'}
+                  ><Trash2 size={15} /></button>
+                )
+              })()}
             </div>
           </div>
         ))}
@@ -694,19 +875,60 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
   )
 }
 
-// ── Templates Tab ─────────────────────────────────────────────────────────────
-function TemplatesTab() {
+// ── Configuration Tab ─────────────────────────────────────────────────────────
+function ConfigurationTab() {
+  const { data: me, isLoading } = useMe()
+  const { mutate: updateUser, isPending: saving } = useUpdateUser()
+
+  if (isLoading) return <Spinner className="py-12" />
+
   return (
-    <EmptyState icon={LayoutTemplate} title="No templates yet" description="Save shopping lists as templates to reuse them" />
+    <div className="flex flex-col gap-4 max-w-lg">
+      <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+        {/* Account type — read-only display */}
+        <div className="p-4">
+          <p className="text-sm font-semibold text-zinc-900 mb-1">Account type</p>
+          <p className="text-xs text-zinc-400 mb-3">Set when your first group was created. Each group has its own type.</p>
+          <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200">
+            <span className="text-xl">{me?.accountType === 'business' ? '🏢' : '🏠'}</span>
+            <div>
+              <p className="text-sm font-semibold text-zinc-900 capitalize">{me?.accountType || 'Personal'}</p>
+              {me?.businessName && <p className="text-xs text-zinc-500">{me.businessName}</p>}
+            </div>
+            <span className="ml-auto text-[10px] text-zinc-400 bg-zinc-200 px-2 py-0.5 rounded-full">Locked</span>
+          </div>
+        </div>
+
+        {/* Currency */}
+        <div className="border-t border-zinc-100 p-4">
+          <p className="text-sm font-semibold text-zinc-900 mb-1">Currency</p>
+          <p className="text-xs text-zinc-400 mb-3">Used across Finance, Orders and Dashboard.</p>
+          <select
+            defaultValue={me?.currency || 'INR'}
+            onChange={(e) => updateUser({ id: me._id, data: { currency: e.target.value } })}
+            className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
+          >
+            {[
+              { code: 'INR', label: '₹ INR — Indian Rupee' },
+              { code: 'USD', label: '$ USD — US Dollar' },
+              { code: 'EUR', label: '€ EUR — Euro' },
+              { code: 'GBP', label: '£ GBP — British Pound' },
+              { code: 'JPY', label: '¥ JPY — Japanese Yen' },
+              { code: 'AUD', label: 'A$ AUD — Australian Dollar' },
+            ].map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>
   )
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'profile',   label: 'My Profile', mobileLabel: 'Profile'   },
-  { key: 'friends',   label: 'Friends',    mobileLabel: 'Friends'   },
-  { key: 'groups',    label: 'Groups',     mobileLabel: 'Groups'    },
-  { key: 'templates', label: 'Templates',  mobileLabel: 'Templates' },
+  { key: 'profile',       label: 'My Profile',    mobileLabel: 'Profile' },
+  { key: 'friends',       label: 'Friends',        mobileLabel: 'Friends' },
+  { key: 'groups',        label: 'Groups',         mobileLabel: 'Groups'  },
+  { key: 'configuration', label: 'Configuration',  mobileLabel: 'Config'  },
 ]
 
 export default function Settings() {
@@ -809,7 +1031,7 @@ export default function Settings() {
           {tab === 'profile'   && <ProfileTab />}
           {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
           {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
-          {tab === 'templates' && <TemplatesTab />}
+          {tab === 'configuration' && <ConfigurationTab />}
         </div>
       </div>
     </>

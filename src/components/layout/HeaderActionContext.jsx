@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useCallback } from 'react'
 
-const HeaderActionContext = createContext({ action: null, setAction: () => {}, clearAction: () => {} })
+const HeaderActionContext = createContext({ action: null, setAction: () => { }, clearAction: () => { } })
 
 export function HeaderActionProvider({ children }) {
   const [action, setActionState] = useState(null)
 
-  const setAction  = useCallback((node) => setActionState(() => node), [])
+  const setAction = useCallback((node) => setActionState(() => node), [])
   const clearAction = useCallback(() => setActionState(null), [])
 
   return (

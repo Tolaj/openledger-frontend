@@ -3,18 +3,22 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { login } from '../api/auth'
 import useAuthStore from '../store/authStore'
+import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 
 export default function Login() {
   const navigate = useNavigate()
-  const setSession = useAuthStore((s) => s.setSession)
+  const { setSession, clearSession } = useAuthStore()
+  const { clearGroup } = useGroupStore()
 
   const { register, handleSubmit, formState: { errors } } = useForm()
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: login,
     onSuccess: (res) => {
+      clearSession()
+      clearGroup()
       setSession(res.data.user)
       navigate('/', { replace: true })
     },

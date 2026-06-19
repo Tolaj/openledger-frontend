@@ -3,19 +3,23 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { register as registerApi } from '../api/auth'
 import useAuthStore from '../store/authStore'
+import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 
 export default function Register() {
   const navigate = useNavigate()
-  const setSession = useAuthStore((s) => s.setSession)
+  const { setSession, clearSession } = useAuthStore()
+  const { clearGroup } = useGroupStore()
 
   const { register, handleSubmit, formState: { errors } } = useForm()
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: registerApi,
     onSuccess: (res) => {
-      setSession(res.data)
+      clearSession()
+      clearGroup()
+      setSession(res.data.user ?? res.data)
       navigate('/onboarding', { replace: true })
     },
   })

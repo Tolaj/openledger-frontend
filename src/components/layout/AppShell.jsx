@@ -9,8 +9,16 @@ export default function AppShell() {
     <div className="flex-1 flex flex-col bg-zinc-50 overflow-hidden">
       <Sidebar />
 
-      <div className="md:pl-60 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-        <main className="min-h-full max-w-md mx-auto pb-nav md:max-w-none md:pb-0 md:p-8 md:flex md:flex-col">
+      <div className="md:pl-60 flex-1 min-h-0 flex flex-col overflow-x-hidden">
+        {/* Mobile: page scrolls naturally */}
+        <div className="flex-1 overflow-y-auto md:hidden">
+          <main className="max-w-md mx-auto pb-nav px-4 pt-4">
+            <Outlet />
+          </main>
+        </div>
+
+        {/* Desktop: fixed height so DataTable fills and scrolls internally */}
+        <main className="hidden md:flex md:flex-col md:flex-1 md:min-h-0 md:px-8 md:pt-7">
           <Outlet />
         </main>
       </div>

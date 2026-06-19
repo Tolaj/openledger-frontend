@@ -8,13 +8,13 @@ export default function PageActions({ add }) {
 
   return (
     <div className="hidden md:flex items-center gap-2">
-      <GroupSwitcher />
+      <GroupSwitcher height="h-9" />
 
       {add && <div>{add}</div>}
 
       <button
         onClick={openCart}
-        className="relative flex items-center gap-2 px-3 py-2 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+        className="relative flex items-center gap-2 h-9 px-3 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
       >
         <ShoppingCart size={15} className="text-zinc-500" />
         <span>Cart</span>

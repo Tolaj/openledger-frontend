@@ -2,10 +2,10 @@ import { NavLink } from 'react-router-dom'
 import { Home, Tag, CreditCard, Settings } from 'lucide-react'
 
 const tabs = [
-  { to: '/',         icon: Home,       label: 'Dashboard', exact: true },
-  { to: '/products', icon: Tag,         label: 'Products'              },
-  { to: '/finance',  icon: CreditCard,  label: 'Finance'               },
-  { to: '/settings', icon: Settings,    label: 'Settings'              },
+  { to: '/', icon: Home, label: 'Dashboard', exact: true },
+  { to: '/products', icon: Tag, label: 'Products' },
+  { to: '/finance', icon: CreditCard, label: 'Finance' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export default function BottomNav() {
