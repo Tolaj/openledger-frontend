@@ -16,6 +16,7 @@ import { useOrders, useDeleteOrder } from '../hooks/useOrders'
 import { useWishlists, useDeleteWishlist, useUpdateWishlist } from '../hooks/useWishlists'
 import { useInventory, useDeleteInventory } from '../hooks/useInventory'
 import useCartStore from '../store/cartStore'
+import { useCurrencySymbol } from '../hooks/useCurrency'
 import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import useWishlistStore from '../store/wishlistStore'
@@ -133,6 +134,7 @@ function SplitDropdown({ members = [], splitAmong, onChange }) {
 // ── Products List tab ─────────────────────────────────────────────────────────
 function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { addItem, items } = useCartStore()
+  const sym = useCurrencySymbol()
   const [qty, setQty] = useState({})
   const [prices, setPrices] = useState({})
   const [splits, setSplits] = useState({})  // productId -> splitAmong array
@@ -200,7 +202,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
     { key: 'name', label: 'name', filterable: true },
     { key: 'description', label: 'description', filterable: true, noDropdown: true },
     { key: 'category', label: 'category', filterable: true },
-    { key: 'price', label: 'price', filterable: true },
+    { key: 'price', label: `price (${sym})`, filterable: true },
     { key: 'unit', label: 'unit', filterable: true },
     { key: 'manufacturer', label: 'manufacturer', filterable: true },
   ]
@@ -230,7 +232,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                 <div className="flex-1 min-w-0" onClick={() => toggleExpand(p._id)}>
                   <p className="text-sm font-semibold text-zinc-900 truncate">{p.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs font-medium text-zinc-700">$ {parseFloat(p.price).toFixed(2)}</span>
+                    <span className="text-xs font-medium text-zinc-700">{sym}{parseFloat(p.price).toFixed(2)}</span>
                     <span className="text-xs text-zinc-400">| {p.unit}</span>
                   </div>
                 </div>
@@ -262,18 +264,18 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                   <div className="flex items-center px-4 py-2.5">
                     <span className="text-xs text-zinc-400 w-24 flex-shrink-0">price</span>
                     <div className="flex items-center gap-2 flex-1">
-                      <button onClick={() => adjPrice(p, -0.05)} className="w-7 h-7 rounded-full bg-zinc-900 text-white flex items-center justify-center text-base font-bold leading-none flex-shrink-0">−</button>
+                      <button onClick={() => adjPrice(p, -0.05)} className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">−</button>
                       <InlineNumber value={price} onCommit={(v) => setPrices((prev) => ({ ...prev, [p._id]: v }))} format={(v) => v.toFixed(2)} />
-                      <button onClick={() => adjPrice(p, 0.05)} className="w-7 h-7 rounded-full bg-zinc-900 text-white flex items-center justify-center text-base font-bold leading-none flex-shrink-0">+</button>
+                      <button onClick={() => adjPrice(p, 0.05)} className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">+</button>
                     </div>
                   </div>
                   {/* unit */}
                   <div className="flex items-center px-4 py-2.5">
                     <span className="text-xs text-zinc-400 w-24 flex-shrink-0">unit</span>
                     <div className="flex items-center gap-2 flex-1">
-                      <button onClick={() => cycleUnit(p, -1)} className="w-7 h-7 rounded-full bg-zinc-900 text-white flex items-center justify-center text-base font-bold leading-none flex-shrink-0">−</button>
+                      <button onClick={() => cycleUnit(p, -1)} className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">−</button>
                       <span className="w-14 text-center text-xs font-semibold text-zinc-900">{unit}</span>
-                      <button onClick={() => cycleUnit(p, 1)} className="w-7 h-7 rounded-full bg-zinc-900 text-white flex items-center justify-center text-base font-bold leading-none flex-shrink-0">+</button>
+                      <button onClick={() => cycleUnit(p, 1)} className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none flex-shrink-0">+</button>
                     </div>
                   </div>
                   {/* splitAmong */}
@@ -308,7 +310,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
           { key: 'name', label: 'name', filterable: true },
           { key: 'description', label: 'description', filterable: true, noDropdown: true },
           { key: 'category', label: 'category', filterable: true },
-          { key: 'price', label: 'price', filterable: true },
+          { key: 'price', label: `price (${sym})`, filterable: true },
           { key: 'unit', label: 'unit', filterable: true },
           { key: 'splitAmong', label: 'splitAmong' },
           { key: 'manufacturer', label: 'manufacturer', filterable: true },
@@ -345,7 +347,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
               <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <button
                   onClick={() => adjPrice(p, -0.05)}
-                  className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center text-sm font-bold leading-none"
+                  className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none"
                 >−</button>
                 <InlineNumber
                   value={getPrice(p)}
@@ -354,7 +356,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                 />
                 <button
                   onClick={() => adjPrice(p, 0.05)}
-                  className="w-6 h-6 rounded-full bg-zinc-900 text-white flex items-center justify-center text-sm font-bold leading-none"
+                  className="w-5 h-5 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-bold leading-none"
                 >+</button>
               </div>
             </td>
@@ -544,6 +546,7 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFi
 
 // ── WishlistMobileCard ────────────────────────────────────────────────────────
 function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
+  const sym = useCurrencySymbol()
   const [isOpen, setIsOpen] = useState(false)
   const [itemsOpen, setItemsOpen] = useState(false)
   return (
@@ -557,7 +560,7 @@ function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
         </div>
         <div className="flex-1 min-w-0" onClick={() => setIsOpen((o) => !o)}>
           <p className="text-sm font-semibold text-zinc-900 truncate">{w.name}</p>
-          <p className="text-xs text-zinc-400 mt-0.5">$ {w.totalPrice} &nbsp;|&nbsp; {w.date ? new Date(w.date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) : '—'}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">{sym}{w.totalPrice} &nbsp;|&nbsp; {w.date ? new Date(w.date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) : '—'}</p>
         </div>
         <div className="flex gap-0 flex-shrink-0" >
           <button onClick={() => onAddToCart(w)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
@@ -583,7 +586,7 @@ function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
           </div>
           <div className="flex items-center px-4 py-2.5">
             <span className="text-xs text-zinc-400 w-24 flex-shrink-0">totalPrice</span>
-            <span className="text-sm font-semibold text-zinc-900">$ {w.totalPrice}</span>
+            <span className="text-sm font-semibold text-zinc-900">{sym}{w.totalPrice}</span>
           </div>
           {/* items accordion */}
           <div className="px-4 py-2.5">
@@ -605,7 +608,7 @@ function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
                     {(w.items || []).map((item, idx, arr) => (
                       <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-800 font-medium">{item.product?.name || '—'}</td>
-                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.price}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.count}</td>
                         <td className="px-2 py-1.5 text-zinc-600">
@@ -643,6 +646,7 @@ function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
 function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { openEdit } = useWishlistStore()
   const { addItem } = useCartStore()
+  const sym = useCurrencySymbol()
 
   const memberName = (id) => {
     const m = groupMemberObjects.find((m) => String(m._id) === String(id))
@@ -695,7 +699,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
 
   const WISH_COLS = [
     { key: 'name', label: 'name', filterable: true },
-    { key: 'totalPrice', label: 'total price', filterable: true },
+    { key: 'totalPrice', label: `total price (${sym})`, filterable: true },
     { key: 'date', label: 'date', filterable: true },
     { key: 'paidBy', label: 'paid by', filterable: true },
     { key: 'createdBy', label: 'created by', filterable: true },
@@ -722,7 +726,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
         columns={[
           { key: 'name', label: 'name', filterable: true },
           { key: 'items', label: 'items' },
-          { key: 'totalPrice', label: 'totalPrice', filterable: true },
+          { key: 'totalPrice', label: `total price (${sym})`, filterable: true },
           { key: 'date', label: 'date', filterable: true },
           { key: 'paidBy', label: 'paidBy', filterable: true },
           { key: 'createdBy', label: 'createdBy', filterable: true },
@@ -743,7 +747,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
               </td>
               <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{w.name}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.items?.length ?? 0}</td>
-              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{w.totalPrice}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{sym}{w.totalPrice}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500">{w.date}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.paidBy?.name || w.paidBy?.email || '—'}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{w.createdBy?.name || w.createdBy?.email || '—'}</td>
@@ -777,7 +781,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
                       {(w.items || []).map((item, idx, arr) => (
                         <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
                           <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
-                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.price}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
                           <td className="px-3 py-2 text-zinc-600">
@@ -805,6 +809,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
 
 // ── OrderMobileCard ───────────────────────────────────────────────────────────
 function OrderMobileCard({ o, onDelete }) {
+  const sym = useCurrencySymbol()
   const [isOpen, setIsOpen] = useState(false)
   const [itemsOpen, setItemsOpen] = useState(false)
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) : '—'
@@ -819,7 +824,7 @@ function OrderMobileCard({ o, onDelete }) {
         </div>
         <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
           <p className="text-sm font-semibold text-zinc-900 truncate">{o.name}</p>
-          <p className="text-xs text-zinc-400 mt-0.5">$ {o.totalPrice} &nbsp;|&nbsp; {fmtDate(o.date)}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">{sym}{o.totalPrice} &nbsp;|&nbsp; {fmtDate(o.date)}</p>
         </div>
         <div className="flex gap-0 flex-shrink-0" >
           <button onClick={() => { if (confirm(`Delete "${o.name}"?`)) onDelete(o._id) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
@@ -839,7 +844,7 @@ function OrderMobileCard({ o, onDelete }) {
           </div>
           <div className="flex items-center px-4 py-2.5">
             <span className="text-xs text-zinc-400 w-24 flex-shrink-0">totalPrice</span>
-            <span className="text-sm font-semibold text-zinc-900">$ {o.totalPrice}</span>
+            <span className="text-sm font-semibold text-zinc-900">{sym}{o.totalPrice}</span>
           </div>
           {/* items accordion */}
           <div className="px-4 py-2.5">
@@ -861,7 +866,7 @@ function OrderMobileCard({ o, onDelete }) {
                     {(o.items || []).map((item, idx, arr) => (
                       <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-800 font-medium">{item.product?.name || '—'}</td>
-                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.price}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.count}</td>
                         <td className="px-2 py-1.5 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>
@@ -892,6 +897,7 @@ function OrderMobileCard({ o, onDelete }) {
 
 // ── Orders tab ────────────────────────────────────────────────────────────────
 function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+  const sym = useCurrencySymbol()
   const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ name: '', totalPrice: '', date: '', paidBy: '', createdBy: '' })
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
@@ -932,7 +938,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
 
   const ORDER_COLS = [
     { key: 'name', label: 'name', filterable: true },
-    { key: 'totalPrice', label: 'total price', filterable: true },
+    { key: 'totalPrice', label: `total price (${sym})`, filterable: true },
     { key: 'date', label: 'date', filterable: true },
     { key: 'paidBy', label: 'paid by', filterable: true },
     { key: 'createdBy', label: 'created by', filterable: true },
@@ -952,7 +958,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
         columns={[
           { key: 'name', label: 'name', filterable: true },
           { key: 'items', label: 'items' },
-          { key: 'totalPrice', label: 'totalPrice', filterable: true },
+          { key: 'totalPrice', label: `total price (${sym})`, filterable: true },
           { key: 'date', label: 'date', filterable: true },
           { key: 'paidBy', label: 'paidBy', filterable: true },
           { key: 'createdBy', label: 'createdBy', filterable: true },
@@ -976,7 +982,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
               </td>
               <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{o.name}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.items?.length ?? 0}</td>
-              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{o.totalPrice}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{sym}{o.totalPrice}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500">{o.date}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.paidBy?.name || o.paidBy?.email || '—'}</td>
               <td className="px-4 py-3 text-zinc-700">{o.createdBy?.name || o.createdBy?.email || '—'}</td>
@@ -1005,7 +1011,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
                       {(o.items || []).map((item, idx, arr) => (
                         <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
                           <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
-                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.price}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
                           <td className="px-3 py-2 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>
@@ -1028,6 +1034,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
 
 // ── InventoryMobileCard ───────────────────────────────────────────────────────
 function InventoryMobileCard({ inv, p, iconBg, splitIds, memberName, onAddToCart, onDelete }) {
+  const sym = useCurrencySymbol()
   const [isOpen, setIsOpen] = useState(false)
   return (
     <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
@@ -1041,7 +1048,7 @@ function InventoryMobileCard({ inv, p, iconBg, splitIds, memberName, onAddToCart
         </div>
         <div className="flex-1 min-w-0" onClick={() => setIsOpen((o) => !o)}>
           <p className="text-sm font-semibold text-zinc-900 truncate">{p.name || '—'}</p>
-          <p className="text-xs text-zinc-400 mt-0.5">$ {inv.price} &nbsp;|&nbsp; {p.unit || '—'}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">{sym}{inv.price} &nbsp;|&nbsp; {p.unit || '—'}</p>
         </div>
         <div className="flex gap-0 flex-shrink-0" >
           <button onClick={onAddToCart} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
@@ -1068,7 +1075,7 @@ function InventoryMobileCard({ inv, p, iconBg, splitIds, memberName, onAddToCart
           </div>
           <div className="flex items-center px-4 py-2.5">
             <span className="text-xs text-zinc-400 w-28 flex-shrink-0">price</span>
-            <span className="text-sm text-zinc-900">$ {inv.price}</span>
+            <span className="text-sm text-zinc-900">{sym}{inv.price}</span>
           </div>
           <div className="flex items-center px-4 py-2.5">
             <span className="text-xs text-zinc-400 w-28 flex-shrink-0">unit</span>
@@ -1109,6 +1116,7 @@ function InventoryMobileCard({ inv, p, iconBg, splitIds, memberName, onAddToCart
 // ── Inventory tab ─────────────────────────────────────────────────────────────
 function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { addItem } = useCartStore()
+  const sym = useCurrencySymbol()
   const [filters, setFilters] = useState({ name: '', description: '', category: '', price: '', unit: '', manufacturer: '' })
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
   const [dropSel, setDropSel] = useState({})
@@ -1160,7 +1168,7 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
     { key: 'name', label: 'name', filterable: true },
     { key: 'description', label: 'description', filterable: true, noDropdown: true },
     { key: 'category', label: 'category', filterable: true },
-    { key: 'price', label: 'price', filterable: true },
+    { key: 'price', label: `price (${sym})`, filterable: true },
     { key: 'unit', label: 'unit', filterable: true },
     { key: 'manufacturer', label: 'manufacturer', filterable: true },
   ]
@@ -1196,7 +1204,7 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
           { key: 'name', label: 'name', filterable: true },
           { key: 'description', label: 'description', filterable: true, noDropdown: true },
           { key: 'category', label: 'category', filterable: true },
-          { key: 'price', label: 'price', filterable: true },
+          { key: 'price', label: `price (${sym})`, filterable: true },
           { key: 'unit', label: 'unit', filterable: true },
           { key: 'splitAmong', label: 'splitAmong' },
           { key: 'manufacturer', label: 'manufacturer', filterable: true },
@@ -1229,7 +1237,7 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
                   </span>
                 ) : <span className="text-zinc-400">—</span>}
               </td>
-              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{inv.price}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{sym}{inv.price}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{p.unit || '—'}</td>
               <td className="px-4 py-3 border-r border-zinc-100">
                 <div className="flex flex-wrap gap-1">

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Minus, Plus, Trash2, ChevronDown, Check, ShoppingCart } from 'lucide-react'
 import useCartStore from '../../store/cartStore'
+import { useCurrencySymbol } from '../../hooks/useCurrency'
 import useGroupStore from '../../store/groupStore'
 import useAuthStore from '../../store/authStore'
 import { useGroup } from '../../hooks/useGroups'
@@ -107,6 +108,7 @@ function InlineNumber({ value, onCommit, format = (v) => v }) {
 
 // ── CartItem ──────────────────────────────────────────────────────────────────
 function CartItem({ item, members, onUpdateQty, onUpdatePrice, onUpdateSplit, onRemove }) {
+  const sym = useCurrencySymbol()
   const lineTotal = (item._price * item.quantity).toFixed(2)
   const catColor = item.category?.color
   // category.color may be a hex code or a Tailwind class — only use as inline style if hex
@@ -127,7 +129,7 @@ function CartItem({ item, members, onUpdateQty, onUpdatePrice, onUpdateSplit, on
         {/* name + total */}
         <div className="flex items-start justify-between gap-2 mb-2">
           <p className="text-sm font-semibold text-zinc-900 leading-tight">{item.name}</p>
-          <p className="text-sm font-bold text-zinc-900 whitespace-nowrap">$ {lineTotal}</p>
+          <p className="text-sm font-bold text-zinc-900 whitespace-nowrap">{sym}{lineTotal}</p>
         </div>
 
         {/* rows: Unit / Price / Count — Split label+dropdown pinned right */}
@@ -210,6 +212,7 @@ export default function CartPanel() {
   const { mutate: createOrder, isPending: placingOrder } = useCreateOrder()
   const { mutate: createWishlist, isPending: savingWishlist } = useCreateWishlist()
   const { mutate: upsertInventory } = useCreateInventory()
+  const sym = useCurrencySymbol()
 
   const members = (group?.members || []).filter((m) => m._id || m)
   const total = getTotal()
@@ -354,7 +357,7 @@ export default function CartPanel() {
             {/* Subtotal */}
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-zinc-900">Subtotal</span>
-              <span className="text-sm font-bold text-zinc-900">Rs.{total.toFixed(2)}</span>
+              <span className="text-sm font-bold text-zinc-900">{sym}{total.toFixed(2)}</span>
             </div>
 
             {/* Order form */}

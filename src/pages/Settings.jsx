@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   LogOut, Users, UserPlus, Check, X, Trash2, Plus,
-  Filter, ChevronDown, Pencil, LayoutTemplate,
+  Filter, ChevronDown, Pencil, LayoutTemplate, Home, Briefcase,
 } from 'lucide-react'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import { useForm, Controller } from 'react-hook-form'
@@ -778,7 +778,9 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
           <tr key={g._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
             <td className="px-4 py-3 border-r border-zinc-100">
               <div className="flex items-center gap-2">
-                <span className="text-lg">{g.type === 'business' ? '🏢' : '🏠'}</span>
+                <div className="w-6 h-6 rounded-lg bg-zinc-100 flex items-center justify-center flex-shrink-0">
+                  {g.type === 'business' ? <Briefcase size={13} className="text-zinc-600" /> : <Home size={13} className="text-zinc-600" />}
+                </div>
                 <span className="font-medium text-zinc-900">{g.displayName || g.name}</span>
               </div>
             </td>
@@ -834,8 +836,8 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
           <EmptyState icon={Users} title="No shared groups" description="Create a group to share expenses with friends" />
         ) : sharedGroups.map((g) => (
           <div key={g._id} className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0 text-xl">
-              {g.type === 'business' ? '🏢' : '🏠'}
+            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
+              {g.type === 'business' ? <Briefcase size={18} className="text-zinc-600" /> : <Home size={18} className="text-zinc-600" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

@@ -13,14 +13,11 @@ import { useOrders } from '../hooks/useOrders'
 import { useWishlists } from '../hooks/useWishlists'
 import { useInventory } from '../hooks/useInventory'
 import { useMe } from '../hooks/useUser'
+import { useCurrencySymbol } from '../hooks/useCurrency'
 import { useFinanceSummary, useFinance } from '../hooks/useFinance'
 import { startOfMonth, endOfMonth, format } from 'date-fns'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const CURRENCIES = {
-  INR: '₹', USD: '$', EUR: '€', GBP: '£', JPY: '¥', AUD: 'A$',
-}
-
 function fmt(amount, symbol) {
   return `${symbol}${Number(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
@@ -51,7 +48,7 @@ export default function Dashboard() {
 
   const { activeGroupId } = useGroupStore()
   const { data: me }      = useMe()
-  const symbol = CURRENCIES[me?.currency || 'INR'] || '₹'
+  const symbol = useCurrencySymbol()
 
   const { data: products  = [] } = useProducts()
   const { data: orders    = [] } = useOrders()

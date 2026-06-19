@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Trash2, ChevronDown, Check, ShoppingCart } from 'lucide-react'
 import useWishlistStore from '../../store/wishlistStore'
+import { useCurrencySymbol } from '../../hooks/useCurrency'
 import useGroupStore from '../../store/groupStore'
 import useAuthStore from '../../store/authStore'
 import { useGroup } from '../../hooks/useGroups'
@@ -105,6 +106,7 @@ function InlineNumber({ value, onCommit, format = (v) => v }) {
 
 // ── WishlistItem ──────────────────────────────────────────────────────────────
 function WishlistItem({ item, members, onUpdateQty, onUpdatePrice, onUpdateSplit, onRemove }) {
+  const sym = useCurrencySymbol()
   const lineTotal = (item._price * item.quantity).toFixed(2)
   const catColor = item.category?.color
   const iconBg = catColor && catColor.startsWith('#') ? `${catColor}22` : '#f4f4f5'
@@ -121,7 +123,7 @@ function WishlistItem({ item, members, onUpdateQty, onUpdatePrice, onUpdateSplit
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2 mb-2">
           <p className="text-sm font-semibold text-zinc-900 leading-tight">{item.name}</p>
-          <p className="text-sm font-bold text-zinc-900 whitespace-nowrap">$ {lineTotal}</p>
+          <p className="text-sm font-bold text-zinc-900 whitespace-nowrap">{sym}{lineTotal}</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -193,6 +195,7 @@ export default function WishlistCartPanel() {
   const { data: group } = useGroup(activeGroupId)
   const { data: wishlists = [] } = useWishlists()
   const { mutate: updateWishlist } = useUpdateWishlist()
+  const sym = useCurrencySymbol()
 
   const entry = wishlists.find((w) => w._id === editingId)
   const members = (group?.members || []).filter((m) => m._id)
@@ -310,7 +313,7 @@ export default function WishlistCartPanel() {
           <div className="flex-shrink-0 border-t border-zinc-100 px-5 pt-4 pb-5 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-zinc-900">Subtotal</span>
-              <span className="text-sm font-bold text-zinc-900">Rs.{total.toFixed(2)}</span>
+              <span className="text-sm font-bold text-zinc-900">{sym}{total.toFixed(2)}</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">

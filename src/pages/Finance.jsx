@@ -22,6 +22,7 @@ import {
 } from '../hooks/useFinance'
 import { useGroups } from '../hooks/useGroups'
 import { useCategories } from '../hooks/useCategories'
+import { useCurrencySymbol } from '../hooks/useCurrency'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths } from 'date-fns'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -744,7 +745,7 @@ export default function Finance() {
   const { data: groups }  = useGroups()
   const { data: categories = [] } = useCategories()
 
-  const symbol = CURRENCIES.find((c) => c.code === (me?.currency || 'INR'))?.symbol || '₹'
+  const symbol = useCurrencySymbol()
 
   const activeGroup = groups?.find((g) => g._id === activeGroupId)
   const groupMembers = activeGroup?.members || []
