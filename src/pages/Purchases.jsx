@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
-import { Construction, Plus, Pencil, Trash2, Users, ShoppingCart, Minus } from 'lucide-react'
+import { Construction, Plus, Pencil, Trash2, Users, ShoppingCart, Minus, PackageCheck, RefreshCw, ChevronDown, FileText } from 'lucide-react'
+import React from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
@@ -12,6 +13,8 @@ import EmptyState from '../components/ui/EmptyState'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor } from '../hooks/useVendors'
 import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useDeletePurchaseOrder } from '../hooks/usePurchaseOrders'
+import { useGRNs, useCreateGRN, useDeleteGRN } from '../hooks/useGRNs'
+import { usePurchaseInvoices, useCreatePurchaseInvoice, useUpdatePurchaseInvoice, useDeletePurchaseInvoice } from '../hooks/usePurchaseInvoices'
 import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import ProductPicker from '../components/features/ProductPicker'
@@ -199,8 +202,10 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ poNumber: '', vendor: '', status: '' })
   const [dropSel, setDropSel] = useState({})
+  const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
 
   const { register, handleSubmit, reset, watch, control, setValue, formState: { errors } } = useForm({
     defaultValues: { vendor: '', items: [{ product: '', description: '', qty: 1, unitPrice: 0, taxRate: 0 }], expectedDate: '', notes: '' }
@@ -244,7 +249,10 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
   })
 
   const onSubmit = async (data) => {
-    const items = data.items.map((it, i) => ({ ...it, qty: parseFloat(it.qty), unitPrice: parseFloat(it.unitPrice), taxRate: parseFloat(it.taxRate) || 0, amount: calcAmount(i) }))
+    const items = data.items.map((it, i) => {
+      const { product, ...rest } = it
+      return { ...(product ? { product } : {}), ...rest, qty: parseFloat(it.qty), unitPrice: parseFloat(it.unitPrice), taxRate: parseFloat(it.taxRate) || 0, amount: calcAmount(i) }
+    })
     await createPO.mutateAsync({ ...data, items })
     setSheetOpen(false)
   }
@@ -271,14 +279,15 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-sm font-semibold text-zinc-900">{o.poNumber}</span>
-                  <button onClick={() => setStatusSheet(o)}><Badge variant={STATUS_VARIANT[o.status] || 'default'}>{o.status}</Badge></button>
+                  <Badge variant={STATUS_VARIANT[o.status] || 'default'}>{o.status}</Badge>
                 </div>
                 <p className="text-sm text-zinc-600 mt-0.5">{o.vendor?.name || '—'}</p>
                 {o.expectedDate && <p className="text-xs text-zinc-400 mt-0.5">Expected: {new Date(o.expectedDate).toLocaleDateString()}</p>}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <span className="text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</span>
-                <button onClick={() => onDelete(o._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors ml-1"><Trash2 size={15} /></button>
+                <button onClick={() => setStatusSheet(o)} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors" title="Update status"><RefreshCw size={14} /></button>
+                <button onClick={() => onDelete(o._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
               </div>
             </div>
             {o.items?.length > 0 && (
@@ -305,21 +314,55 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
         dropSel={dropSel}
         onDropChange={setDrop}
         emptyMessage="No purchase orders yet"
+        leadingCol={true}
         renderRow={(o) => (
-          <tr key={o._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-            <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{o.poNumber}</td>
-            <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{o.vendor?.name || '—'}</td>
-            <td className="px-4 py-3 border-r border-zinc-100">
-              <button onClick={() => setStatusSheet(o)}><Badge variant={STATUS_VARIANT[o.status] || 'default'}>{o.status}</Badge></button>
-            </td>
-            <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{o.items?.length || 0}</td>
-            <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
-            <td className="px-4 py-3">
-              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <button onClick={() => onDelete(o._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
-              </div>
-            </td>
-          </tr>
+          <React.Fragment key={o._id}>
+            <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggleExpand(o._id)}>
+              <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+                <ChevronDown size={14} className={`transition-transform ${expanded[o._id] ? '' : '-rotate-90'}`} />
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{o.poNumber}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{o.vendor?.name || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100">
+                <Badge variant={STATUS_VARIANT[o.status] || 'default'}>{o.status}</Badge>
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{o.items?.length || 0}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <button onClick={(e) => { e.stopPropagation(); setStatusSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status"><RefreshCw size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                </div>
+              </td>
+            </tr>
+            {expanded[o._id] && (
+              <tr className="border-b border-zinc-100 bg-zinc-50">
+                <td /><td colSpan={6} className="px-4 py-3">
+                  <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                    <thead>
+                      <tr className="border-b border-zinc-200">
+                        {['Product / Description', 'Qty', 'Unit Price', 'Tax %', 'Amount', 'Unit'].map((h, i, arr) => (
+                          <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(o.items || []).map((item, idx, arr) => (
+                        <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                          <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || item.description || '—'}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.qty ?? '—'}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{(item.unitPrice ?? 0).toFixed(2)}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.taxRate ?? 0}%</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{(item.amount ?? 0).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-zinc-600">{item.unit || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            )}
+          </React.Fragment>
         )}
       />
         </>
@@ -401,26 +444,637 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
   )
 }
 
+/* ─── GRN Tab ─────────────────────────────────────────────────────────────── */
+const GRN_STATUS_VARIANT = { complete: 'success', partial: 'warning' }
+
+const GRN_COLS = [
+  { key: 'grnNumber',  label: 'GRN #',    filterable: true, noDropdown: true, width: 'w-28' },
+  { key: 'po',         label: 'PO #',     filterable: true, noDropdown: true },
+  { key: 'vendor',     label: 'Vendor',   filterable: true },
+  { key: 'status',     label: 'Status',   filterable: true },
+  { key: 'items',      label: 'Items',    width: 'w-16' },
+  { key: 'date',       label: 'Date',     width: 'w-28' },
+  { key: 'action',     label: 'action' },
+]
+
+function GRNTab({ mobileFiltersOpen, onAdd }) {
+  const { data: grns = [], isLoading } = useGRNs()
+  const { data: purchaseOrders = [] } = usePurchaseOrders()
+  const createGRN = useCreateGRN()
+  const deleteGRN = useDeleteGRN()
+  const sym = useCurrencySymbol()
+
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [selectedPO, setSelectedPO] = useState('')
+  const [grnItems, setGrnItems] = useState([])
+  const [receivedDate, setReceivedDate] = useState('')
+  const [notes, setNotes] = useState('')
+  const [formError, setFormError] = useState('')
+  const [filters, setFilters] = useState({ grnNumber: '', po: '', vendor: '', status: '' })
+  const [dropSel, setDropSel] = useState({})
+
+  // When PO changes, pre-populate items from the PO
+  const handlePOChange = (poId) => {
+    setSelectedPO(poId)
+    const po = purchaseOrders.find((p) => p._id === poId)
+    if (po?.items) {
+      setGrnItems(po.items.map((it) => ({
+        product: it.product?._id || it.product || '',
+        description: it.description || it.product?.name || '',
+        qtyOrdered: it.qty || 0,
+        qtyReceived: it.qty || 0,
+        unit: it.unit || it.product?.unit || '',
+        unitPrice: it.unitPrice || 0,
+      })))
+    } else {
+      setGrnItems([])
+    }
+  }
+
+  const openCreate = () => {
+    setSelectedPO('')
+    setGrnItems([])
+    setReceivedDate(new Date().toISOString().slice(0, 10))
+    setNotes('')
+    setFormError('')
+    setSheetOpen(true)
+  }
+  onAdd.current = openCreate
+
+  const handleSubmit = async () => {
+    if (!selectedPO) return setFormError('Please select a purchase order')
+    if (grnItems.length === 0) return setFormError('No items to receive')
+    setFormError('')
+    try {
+      await createGRN.mutateAsync({
+        purchaseOrder: selectedPO,
+        items: grnItems,
+        receivedDate,
+        notes,
+      })
+      setSheetOpen(false)
+    } catch (e) {
+      setFormError(e?.response?.data?.error || e?.response?.data?.message || 'Failed to create GRN')
+    }
+  }
+
+  const setFilter = (key, val) => setFilters((f) => ({ ...f, [key]: val }))
+  const setDrop   = (key, vals) => setDropSel((p) => ({ ...p, [key]: vals }))
+  const getDrop   = (key) => dropSel[key] || []
+  const inDrop    = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
+
+  const dropOpts = {
+    status: [...new Set(grns.map((g) => g.status).filter(Boolean))],
+    vendor: [...new Set(grns.map((g) => g.purchaseOrder?.vendor?.name).filter(Boolean))],
+  }
+
+  const filtered = grns.filter((g) => {
+    const poNum = g.purchaseOrder?.poNumber || ''
+    const vendorName = g.purchaseOrder?.vendor?.name || ''
+    return (
+      (g.grnNumber || '').toLowerCase().includes(filters.grnNumber.toLowerCase()) &&
+      poNum.toLowerCase().includes(filters.po.toLowerCase()) &&
+      vendorName.toLowerCase().includes(filters.vendor.toLowerCase()) && inDrop('vendor', vendorName) &&
+      (g.status || '').includes(filters.status) && inDrop('status', g.status)
+    )
+  })
+
+  const onDelete = async (id) => { if (confirm('Delete this GRN? Note: stock will not be reversed automatically.')) await deleteGRN.mutateAsync(id) }
+
+  // Eligible POs: only those in sent / partial status (not yet fully received)
+  const eligiblePOs = purchaseOrders.filter((p) => ['draft', 'sent', 'partial'].includes(p.status))
+
+  if (isLoading) return <div className="flex-1 flex items-center justify-center"><span className="h-6 w-6 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" /></div>
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {grns.length === 0 ? (
+        <EmptyState icon={PackageCheck} title="No goods receipts yet" description="Record stock received against a purchase order"
+          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create GRN</Button>} />
+      ) : (
+        <>
+          <DataTableMobileFilters columns={GRN_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
+
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-2 md:hidden">
+            {filtered.map((g) => (
+              <div key={g._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm font-semibold text-zinc-900">{g.grnNumber}</span>
+                      <Badge variant={GRN_STATUS_VARIANT[g.status] || 'default'}>{g.status}</Badge>
+                    </div>
+                    <p className="text-sm text-zinc-600 mt-0.5">PO: {g.purchaseOrder?.poNumber || '—'} · {g.purchaseOrder?.vendor?.name || '—'}</p>
+                    {g.receivedDate && <p className="text-xs text-zinc-400 mt-0.5">{new Date(g.receivedDate).toLocaleDateString()}</p>}
+                  </div>
+                  <button onClick={() => onDelete(g._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                </div>
+                {g.items?.length > 0 && (
+                  <div className="mt-3 border-t border-zinc-100 pt-3 space-y-1">
+                    {g.items.map((it, i) => (
+                      <div key={i} className="flex justify-between text-xs text-zinc-500">
+                        <span className="truncate max-w-[60%]">{it.description || it.product?.name || 'Item'}</span>
+                        <span>{it.qtyReceived} / {it.qtyOrdered} {it.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop DataTable */}
+          <DataTable
+            columns={GRN_COLS}
+            data={filtered}
+            filters={filters}
+            onFilterChange={setFilter}
+            dropOpts={dropOpts}
+            dropSel={dropSel}
+            onDropChange={setDrop}
+            emptyMessage="No GRNs match the filter"
+            renderRow={(g) => (
+              <tr key={g._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+                <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{g.grnNumber}</td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{g.purchaseOrder?.poNumber || '—'}</td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{g.purchaseOrder?.vendor?.name || '—'}</td>
+                <td className="px-4 py-3 border-r border-zinc-100"><Badge variant={GRN_STATUS_VARIANT[g.status] || 'default'}>{g.status}</Badge></td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{g.items?.length || 0}</td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : '—'}</td>
+                <td className="px-4 py-3">
+                  <button onClick={() => onDelete(g._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                </td>
+              </tr>
+            )}
+          />
+        </>
+      )}
+
+      {/* Create GRN Sheet */}
+      <BottomSheet
+        open={sheetOpen} onClose={() => setSheetOpen(false)}
+        title="Create Goods Receipt (GRN)"
+        footer={<Button fullWidth loading={createGRN.isPending} onClick={handleSubmit}>Record Receipt</Button>}
+      >
+        <div className="space-y-4">
+          {/* PO selector */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Purchase Order *</label>
+            <select value={selectedPO} onChange={(e) => handlePOChange(e.target.value)}
+              className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
+              <option value="">Select PO...</option>
+              {eligiblePOs.map((p) => (
+                <option key={p._id} value={p._id}>{p.poNumber} — {p.vendor?.name || 'Unknown vendor'}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Items */}
+          {grnItems.length > 0 && (
+            <div>
+              <label className="text-sm font-medium text-zinc-700 mb-2 block">Items Received</label>
+              <div className="space-y-2">
+                {grnItems.map((item, idx) => (
+                  <div key={idx} className="border border-zinc-200 rounded-xl p-3 space-y-2">
+                    <p className="text-sm font-medium text-zinc-800 truncate">{item.description || 'Item'}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">Ordered</label>
+                        <input readOnly value={item.qtyOrdered}
+                          className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-500 outline-none" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">Received *</label>
+                        <input
+                          type="number" min="0" max={item.qtyOrdered} step="0.01"
+                          value={item.qtyReceived}
+                          onChange={(e) => {
+                            const updated = [...grnItems]
+                            updated[idx] = { ...updated[idx], qtyReceived: parseFloat(e.target.value) || 0 }
+                            setGrnItems(updated)
+                          }}
+                          className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+                        />
+                      </div>
+                    </div>
+                    {item.unit && <p className="text-xs text-zinc-400">Unit: {item.unit}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Input label="Received Date" type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Notes</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Optional notes..."
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 resize-none" />
+          </div>
+
+          {formError && <p className="text-sm text-red-500">{formError}</p>}
+        </div>
+      </BottomSheet>
+    </div>
+  )
+}
+
+/* ─── Purchase Invoices Tab ───────────────────────────────────────────────── */
+const PINV_STATUS_VARIANT = { draft: 'default', sent: 'warning', paid: 'success', overdue: 'danger', cancelled: 'danger' }
+
+const PINV_COLS = [
+  { key: 'invoiceNumber', label: 'Invoice #',  filterable: true, noDropdown: true, width: 'w-32' },
+  { key: 'vendor',        label: 'Vendor',     filterable: true },
+  { key: 'ref',           label: 'PO / GRN',   filterable: true, noDropdown: true },
+  { key: 'status',        label: 'Status',     filterable: true },
+  { key: 'total',         label: 'Total',      width: 'w-32' },
+  { key: 'due',           label: 'Due Date',   width: 'w-28' },
+  { key: 'action',        label: 'action' },
+]
+
+function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
+  const { data: invoices = [], isLoading } = usePurchaseInvoices()
+  const { data: purchaseOrders = [] } = usePurchaseOrders()
+  const { data: grns = [] } = useGRNs()
+  const { data: vendors = [] } = useVendors()
+  const createInvoice = useCreatePurchaseInvoice()
+  const updateInvoice = useUpdatePurchaseInvoice()
+  const deleteInvoice = useDeletePurchaseInvoice()
+  const sym = useCurrencySymbol()
+
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [statusSheet, setStatusSheet] = useState(null)
+  const [expanded, setExpanded] = useState({})
+  const [sourceType, setSourceType] = useState('grn') // 'grn' | 'po' | 'manual'
+  const [selectedSource, setSelectedSource] = useState('')
+  const [vendorId, setVendorId] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [notes, setNotes] = useState('')
+  const [formError, setFormError] = useState('')
+  const [manualItems, setManualItems] = useState([{ description: '', qty: 1, unitPrice: 0, taxRate: 0 }])
+  const addManualItem = () => setManualItems((p) => [...p, { description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 }])
+  const removeManualItem = (i) => setManualItems((p) => p.filter((_, idx) => idx !== i))
+  const updateManualItem = (i, field, val) => setManualItems((p) => p.map((it, idx) => idx === i ? { ...it, [field]: val } : it))
+  const [filters, setFilters] = useState({ invoiceNumber: '', vendor: '', ref: '', status: '' })
+  const [dropSel, setDropSel] = useState({})
+
+  const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
+  const setFilter = (key, val) => setFilters((f) => ({ ...f, [key]: val }))
+  const setDrop   = (key, vals) => setDropSel((p) => ({ ...p, [key]: vals }))
+  const getDrop   = (key) => dropSel[key] || []
+  const inDrop    = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
+
+  const dropOpts = {
+    vendor: [...new Set(invoices.map((i) => i.vendor?.name).filter(Boolean))],
+    status: ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
+  }
+
+  const filtered = invoices.filter((inv) => {
+    const vendorName = inv.vendor?.name || ''
+    const ref = [inv.purchaseOrder?.poNumber, inv.grn?.grnNumber].filter(Boolean).join(' / ')
+    return (
+      (inv.invoiceNumber || '').toLowerCase().includes(filters.invoiceNumber.toLowerCase()) &&
+      vendorName.toLowerCase().includes(filters.vendor.toLowerCase()) && inDrop('vendor', vendorName) &&
+      ref.toLowerCase().includes(filters.ref.toLowerCase()) &&
+      (filters.status === '' || inv.status === filters.status) && inDrop('status', inv.status)
+    )
+  })
+
+  const openCreate = () => {
+    setSourceType('grn')
+    setSelectedSource('')
+    setVendorId('')
+    setDueDate('')
+    setNotes('')
+    setFormError('')
+    setManualItems([{ description: '', qty: 1, unitPrice: 0, taxRate: 0 }])
+    setSheetOpen(true)
+  }
+  onAdd.current = openCreate
+
+  const handleSubmit = async () => {
+    if (sourceType === 'manual') {
+      if (!vendorId) return setFormError('Please select a vendor')
+      if (manualItems.every((it) => !it.description)) return setFormError('Add at least one item')
+    } else if (!selectedSource) {
+      return setFormError(`Please select a ${sourceType === 'grn' ? 'GRN' : 'Purchase Order'}`)
+    }
+    setFormError('')
+    const items = sourceType === 'manual'
+      ? manualItems.filter((it) => it.description).map((it) => ({
+          description: it.description,
+          qty: parseFloat(it.qty) || 0,
+          unitPrice: parseFloat(it.unitPrice) || 0,
+          taxRate: parseFloat(it.taxRate) || 0,
+          amount: (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0),
+        }))
+      : []
+    try {
+      await createInvoice.mutateAsync({
+        vendor: vendorId || undefined,
+        grn:            sourceType === 'grn' ? selectedSource : undefined,
+        purchaseOrder:  sourceType === 'po'  ? selectedSource : undefined,
+        items,
+        dueDate,
+        notes,
+      })
+      setSheetOpen(false)
+    } catch (e) {
+      setFormError(e?.response?.data?.error || e?.response?.data?.message || 'Failed to create invoice')
+    }
+  }
+
+  const onStatusChange = async (s) => {
+    await updateInvoice.mutateAsync({ id: statusSheet._id, data: { status: s } })
+    setStatusSheet(null)
+  }
+  const onDelete = async (id) => { if (confirm('Delete this invoice?')) await deleteInvoice.mutateAsync(id) }
+
+  if (isLoading) return <div className="flex-1 flex items-center justify-center"><span className="h-6 w-6 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" /></div>
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {invoices.length === 0 ? (
+        <EmptyState icon={FileText} title="No purchase invoices" description="Create invoices from a GRN or purchase order"
+          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create Invoice</Button>} />
+      ) : (
+        <>
+          <DataTableMobileFilters columns={PINV_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
+
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-2 md:hidden">
+            {filtered.map((inv) => (
+              <div key={inv._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-sm font-semibold text-zinc-900">{inv.invoiceNumber}</span>
+                      <Badge variant={PINV_STATUS_VARIANT[inv.status] || 'default'}>{inv.status}</Badge>
+                    </div>
+                    <p className="text-sm text-zinc-600 mt-0.5">{inv.vendor?.name || '—'}</p>
+                    {(inv.purchaseOrder || inv.grn) && (
+                      <p className="text-xs text-zinc-400 mt-0.5">
+                        {[inv.purchaseOrder?.poNumber, inv.grn?.grnNumber].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    {inv.dueDate && <p className="text-xs text-zinc-400">Due: {new Date(inv.dueDate).toLocaleDateString()}</p>}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-sm font-semibold text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</span>
+                    <button onClick={() => setStatusSheet(inv)} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"><RefreshCw size={14} /></button>
+                    <button onClick={() => onDelete(inv._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+                {inv.items?.length > 0 && (
+                  <div className="mt-3 border-t border-zinc-100 pt-3 space-y-1">
+                    {inv.items.map((it, i) => (
+                      <div key={i} className="flex justify-between text-xs text-zinc-500">
+                        <span className="truncate max-w-[60%]">{it.description || it.product?.name || 'Item'} × {it.qty}</span>
+                        <span>{sym}{(it.amount || 0).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop DataTable */}
+          <DataTable
+            columns={PINV_COLS}
+            data={filtered}
+            filters={filters}
+            onFilterChange={setFilter}
+            dropOpts={dropOpts}
+            dropSel={dropSel}
+            onDropChange={setDrop}
+            emptyMessage="No invoices match the filter"
+            leadingCol={true}
+            renderRow={(inv) => (
+              <React.Fragment key={inv._id}>
+                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggleExpand(inv._id)}>
+                  <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+                    <ChevronDown size={14} className={`transition-transform ${expanded[inv._id] ? '' : '-rotate-90'}`} />
+                  </td>
+                  <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{inv.invoiceNumber}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{inv.vendor?.name || '—'}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-xs text-zinc-500">
+                    {[inv.purchaseOrder?.poNumber, inv.grn?.grnNumber].filter(Boolean).join(' / ') || '—'}
+                  </td>
+                  <td className="px-4 py-3 border-r border-zinc-100">
+                    <Badge variant={PINV_STATUS_VARIANT[inv.status] || 'default'}>{inv.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <button onClick={(e) => { e.stopPropagation(); setStatusSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status"><RefreshCw size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+                {expanded[inv._id] && (
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    <td /><td colSpan={7} className="px-4 py-3">
+                      <div className="flex gap-6 text-xs text-zinc-500 mb-2">
+                        <span>Subtotal: <strong className="text-zinc-800">{sym}{(inv.subtotal || 0).toFixed(2)}</strong></span>
+                        <span>Tax: <strong className="text-zinc-800">{sym}{(inv.taxAmount || 0).toFixed(2)}</strong></span>
+                        <span>Total: <strong className="text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</strong></span>
+                        {inv.invoiceDate && <span>Issued: <strong className="text-zinc-800">{new Date(inv.invoiceDate).toLocaleDateString()}</strong></span>}
+                      </div>
+                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                        <thead>
+                          <tr className="border-b border-zinc-200">
+                            {['Product / Description', 'Qty', 'Unit Price', 'Tax %', 'Amount', 'Unit'].map((h, i, arr) => (
+                              <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(inv.items || []).map((item, idx, arr) => (
+                            <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                              <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || item.description || '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.qty}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{(item.unitPrice ?? 0).toFixed(2)}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.taxRate ?? 0}%</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{(item.amount ?? 0).toFixed(2)}</td>
+                              <td className="px-3 py-2 text-zinc-600">{item.unit || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            )}
+          />
+        </>
+      )}
+
+      {/* Create Invoice Sheet */}
+      <BottomSheet
+        open={sheetOpen} onClose={() => setSheetOpen(false)}
+        title="Create Purchase Invoice"
+        footer={<Button fullWidth loading={createInvoice.isPending} onClick={handleSubmit}>Create Invoice</Button>}
+      >
+        <div className="space-y-4">
+          {/* Source type tabs */}
+          <div className="flex gap-1 bg-zinc-100 rounded-xl p-0.5">
+            {[['grn', 'From GRN'], ['po', 'From PO'], ['manual', 'Manual']].map(([k, label]) => (
+              <button key={k} onClick={() => { setSourceType(k); setSelectedSource('') }}
+                className={['flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all',
+                  sourceType === k ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400'].join(' ')}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {sourceType === 'grn' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700">GRN *</label>
+              <select value={selectedSource} onChange={(e) => {
+                setSelectedSource(e.target.value)
+                const grn = grns.find((g) => g._id === e.target.value)
+                if (grn?.purchaseOrder?.vendor) setVendorId(grn.purchaseOrder.vendor._id || grn.purchaseOrder.vendor)
+              }}
+                className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
+                <option value="">Select GRN...</option>
+                {grns.map((g) => <option key={g._id} value={g._id}>{g.grnNumber} — {g.purchaseOrder?.vendor?.name || '?'}</option>)}
+              </select>
+            </div>
+          )}
+
+          {sourceType === 'po' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700">Purchase Order *</label>
+              <select value={selectedSource} onChange={(e) => {
+                setSelectedSource(e.target.value)
+                const po = purchaseOrders.find((p) => p._id === e.target.value)
+                if (po?.vendor) setVendorId(po.vendor._id || po.vendor)
+              }}
+                className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
+                <option value="">Select PO...</option>
+                {purchaseOrders.map((p) => <option key={p._id} value={p._id}>{p.poNumber} — {p.vendor?.name || '?'}</option>)}
+              </select>
+            </div>
+          )}
+
+          {sourceType === 'manual' && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-zinc-700">Vendor *</label>
+                <select value={vendorId} onChange={(e) => setVendorId(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
+                  <option value="">Select vendor...</option>
+                  {vendors.map((v) => <option key={v._id} value={v._id}>{v.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-zinc-700">Items *</label>
+                  <button type="button" onClick={addManualItem} className="text-xs font-medium text-zinc-600 flex items-center gap-1 hover:text-zinc-900">
+                    <Plus size={13} /> Add Item
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {manualItems.map((item, idx) => (
+                    <div key={idx} className="border border-zinc-200 rounded-xl p-3 space-y-2 relative">
+                      {manualItems.length > 1 && (
+                        <button type="button" onClick={() => removeManualItem(idx)} className="absolute top-2 right-2 p-1 text-zinc-400 hover:text-red-500"><Minus size={14} /></button>
+                      )}
+                      <input
+                        placeholder="Description *"
+                        value={item.description}
+                        onChange={(e) => updateManualItem(idx, 'description', e.target.value)}
+                        className="w-full h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+                      />
+                      <div className="grid grid-cols-4 gap-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-zinc-500">Qty</label>
+                          <input type="number" min="0" step="0.01" value={item.qty} onChange={(e) => updateManualItem(idx, 'qty', e.target.value)}
+                            className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-zinc-500">Unit</label>
+                          <input placeholder="pcs" value={item.unit} onChange={(e) => updateManualItem(idx, 'unit', e.target.value)}
+                            className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-zinc-500">Unit Price</label>
+                          <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateManualItem(idx, 'unitPrice', e.target.value)}
+                            className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-zinc-500">Tax %</label>
+                          <input type="number" min="0" step="0.1" value={item.taxRate} onChange={(e) => updateManualItem(idx, 'taxRate', e.target.value)}
+                            className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                        </div>
+                      </div>
+                      <p className="text-xs text-zinc-400 text-right">
+                        Amount: <span className="font-semibold text-zinc-800">{sym}{((parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2)}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          <Input label="Due Date" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Notes</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Optional notes..."
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 resize-none" />
+          </div>
+          {formError && <p className="text-sm text-red-500">{formError}</p>}
+        </div>
+      </BottomSheet>
+
+      {/* Status Sheet */}
+      <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Invoice Status">
+        <div className="grid grid-cols-2 gap-2 pb-2">
+          {['draft', 'sent', 'paid', 'overdue', 'cancelled'].map((s) => (
+            <button key={s} onClick={() => onStatusChange(s)}
+              className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
+                statusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50',
+              ].join(' ')}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
+    </div>
+  )
+}
+
 /* ─── Page ────────────────────────────────────────────────────────────────── */
 export default function Purchases() {
   const [tab, setTab] = useState('po')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const onAddRef = useRef(null)
 
-  const hasFilters = tab === 'po' || tab === 'vendors'
-  const hasAdd = tab === 'po' || tab === 'vendors'
+  const hasFilters = ['po', 'grn', 'invoices', 'vendors'].includes(tab)
+  const hasAdd     = ['po', 'grn', 'invoices', 'vendors'].includes(tab)
 
   const addBtn = tab === 'po'
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create PO</Button>
+    : tab === 'grn'
+    ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create GRN</Button>
+    : tab === 'invoices'
+    ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create Invoice</Button>
     : tab === 'vendors'
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Add Vendor</Button>
     : null
 
   const renderTab = () => {
     switch (tab) {
-      case 'po':      return <PurchaseOrdersTab mobileFiltersOpen={mobileFiltersOpen} onAdd={onAddRef} />
-      case 'vendors': return <VendorsTab mobileFiltersOpen={mobileFiltersOpen} onAdd={onAddRef} />
-      default:        return <ComingSoonTab />
+      case 'po':       return <PurchaseOrdersTab mobileFiltersOpen={mobileFiltersOpen} onAdd={onAddRef} />
+      case 'grn':      return <GRNTab mobileFiltersOpen={mobileFiltersOpen} onAdd={onAddRef} />
+      case 'invoices': return <PurchaseInvoicesTab mobileFiltersOpen={mobileFiltersOpen} onAdd={onAddRef} />
+      case 'vendors':  return <VendorsTab mobileFiltersOpen={mobileFiltersOpen} onAdd={onAddRef} />
+      default:         return <ComingSoonTab />
     }
   }
 
