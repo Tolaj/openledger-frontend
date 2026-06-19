@@ -17,6 +17,8 @@ import { useCategories, useDeleteCategory } from '../hooks/useCategories'
 import { useOrders, useDeleteOrder } from '../hooks/useOrders'
 import { usePurchaseOrders, useDeletePurchaseOrder } from '../hooks/usePurchaseOrders'
 import { useSalesOrders, useDeleteSalesOrder } from '../hooks/useSalesOrders'
+import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
+import { useSalesInvoices } from '../hooks/useSalesInvoices'
 import { useWishlists, useDeleteWishlist, useUpdateWishlist } from '../hooks/useWishlists'
 import { useInventory, useUpdateInventory, useDeleteInventory } from '../hooks/useInventory'
 import useCartStore from '../store/cartStore'
@@ -954,6 +956,14 @@ const ORDER_STATUS_VARIANT = {
   draft: 'default', sent: 'warning', confirmed: 'warning',
   partial: 'warning', received: 'success', delivered: 'success', cancelled: 'danger',
 }
+const SETTLEMENT_VARIANT = {
+  paid:       'success',
+  overdue:    'danger',
+  sent:       'warning',
+  draft:      'default',
+  cancelled:  'default',
+  uninvoiced: 'default',
+}
 
 function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const sym = useCurrencySymbol()
@@ -961,17 +971,38 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
   const { data: generalOrders = [], isLoading: loadingGeneral } = useOrders()
   const { data: purchaseOrders = [], isLoading: loadingPO } = usePurchaseOrders()
   const { data: salesOrders = [], isLoading: loadingSO } = useSalesOrders()
+  const { data: purchaseInvoices = [] } = usePurchaseInvoices()
+  const { data: salesInvoices = [] } = useSalesInvoices()
   const { mutate: deleteGeneral } = useDeleteOrder()
   const { mutate: deletePO } = useDeletePurchaseOrder()
   const { mutate: deleteSO } = useDeleteSalesOrder()
 
   const loading = loadingGeneral || loadingPO || loadingSO
 
+  // Settlement lookup: poId → latest invoice status, soId → latest invoice status
+  const poSettlement = {}
+  purchaseInvoices.forEach((inv) => {
+    const poId = inv.purchaseOrder?._id || inv.purchaseOrder
+    if (!poId) return
+    const key = String(poId)
+    const prev = poSettlement[key]
+    // prefer paid > overdue > sent > draft; last-created wins if same status
+    if (!prev || new Date(inv.createdAt) > new Date(prev.createdAt)) poSettlement[key] = inv
+  })
+  const soSettlement = {}
+  salesInvoices.forEach((inv) => {
+    const soId = inv.salesOrder?._id || inv.salesOrder
+    if (!soId) return
+    const key = String(soId)
+    const prev = soSettlement[key]
+    if (!prev || new Date(inv.createdAt) > new Date(prev.createdAt)) soSettlement[key] = inv
+  })
+
   // Normalise all three into one shape
   const orders = [
-    ...generalOrders.map((o) => ({ ...o, _type: 'general', _label: o.name,     _date: o.date,          _total: o.totalPrice, _party: o.paidBy?.name || o.paidBy?.email || '—', _status: o.status || 'received' })),
-    ...purchaseOrders.map((o) => ({ ...o, _type: 'po',      _label: o.poNumber, _date: o.expectedDate,  _total: o.grandTotal, _party: o.vendor?.name || '—',                         _status: o.status || '—' })),
-    ...salesOrders.map((o)    => ({ ...o, _type: 'so',      _label: o.soNumber, _date: o.deliveryDate,  _total: o.grandTotal, _party: o.customer?.name || '—',                       _status: o.status || '—' })),
+    ...generalOrders.map((o) => ({ ...o, _type: 'general', _label: o.name,     _date: o.date,         _total: o.totalPrice, _party: o.paidBy?.name || o.paidBy?.email || '—', _status: o.status || 'received', _settlement: 'paid' })),
+    ...purchaseOrders.map((o) => ({ ...o, _type: 'po',     _label: o.poNumber, _date: o.expectedDate, _total: o.grandTotal, _party: o.vendor?.name || '—',                        _status: o.status || '—',       _settlement: poSettlement[String(o._id)]?.status || 'uninvoiced' })),
+    ...salesOrders.map((o)    => ({ ...o, _type: 'so',     _label: o.soNumber, _date: o.deliveryDate, _total: o.grandTotal, _party: o.customer?.name || '—',                      _status: o.status || '—',       _settlement: soSettlement[String(o._id)]?.status || 'uninvoiced' })),
   ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
 
   const handleDelete = (o) => {
@@ -992,8 +1023,9 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
   const inDrop = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
 
   const dropOpts = {
-    _type:   ['general', 'po', 'so'],
-    _status: ['draft', 'sent', 'confirmed', 'partial', 'received', 'delivered', 'cancelled'],
+    _type:       ['general', 'po', 'so'],
+    _status:     ['draft', 'sent', 'confirmed', 'partial', 'received', 'delivered', 'cancelled'],
+    _settlement: ['paid', 'overdue', 'sent', 'draft', 'uninvoiced', 'cancelled'],
   }
 
   if (loading) return <Spinner className="py-12" />
@@ -1005,16 +1037,18 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
     (o._label || '').toLowerCase().includes(filters._label.toLowerCase()) &&
     (filters._type === '' || o._type === filters._type) && inDrop('_type', o._type) &&
     inDrop('_status', o._status) &&
+    inDrop('_settlement', o._settlement) &&
     (o._party || '').toLowerCase().includes(filters._party.toLowerCase())
   )
 
   const ORDER_COLS = [
-    { key: '_label',  label: 'Order #',  filterable: true, noDropdown: true },
-    { key: '_type',   label: 'Type',     filterable: true },
-    { key: '_status', label: 'Status',   filterable: true },
-    { key: '_party',  label: isBusiness ? 'Party' : 'Paid By', filterable: true, noDropdown: true },
-    { key: '_total',  label: `Total (${sym})` },
-    { key: '_date',   label: 'Date' },
+    { key: '_label',      label: 'Order #',    filterable: true, noDropdown: true },
+    { key: '_type',       label: 'Type',       filterable: true },
+    { key: '_status',     label: 'Status',     filterable: true },
+    { key: '_settlement', label: 'Settlement', filterable: true },
+    { key: '_party',      label: isBusiness ? 'Party' : 'Paid By', filterable: true, noDropdown: true },
+    { key: '_total',      label: `Total (${sym})` },
+    { key: '_date',       label: 'Date' },
   ]
 
   return (
@@ -1031,6 +1065,7 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
                   <span className="font-mono text-sm font-semibold text-zinc-900">{o._label || '—'}</span>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${ORDER_TYPE_COLORS[o._type]}`}>{ORDER_TYPE_LABELS[o._type]}</span>
                   {o._status && o._status !== '—' && <Badge variant={ORDER_STATUS_VARIANT[o._status] || 'default'}>{o._status}</Badge>}
+                  <Badge variant={SETTLEMENT_VARIANT[o._settlement] || 'default'}>{o._settlement}</Badge>
                 </div>
                 {o._party && o._party !== '—' && <p className="text-xs text-zinc-500 mt-0.5">{o._party}</p>}
                 {o._date && <p className="text-xs text-zinc-400 mt-0.5">{new Date(o._date).toLocaleDateString()}</p>}
@@ -1046,14 +1081,15 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
 
       <DataTable
         columns={[
-          { key: '_label',  label: 'Order #',   filterable: true, noDropdown: true },
-          { key: '_type',   label: 'Type',       filterable: true },
-          { key: '_status', label: 'Status',     filterable: true },
-          { key: '_party',  label: isBusiness ? 'Party' : 'Paid By', filterable: true, noDropdown: true },
-          { key: 'items',   label: 'Items' },
-          { key: '_total',  label: `Total (${sym})` },
-          { key: '_date',   label: 'Date' },
-          { key: 'action',  label: 'action' },
+          { key: '_label',      label: 'Order #',    filterable: true, noDropdown: true },
+          { key: '_type',       label: 'Type',       filterable: true },
+          { key: '_status',     label: 'Status',     filterable: true },
+          { key: '_settlement', label: 'Settlement', filterable: true },
+          { key: '_party',      label: isBusiness ? 'Party' : 'Paid By', filterable: true, noDropdown: true },
+          { key: 'items',       label: 'Items' },
+          { key: '_total',      label: `Total (${sym})` },
+          { key: '_date',       label: 'Date' },
+          { key: 'action',      label: 'action' },
         ]}
         data={filtered}
         filters={filters}
@@ -1075,6 +1111,9 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
               <td className="px-4 py-3 border-r border-zinc-100">
                 {o._status && o._status !== '—' ? <Badge variant={ORDER_STATUS_VARIANT[o._status] || 'default'}>{o._status}</Badge> : <span className="text-zinc-400">—</span>}
               </td>
+              <td className="px-4 py-3 border-r border-zinc-100">
+                <Badge variant={SETTLEMENT_VARIANT[o._settlement] || 'default'}>{o._settlement}</Badge>
+              </td>
               <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-600">{o._party}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{o.items?.length ?? 0}</td>
               <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{Number(o._total || 0).toFixed(2)}</td>
@@ -1085,7 +1124,7 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
             </tr>
             {expanded[o._id] && (
               <tr key={`${o._id}-exp`} className="border-b border-zinc-100 bg-zinc-50">
-                <td /><td colSpan={8} className="px-4 py-3">
+                <td /><td colSpan={9} className="px-4 py-3">
                   <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
                     <thead>
                       <tr className="border-b border-zinc-200">
