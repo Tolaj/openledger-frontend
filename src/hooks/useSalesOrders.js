@@ -1,0 +1,39 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import * as api from '../api/salesOrders'
+import useGroupStore from '../store/groupStore'
+
+export function useSalesOrders() {
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useQuery({
+    queryKey: ['sales-orders', activeGroupId],
+    queryFn: () => api.getSalesOrders(activeGroupId).then((r) => r.data),
+    enabled: !!activeGroupId,
+  })
+}
+
+export function useCreateSalesOrder() {
+  const qc = useQueryClient()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: (data) => api.createSalesOrder(data, activeGroupId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] }),
+  })
+}
+
+export function useUpdateSalesOrder() {
+  const qc = useQueryClient()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, data }) => api.updateSalesOrder(id, data, activeGroupId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] }),
+  })
+}
+
+export function useDeleteSalesOrder() {
+  const qc = useQueryClient()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: (id) => api.deleteSalesOrder(id, activeGroupId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] }),
+  })
+}

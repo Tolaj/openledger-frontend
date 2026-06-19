@@ -5,6 +5,7 @@ import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../compo
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
 import Button from '../components/ui/Button'
+import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import ProductForm from '../components/features/ProductForm'
@@ -14,13 +15,13 @@ import { useProducts, useDeleteProduct } from '../hooks/useProducts'
 import { useCategories, useDeleteCategory } from '../hooks/useCategories'
 import { useOrders, useDeleteOrder } from '../hooks/useOrders'
 import { useWishlists, useDeleteWishlist, useUpdateWishlist } from '../hooks/useWishlists'
-import { useInventory, useDeleteInventory } from '../hooks/useInventory'
+import { useInventory, useUpdateInventory, useDeleteInventory } from '../hooks/useInventory'
 import useCartStore from '../store/cartStore'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import useWishlistStore from '../store/wishlistStore'
-import { useGroup } from '../hooks/useGroups'
+import { useGroup, useGroups } from '../hooks/useGroups'
 
 // ── InlineNumber — click to edit ─────────────────────────────────────────────
 function InlineNumber({ value, onCommit, format = (v) => v }) {
@@ -132,7 +133,7 @@ function SplitDropdown({ members = [], splitAmong, onChange }) {
 }
 
 // ── Products List tab ─────────────────────────────────────────────────────────
-function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const { addItem, items } = useCartStore()
   const sym = useCurrencySymbol()
   const [qty, setQty] = useState({})
@@ -237,9 +238,11 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                   </div>
                 </div>
                 <div className="flex gap-0 flex-shrink-0" >
-                  <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
-                    <ShoppingBasket size={15} />
-                  </button>
+                  {!isBusiness && (
+                    <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                      <ShoppingBasket size={15} />
+                    </button>
+                  )}
                   <button onClick={() => onEdit(p)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <Pencil size={15} />
                   </button>
@@ -375,13 +378,15 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
             {/* actions */}
             <td className="px-4 py-3">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <button
-                  onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
-                  className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
-                  title="Add to cart"
-                >
-                  <ShoppingBasket size={14} />
-                </button>
+                {!isBusiness && (
+                  <button
+                    onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
+                    className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
+                    title="Add to cart"
+                  >
+                    <ShoppingBasket size={14} />
+                  </button>
+                )}
                 <button
                   onClick={() => onEdit(p)}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
@@ -1282,13 +1287,202 @@ function InventoryTab({ inventory = [], loading, groupMemberObjects = [], onDele
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-const TABS = [
-  { key: 'products', label: 'Products', mobileLabel: 'Items' },
-  { key: 'category', label: 'Category', mobileLabel: 'Category' },
-  { key: 'wishlist', label: 'Wish List', mobileLabel: 'Wishlist' },
-  { key: 'inventory', label: 'Inventory', mobileLabel: 'Stock' },
+const PERSONAL_TABS = [
+  { key: 'products',  label: 'Products',  mobileLabel: 'Items'     },
+  { key: 'category',  label: 'Category',  mobileLabel: 'Category'  },
+  { key: 'wishlist',  label: 'Wish List', mobileLabel: 'Wishlist'  },
+  { key: 'inventory', label: 'Inventory', mobileLabel: 'Inventory' },
   { key: 'recurring', label: 'Recurring', mobileLabel: 'Recurring' },
-  { key: 'orders', label: 'Orders', mobileLabel: 'Orders' },
+  { key: 'orders',    label: 'Orders',    mobileLabel: 'Orders'    },
+]
+
+// ── Stock tab (business only) ─────────────────────────────────────────────────
+const STOCK_COLS = [
+  { key: 'product',  label: 'Product',   filterable: true },
+  { key: 'category', label: 'Category',  filterable: true },
+  { key: 'qty',      label: 'In Stock',  filterable: true, noDropdown: true },
+  { key: 'unit',     label: 'Unit' },
+  { key: 'status',   label: 'Status',    filterable: true },
+  { key: 'value',    label: 'Stock Value' },
+  { key: 'action',   label: 'action' },
+]
+
+const LOW_STOCK_THRESHOLD = 5
+
+function stockStatus(qty) {
+  if (qty <= 0)                  return { label: 'Out of Stock', variant: 'danger' }
+  if (qty <= LOW_STOCK_THRESHOLD) return { label: 'Low Stock',    variant: 'warning' }
+  return                                  { label: 'In Stock',     variant: 'success' }
+}
+
+function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+  const sym = useCurrencySymbol()
+  const updateInventory = useUpdateInventory()
+
+  const [filters, setFilters] = useState({ product: '', category: '', qty: '', status: '' })
+  const [dropSel, setDropSel] = useState({})
+  const [adjustSheet, setAdjustSheet] = useState(null) // { inv, draft }
+
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+  const getDrop = (key) => dropSel[key] || []
+  const setDrop = (key, vals) => setDropSel((prev) => ({ ...prev, [key]: vals }))
+  const inDrop  = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
+
+  const dropOpts = {
+    product:  [...new Set(inventory.map((i) => i.product?.name).filter(Boolean))],
+    category: [...new Set(inventory.map((i) => i.product?.category?.name).filter(Boolean))],
+    status:   ['In Stock', 'Low Stock', 'Out of Stock'],
+  }
+
+  if (loading) return <div className="flex justify-center py-16"><Spinner /></div>
+  if (!inventory.length) return (
+    <EmptyState icon={Package} title="No stock entries" description="Stock is updated when purchase orders are received or adjusted manually" />
+  )
+
+  const filtered = inventory.filter((inv) => {
+    const name     = inv.product?.name || ''
+    const category = inv.product?.category?.name || ''
+    const qty      = String(inv.quantityAvailable ?? 0)
+    const status   = stockStatus(inv.quantityAvailable ?? 0).label
+    return (
+      name.toLowerCase().includes(filters.product.toLowerCase()) && inDrop('product', name) &&
+      category.toLowerCase().includes(filters.category.toLowerCase()) && inDrop('category', category) &&
+      qty.includes(filters.qty) &&
+      (filters.status === '' || status === filters.status) && inDrop('status', status)
+    )
+  })
+
+  const openAdjust = (inv) => setAdjustSheet({ inv, draft: inv.quantityAvailable ?? 0 })
+
+  const saveAdjust = async () => {
+    await updateInventory.mutateAsync({ id: adjustSheet.inv._id, data: { quantityAvailable: Number(adjustSheet.draft) } })
+    setAdjustSheet(null)
+  }
+
+  return (
+    <>
+      <DataTableMobileFilters columns={STOCK_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
+
+      {/* Mobile cards */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {filtered.map((inv) => {
+          const { label, variant } = stockStatus(inv.quantityAvailable ?? 0)
+          const stockVal = (inv.quantityAvailable ?? 0) * (inv.price || 0)
+          return (
+            <div key={inv._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-zinc-900 truncate">{inv.product?.name || '—'}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{inv.product?.category?.name || 'Uncategorised'}</p>
+                </div>
+                <Badge variant={variant}>{label}</Badge>
+              </div>
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center gap-3">
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-400">Qty</p>
+                    <p className={`text-lg font-bold ${inv.quantityAvailable <= 0 ? 'text-red-500' : inv.quantityAvailable <= LOW_STOCK_THRESHOLD ? 'text-amber-600' : 'text-zinc-900'}`}>
+                      {inv.quantityAvailable ?? 0}
+                    </p>
+                    <p className="text-xs text-zinc-400">{inv.product?.unit || 'units'}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-400">Value</p>
+                    <p className="text-sm font-semibold text-zinc-700">{sym}{stockVal.toFixed(2)}</p>
+                  </div>
+                </div>
+                <button onClick={() => openAdjust(inv)}
+                  className="px-3 py-1.5 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100">
+                  Adjust
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop DataTable */}
+      <DataTable
+        columns={STOCK_COLS}
+        data={filtered}
+        filters={filters}
+        onFilterChange={setFilter}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={setDrop}
+        emptyMessage="No stock items match the filter"
+        renderRow={(inv) => {
+          const { label, variant } = stockStatus(inv.quantityAvailable ?? 0)
+          const stockVal = (inv.quantityAvailable ?? 0) * (inv.price || 0)
+          return (
+            <tr key={inv._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
+              <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{inv.product?.name || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">
+                {inv.product?.category ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-5 h-5 rounded-md flex items-center justify-center text-xs" style={{ backgroundColor: inv.product.category.color ? `${inv.product.category.color}22` : '#f4f4f5' }}>
+                      {inv.product.category.icon}
+                    </span>
+                    {inv.product.category.name}
+                  </span>
+                ) : '—'}
+              </td>
+              <td className={`px-4 py-3 border-r border-zinc-100 text-sm font-bold ${inv.quantityAvailable <= 0 ? 'text-red-500' : inv.quantityAvailable <= LOW_STOCK_THRESHOLD ? 'text-amber-600' : 'text-zinc-900'}`}>
+                {inv.quantityAvailable ?? 0}
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.product?.unit || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100"><Badge variant={variant}>{label}</Badge></td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{sym}{stockVal.toFixed(2)}</td>
+              <td className="px-4 py-3">
+                <button onClick={() => openAdjust(inv)}
+                  className="px-2.5 py-1 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100">
+                  Adjust
+                </button>
+              </td>
+            </tr>
+          )
+        }}
+      />
+
+      {/* Adjust stock sheet */}
+      {adjustSheet && createPortal(
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAdjustSheet(null)} />
+          <div className="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
+            <p className="text-base font-semibold text-zinc-900 mb-1">Adjust Stock</p>
+            <p className="text-sm text-zinc-500 mb-4">{adjustSheet.inv.product?.name}</p>
+            <div className="flex items-center gap-3 mb-5">
+              <button onClick={() => setAdjustSheet((s) => ({ ...s, draft: Math.max(0, Number(s.draft) - 1) }))}
+                className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-900 text-xl font-bold flex items-center justify-center active:bg-zinc-200">−</button>
+              <input
+                type="number" min="0"
+                value={adjustSheet.draft}
+                onChange={(e) => setAdjustSheet((s) => ({ ...s, draft: e.target.value }))}
+                className="flex-1 h-10 text-center text-lg font-bold border border-zinc-300 rounded-xl outline-none focus:border-zinc-900"
+              />
+              <button onClick={() => setAdjustSheet((s) => ({ ...s, draft: Number(s.draft) + 1 }))}
+                className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-900 text-xl font-bold flex items-center justify-center active:bg-zinc-200">+</button>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setAdjustSheet(null)}
+                className="flex-1 h-11 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700">Cancel</button>
+              <button onClick={saveAdjust} disabled={updateInventory.isPending}
+                className="flex-1 h-11 rounded-xl bg-zinc-900 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center">
+                {updateInventory.isPending ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  )
+}
+
+const BUSINESS_TABS = [
+  { key: 'products',  label: 'Products',  mobileLabel: 'Products'  },
+  { key: 'category',  label: 'Category',  mobileLabel: 'Category'  },
+  { key: 'stock',     label: 'Stock',     mobileLabel: 'Stock'     },
 ]
 
 export default function Products() {
@@ -1307,7 +1501,16 @@ export default function Products() {
   const { data: inventory = [], isLoading: loadingInventory } = useInventory()
   const { mutate: deleteInventoryItem } = useDeleteInventory()
 
+  const { data: groups = [] } = useGroups()
+  const activeGroup = groups.find(g => g._id === activeGroupId)
+  const isBusiness = activeGroup?.type === 'business'
+  const TABS = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
+
   const [tab, setTab] = useState('products')
+  // Reset to products tab when switching group type
+  useEffect(() => {
+    setTab('products')
+  }, [isBusiness])
   const [productSheet, setProductSheet] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [categorySheet, setCategorySheet] = useState(false)
@@ -1343,38 +1546,54 @@ export default function Products() {
         {/* Tab bar row — tabs left, GROUP + ADD + CART right */}
         {/* Mobile: pill segmented control — sticky two rows */}
         <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(0, 3).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={[
-                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key
-                    ? 'bg-white text-zinc-900 shadow-sm'
-                    : 'text-zinc-400 active:bg-zinc-200',
-                ].join(' ')}
-              >
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(3).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={[
-                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key
-                    ? 'bg-white text-zinc-900 shadow-sm'
-                    : 'text-zinc-400 active:bg-zinc-200',
-                ].join(' ')}
-              >
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
+          {/* Business: single row of 4. Personal: two rows of 3 */}
+          {isBusiness ? (
+            <div className="bg-zinc-100 rounded-xl p-0.5 flex">
+              {TABS.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={[
+                    'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
+                    tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
+                  ].join(' ')}
+                >
+                  {t.mobileLabel}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="bg-zinc-100 rounded-xl p-0.5 flex">
+                {TABS.slice(0, 3).map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={[
+                      'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
+                      tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
+                    ].join(' ')}
+                  >
+                    {t.mobileLabel}
+                  </button>
+                ))}
+              </div>
+              <div className="bg-zinc-100 rounded-xl p-0.5 flex">
+                {TABS.slice(3).map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={[
+                      'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
+                      tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
+                    ].join(' ')}
+                  >
+                    {t.mobileLabel}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Desktop: underline tabs */}
@@ -1412,6 +1631,7 @@ export default function Products() {
               groupMemberObjects={groupMemberObjects}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
+              isBusiness={isBusiness}
             />
           )}
 
@@ -1458,6 +1678,15 @@ export default function Products() {
               orders={orders}
               loading={loadingOrders}
               onDelete={(id) => deleteOrder(id)}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onMobileFiltersOpenChange={setMobileFiltersOpen}
+            />
+          )}
+
+          {tab === 'stock' && (
+            <StockTab
+              inventory={inventory}
+              loading={loadingInventory}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
             />

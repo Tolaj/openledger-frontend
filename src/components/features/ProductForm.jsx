@@ -3,6 +3,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import useGroupStore from '../../store/groupStore'
 import { useCreateProduct, useUpdateProduct } from '../../hooks/useProducts'
 import { useCategories } from '../../hooks/useCategories'
+import { useIsBusiness } from '../../hooks/useActiveGroupType'
 import BottomSheet from '../ui/BottomSheet'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
@@ -12,6 +13,7 @@ const UNITS = ['kg', 'g', 'L', 'mL', 'pcs', 'pack', 'dozen', 'box']
 export default function ProductForm({ open, onClose, editing }) {
   const formId = useId()
   const groupId = useGroupStore((s) => s.activeGroupId)
+  const isBusiness = useIsBusiness()
   const { data: categories = [] } = useCategories()
   const { mutate: create, isPending: creating } = useCreateProduct()
   const { mutate: update, isPending: updating } = useUpdateProduct()
@@ -31,9 +33,9 @@ export default function ProductForm({ open, onClose, editing }) {
         inventory: editing.inventory ?? false,
       })
     } else {
-      reset({ name: '', price: '', unit: 'pcs', category: '', description: '', manufacturer: '', inventory: false })
+      reset({ name: '', price: '', unit: 'pcs', category: '', description: '', manufacturer: '', inventory: isBusiness })
     }
-  }, [editing, open])
+  }, [editing, open, isBusiness])
 
   const onSubmit = (data) => {
     const payload = { ...data, groupId }
