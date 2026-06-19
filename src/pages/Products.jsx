@@ -238,11 +238,9 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                   </div>
                 </div>
                 <div className="flex gap-0 flex-shrink-0" >
-                  {!isBusiness && (
-                    <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
-                      <ShoppingBasket size={15} />
-                    </button>
-                  )}
+                  <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                    <ShoppingBasket size={15} />
+                  </button>
                   <button onClick={() => onEdit(p)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <Pencil size={15} />
                   </button>
@@ -332,16 +330,16 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
             {/* description */}
             <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[160px] truncate">{p.description || '—'}</td>
             {/* category */}
-            <td className="px-4 py-3 border-r border-zinc-100">
+            <td className="px-4 py-3 border-r border-zinc-100 max-w-[140px]">
               {p.category ? (
-                <span className="flex items-center gap-1.5 whitespace-nowrap">
+                <span className="flex items-center gap-1.5 min-w-0">
                   <span
                     className="w-6 h-6 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
                     style={{ backgroundColor: p.category.color ? `${p.category.color}22` : '#f4f4f5' }}
                   >
                     {p.category.icon}
                   </span>
-                  <span className="text-zinc-700 text-xs">{p.category.name}</span>
+                  <span className="text-zinc-700 text-xs truncate">{p.category.name}</span>
                 </span>
               ) : '—'}
             </td>
@@ -378,15 +376,13 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
             {/* actions */}
             <td className="px-4 py-3">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
-                {!isBusiness && (
-                  <button
-                    onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
-                    className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
-                    title="Add to cart"
-                  >
-                    <ShoppingBasket size={14} />
-                  </button>
-                )}
+                <button
+                  onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
+                  className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
+                  title="Add to cart"
+                >
+                  <ShoppingBasket size={14} />
+                </button>
                 <button
                   onClick={() => onEdit(p)}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
@@ -1291,7 +1287,7 @@ const PERSONAL_TABS = [
   { key: 'products',  label: 'Products',  mobileLabel: 'Items'     },
   { key: 'category',  label: 'Category',  mobileLabel: 'Category'  },
   { key: 'wishlist',  label: 'Wish List', mobileLabel: 'Wishlist'  },
-  { key: 'inventory', label: 'Inventory', mobileLabel: 'Inventory' },
+  { key: 'stock',     label: 'Stock',     mobileLabel: 'Stock'     },
   { key: 'recurring', label: 'Recurring', mobileLabel: 'Recurring' },
   { key: 'orders',    label: 'Orders',    mobileLabel: 'Orders'    },
 ]
@@ -1315,9 +1311,11 @@ function stockStatus(qty) {
   return                                  { label: 'In Stock',     variant: 'success' }
 }
 
-function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers = [] }) {
   const sym = useCurrencySymbol()
   const updateInventory = useUpdateInventory()
+  const { mutate: deleteInventory } = useDeleteInventory()
+  const { addItem } = useCartStore()
 
   const [filters, setFilters] = useState({ product: '', category: '', qty: '', status: '' })
   const [dropSel, setDropSel] = useState({})
@@ -1391,10 +1389,20 @@ function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersO
                     <p className="text-sm font-semibold text-zinc-700">{sym}{stockVal.toFixed(2)}</p>
                   </div>
                 </div>
-                <button onClick={() => openAdjust(inv)}
-                  className="px-3 py-1.5 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100">
-                  Adjust
-                </button>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => addItem({ ...inv.product, price: inv.price }, inv.product?.unit, 'equal', groupMembers, groupMembers)}
+                    className="p-2 rounded-xl bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart">
+                    <ShoppingBasket size={15} />
+                  </button>
+                  <button onClick={() => openAdjust(inv)}
+                    className="p-2 rounded-xl text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Adjust stock">
+                    <Pencil size={15} />
+                  </button>
+                  <button onClick={() => { if (confirm('Delete this stock entry?')) deleteInventory(inv._id) }}
+                    className="p-2 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
             </div>
           )
@@ -1417,13 +1425,13 @@ function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersO
           return (
             <tr key={inv._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
               <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{inv.product?.name || '—'}</td>
-              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 max-w-[140px]">
                 {inv.product?.category ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-5 h-5 rounded-md flex items-center justify-center text-xs" style={{ backgroundColor: inv.product.category.color ? `${inv.product.category.color}22` : '#f4f4f5' }}>
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-5 h-5 rounded-md flex items-center justify-center text-xs flex-shrink-0" style={{ backgroundColor: inv.product.category.color ? `${inv.product.category.color}22` : '#f4f4f5' }}>
                       {inv.product.category.icon}
                     </span>
-                    {inv.product.category.name}
+                    <span className="truncate">{inv.product.category.name}</span>
                   </span>
                 ) : '—'}
               </td>
@@ -1434,10 +1442,20 @@ function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersO
               <td className="px-4 py-3 border-r border-zinc-100"><Badge variant={variant}>{label}</Badge></td>
               <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{sym}{stockVal.toFixed(2)}</td>
               <td className="px-4 py-3">
-                <button onClick={() => openAdjust(inv)}
-                  className="px-2.5 py-1 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-50 active:bg-zinc-100">
-                  Adjust
-                </button>
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <button onClick={() => addItem({ ...inv.product, price: inv.price }, inv.product?.unit, 'equal', groupMembers, groupMembers)}
+                    className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart">
+                    <ShoppingBasket size={14} />
+                  </button>
+                  <button onClick={() => openAdjust(inv)}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Adjust stock">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={() => { if (confirm('Delete this stock entry?')) deleteInventory(inv._id) }}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </td>
             </tr>
           )
@@ -1482,7 +1500,9 @@ function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersO
 const BUSINESS_TABS = [
   { key: 'products',  label: 'Products',  mobileLabel: 'Products'  },
   { key: 'category',  label: 'Category',  mobileLabel: 'Category'  },
+  { key: 'wishlist',  label: 'Wish List', mobileLabel: 'Wishlist'  },
   { key: 'stock',     label: 'Stock',     mobileLabel: 'Stock'     },
+  { key: 'orders',    label: 'Orders',    mobileLabel: 'Orders'    },
 ]
 
 export default function Products() {
@@ -1546,22 +1566,38 @@ export default function Products() {
         {/* Tab bar row — tabs left, GROUP + ADD + CART right */}
         {/* Mobile: pill segmented control — sticky two rows */}
         <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
-          {/* Business: single row of 4. Personal: two rows of 3 */}
+          {/* Both business and personal: two rows of 3 */}
           {isBusiness ? (
-            <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-              {TABS.map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className={[
-                    'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                    tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
-                  ].join(' ')}
-                >
-                  {t.mobileLabel}
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="bg-zinc-100 rounded-xl p-0.5 flex">
+                {TABS.slice(0, 3).map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={[
+                      'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
+                      tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
+                    ].join(' ')}
+                  >
+                    {t.mobileLabel}
+                  </button>
+                ))}
+              </div>
+              <div className="bg-zinc-100 rounded-xl p-0.5 flex">
+                {TABS.slice(3).map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setTab(t.key)}
+                    className={[
+                      'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
+                      tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
+                    ].join(' ')}
+                  >
+                    {t.mobileLabel}
+                  </button>
+                ))}
+              </div>
+            </>
           ) : (
             <>
               <div className="bg-zinc-100 rounded-xl p-0.5 flex">
@@ -1687,6 +1723,7 @@ export default function Products() {
             <StockTab
               inventory={inventory}
               loading={loadingInventory}
+              groupMembers={groupMembers}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
             />
