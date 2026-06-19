@@ -25,7 +25,10 @@ export function useUpdateSalesInvoice() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updateSalesInvoice(id, data, activeGroupId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-invoices', activeGroupId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sales-invoices', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['finance'] })
+    },
   })
 }
 
@@ -34,6 +37,9 @@ export function useDeleteSalesInvoice() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: (id) => api.deleteSalesInvoice(id, activeGroupId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-invoices', activeGroupId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sales-invoices', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['finance'] })
+    },
   })
 }

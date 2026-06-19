@@ -578,9 +578,6 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
 
       <TransactionForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }}
         editing={editing} groupId={groupId} groupMembers={groupMembers} categories={categories} symbol={symbol} />
-
-      <TransactionForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }}
-        editing={editing} groupId={groupId} groupMembers={groupMembers} categories={categories} symbol={symbol} />
     </div>
   )
 }

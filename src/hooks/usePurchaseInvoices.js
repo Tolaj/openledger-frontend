@@ -25,7 +25,10 @@ export function useUpdatePurchaseInvoice() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updatePurchaseInvoice(id, data, activeGroupId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['purchase-invoices', activeGroupId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['purchase-invoices', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['finance'] })
+    },
   })
 }
 
@@ -34,6 +37,9 @@ export function useDeletePurchaseInvoice() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: (id) => api.deletePurchaseInvoice(id, activeGroupId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['purchase-invoices', activeGroupId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['purchase-invoices', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['finance'] })
+    },
   })
 }
