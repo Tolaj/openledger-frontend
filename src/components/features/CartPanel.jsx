@@ -271,8 +271,16 @@ export default function CartPanel() {
   useEffect(() => {
     if (cartOpen) {
       setOrderName(`order-${String(Math.floor(1000 + Math.random() * 9000))}`)
-      setOrderError('')
+      setOrderDate(new Date().toISOString().split('T')[0])
+      setPaidBy(userId || '')
       setOrderType('general')
+      setVendorId('')
+      setCustomerId('')
+      setExpectedDate(new Date().toISOString().split('T')[0])
+      setDeliveryDate(new Date().toISOString().split('T')[0])
+      setNotes('')
+      setOrderError('')
+      setTotalsOpen(false)
     }
   }, [cartOpen])
 

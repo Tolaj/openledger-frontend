@@ -15,6 +15,8 @@ import PageActions from '../components/layout/PageActions'
 import { useProducts, useDeleteProduct } from '../hooks/useProducts'
 import { useCategories, useDeleteCategory } from '../hooks/useCategories'
 import { useOrders, useDeleteOrder } from '../hooks/useOrders'
+import { usePurchaseOrders, useDeletePurchaseOrder } from '../hooks/usePurchaseOrders'
+import { useSalesOrders, useDeleteSalesOrder } from '../hooks/useSalesOrders'
 import { useWishlists, useDeleteWishlist, useUpdateWishlist } from '../hooks/useWishlists'
 import { useInventory, useUpdateInventory, useDeleteInventory } from '../hooks/useInventory'
 import useCartStore from '../store/cartStore'
@@ -946,73 +948,103 @@ function OrderMobileCard({ o, onDelete, isBusiness }) {
 }
 
 // ── Orders tab ────────────────────────────────────────────────────────────────
-function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
+const ORDER_TYPE_LABELS = { general: 'General', po: 'Purchase Order', so: 'Sales Order' }
+const ORDER_TYPE_COLORS = { general: 'bg-zinc-100 text-zinc-600', po: 'bg-blue-50 text-blue-600', so: 'bg-emerald-50 text-emerald-600' }
+
+function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const sym = useCurrencySymbol()
+
+  const { data: generalOrders = [], isLoading: loadingGeneral } = useOrders()
+  const { data: purchaseOrders = [], isLoading: loadingPO } = usePurchaseOrders()
+  const { data: salesOrders = [], isLoading: loadingSO } = useSalesOrders()
+  const { mutate: deleteGeneral } = useDeleteOrder()
+  const { mutate: deletePO } = useDeletePurchaseOrder()
+  const { mutate: deleteSO } = useDeleteSalesOrder()
+
+  const loading = loadingGeneral || loadingPO || loadingSO
+
+  // Normalise all three into one shape
+  const orders = [
+    ...generalOrders.map((o) => ({ ...o, _type: 'general', _label: o.name, _date: o.date, _total: o.totalPrice, _party: o.paidBy?.name || o.paidBy?.email || '—' })),
+    ...purchaseOrders.map((o) => ({ ...o, _type: 'po',      _label: o.poNumber, _date: o.expectedDate, _total: o.grandTotal, _party: o.vendor?.name || '—' })),
+    ...salesOrders.map((o)    => ({ ...o, _type: 'so',      _label: o.soNumber, _date: o.deliveryDate,  _total: o.grandTotal, _party: o.customer?.name || '—' })),
+  ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+
+  const handleDelete = (o) => {
+    const label = o._label || 'this order'
+    if (!confirm(`Delete "${label}"?`)) return
+    if (o._type === 'general') deleteGeneral(o._id)
+    else if (o._type === 'po') deletePO(o._id)
+    else deleteSO(o._id)
+  }
+
   const [expanded, setExpanded] = useState({})
-  const [filters, setFilters] = useState({ name: '', totalPrice: '', date: '', paidBy: '', createdBy: '' })
+  const [filters, setFilters] = useState({ _label: '', _type: '', _party: '' })
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
   const [dropSel, setDropSel] = useState({})
   const getDrop = (key) => dropSel[key] || []
   const setDrop = (key, vals) => setDropSel((prev) => ({ ...prev, [key]: vals }))
-  const dropOpts = {
-    name: [...new Set(orders.map((o) => o.name).filter(Boolean))],
-    totalPrice: [...new Set(orders.map((o) => String(o.totalPrice)).filter(Boolean))],
-    date: [...new Set(orders.map((o) => o.date).filter(Boolean))],
-    paidBy: [...new Set(orders.map((o) => o.paidBy?.name || o.paidBy?.email).filter(Boolean))],
-    createdBy: [...new Set(orders.map((o) => o.createdBy?.name || o.createdBy?.email).filter(Boolean))],
-  }
   const inDrop = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
+
+  const dropOpts = {
+    _type: ['general', 'po', 'so'],
+  }
 
   if (loading) return <Spinner className="py-12" />
   if (!orders.length) return (
-    <EmptyState icon={ShoppingCart} title="No orders yet" description="Your shopping trips will appear here" />
+    <EmptyState icon={ShoppingCart} title="No orders yet" description="General, purchase and sales orders will appear here" />
   )
 
-  const filtered = orders.filter((o) => {
-    const paidName = o.paidBy?.name || o.paidBy?.email || ''
-    const createdName = o.createdBy?.name || o.createdBy?.email || ''
-    return (
-      o.name.toLowerCase().includes(filters.name.toLowerCase()) &&
-      String(o.totalPrice).includes(filters.totalPrice) &&
-      (o.date || '').includes(filters.date) &&
-      paidName.toLowerCase().includes(filters.paidBy.toLowerCase()) &&
-      createdName.toLowerCase().includes(filters.createdBy.toLowerCase()) &&
-      inDrop('name', o.name) &&
-      inDrop('totalPrice', String(o.totalPrice)) &&
-      inDrop('date', o.date) &&
-      inDrop('paidBy', paidName) &&
-      inDrop('createdBy', createdName)
-    )
-  })
+  const filtered = orders.filter((o) =>
+    (o._label || '').toLowerCase().includes(filters._label.toLowerCase()) &&
+    (filters._type === '' || o._type === filters._type) && inDrop('_type', o._type) &&
+    (o._party || '').toLowerCase().includes(filters._party.toLowerCase())
+  )
 
   const ORDER_COLS = [
-    { key: 'name', label: 'name', filterable: true },
-    { key: 'totalPrice', label: `total price (${sym})`, filterable: true },
-    { key: 'date', label: 'date', filterable: true },
-    { key: 'paidBy', label: 'paid by', filterable: true },
-    { key: 'createdBy', label: 'created by', filterable: true },
+    { key: '_label', label: 'Order #', filterable: true, noDropdown: true },
+    { key: '_type',  label: 'Type',    filterable: true },
+    { key: '_party', label: 'Vendor / Customer / Paid By', filterable: true, noDropdown: true },
+    { key: '_total', label: `Total (${sym})` },
+    { key: '_date',  label: 'Date' },
   ]
 
   return (
     <>
       <DataTableMobileFilters columns={ORDER_COLS} filters={filters} onFilterChange={setFilter} dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
+
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((o) => (
-          <OrderMobileCard key={o._id} o={o} onDelete={onDelete} isBusiness={isBusiness} />
+          <div key={o._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-sm font-semibold text-zinc-900">{o._label || '—'}</span>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${ORDER_TYPE_COLORS[o._type]}`}>{ORDER_TYPE_LABELS[o._type]}</span>
+                </div>
+                {o._party && o._party !== '—' && <p className="text-xs text-zinc-500 mt-0.5">{o._party}</p>}
+                {o._date && <p className="text-xs text-zinc-400 mt-0.5">{new Date(o._date).toLocaleDateString()}</p>}
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <span className="text-sm font-semibold text-zinc-900">{sym}{Number(o._total || 0).toFixed(2)}</span>
+                <button onClick={() => handleDelete(o)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors ml-1"><Trash2 size={15} /></button>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
 
       <DataTable
         columns={[
-          { key: 'name', label: 'name', filterable: true },
-          { key: 'items', label: 'items' },
-          { key: 'totalPrice', label: `total price (${sym})`, filterable: true },
-          { key: 'date', label: 'date', filterable: true },
-          { key: 'paidBy', label: 'paidBy', filterable: true },
-          { key: 'createdBy', label: 'createdBy', filterable: true },
-          { key: 'action', label: 'Action' },
+          { key: '_label', label: 'Order #',   filterable: true, noDropdown: true },
+          { key: '_type',  label: 'Type',       filterable: true },
+          { key: '_party', label: 'Party',      filterable: true, noDropdown: true },
+          { key: 'items',  label: 'Items' },
+          { key: '_total', label: `Total (${sym})` },
+          { key: '_date',  label: 'Date' },
+          { key: 'action', label: 'action' },
         ]}
         data={filtered}
         filters={filters}
@@ -1023,36 +1055,29 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
         leadingCol={true}
         renderRow={(o) => (
           <React.Fragment key={o._id}>
-            <tr
-              className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer"
-              onClick={() => toggle(o._id)}
-            >
+            <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggle(o._id)}>
               <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
                 <ChevronDown size={14} className={`transition-transform ${expanded[o._id] ? '' : '-rotate-90'}`} />
               </td>
-              <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">{o.name}</td>
-              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.items?.length ?? 0}</td>
-              <td className="px-4 py-3 border-r border-zinc-100 font-semibold text-zinc-900">{sym}{o.totalPrice}</td>
-              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500">{o.date}</td>
-              <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{o.paidBy?.name || o.paidBy?.email || '—'}</td>
-              <td className="px-4 py-3 text-zinc-700">{o.createdBy?.name || o.createdBy?.email || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{o._label || '—'}</td>
+              <td className="px-4 py-3 border-r border-zinc-100">
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${ORDER_TYPE_COLORS[o._type]}`}>{ORDER_TYPE_LABELS[o._type]}</span>
+              </td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-600">{o._party}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{o.items?.length ?? 0}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{Number(o._total || 0).toFixed(2)}</td>
+              <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{o._date ? new Date(o._date).toLocaleDateString() : '—'}</td>
               <td className="px-4 py-3">
-                <button
-                  onClick={(e) => { e.stopPropagation(); if (confirm(`Delete "${o.name}"?`)) onDelete(o._id) }}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"
-                >
-                  <Trash2 size={14} />
-                </button>
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
               </td>
             </tr>
             {expanded[o._id] && (
-              <tr key={`${o._id}-items`} className="border-b border-zinc-100 bg-zinc-50">
-                <td />
-                <td colSpan={7} className="px-4 py-3">
+              <tr key={`${o._id}-exp`} className="border-b border-zinc-100 bg-zinc-50">
+                <td /><td colSpan={7} className="px-4 py-3">
                   <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
                     <thead>
                       <tr className="border-b border-zinc-200">
-                        {['product', 'price', 'count', 'unit', ...(!isBusiness ? ['splitAmong'] : [])].map((h, i, arr) => (
+                        {['Product / Description', 'Qty / Count', 'Unit Price', 'Unit', ...(!isBusiness ? ['Split Among'] : [])].map((h, i, arr) => (
                           <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
                         ))}
                       </tr>
@@ -1060,9 +1085,9 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
                     <tbody>
                       {(o.items || []).map((item, idx, arr) => (
                         <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
-                          <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
-                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
-                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || item.description || '—'}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.qty ?? item.count ?? '—'}</td>
+                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{item.unitPrice ?? item.price ?? '—'}</td>
                           <td className={`px-3 py-2 text-zinc-600 ${!isBusiness ? 'border-r border-zinc-100' : ''}`}>{item.unit}</td>
                           {!isBusiness && <td className="px-3 py-2 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>}
                         </tr>
@@ -1074,7 +1099,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
             )}
           </React.Fragment>
         )}
-        emptyMessage="No orders yet"
+        emptyMessage="No orders match the filter"
         mobileFiltersOpen={mobileFiltersOpen}
         onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
@@ -1761,9 +1786,6 @@ export default function Products() {
 
           {tab === 'orders' && (
             <OrdersTab
-              orders={orders}
-              loading={loadingOrders}
-              onDelete={(id) => deleteOrder(id)}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
               isBusiness={isBusiness}
