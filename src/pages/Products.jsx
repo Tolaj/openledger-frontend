@@ -10,6 +10,7 @@ import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import ProductForm from '../components/features/ProductForm'
 import CategoryForm from '../components/features/CategoryForm'
+import BottomSheet from '../components/ui/BottomSheet'
 import PageActions from '../components/layout/PageActions'
 import { useProducts, useDeleteProduct } from '../hooks/useProducts'
 import { useCategories, useDeleteCategory } from '../hooks/useCategories'
@@ -139,10 +140,11 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
   const [qty, setQty] = useState({})
   const [prices, setPrices] = useState({})
   const [splits, setSplits] = useState({})  // productId -> splitAmong array
-  const [filters, setFilters] = useState({ name: '', description: '', category: '', price: '', unit: '', manufacturer: '' })
+  const [filters, setFilters] = useState({ name: '', category: '', price: '', unit: '', manufacturer: '' })
   const [dropSel, setDropSel] = useState({})
   const [expanded, setExpanded] = useState({})
   const [mobileUnits, setMobileUnits] = useState({})
+  const [detailProduct, setDetailProduct] = useState(null)
 
   const getQty = (id) => qty[id] ?? 1
   const setQ = (id, val) => setQty((prev) => ({ ...prev, [id]: Math.max(1, val) }))
@@ -172,7 +174,6 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
     const catName = p.category?.name || ''
     return (
       p.name.toLowerCase().includes(filters.name.toLowerCase()) && inDrop('name', p.name) &&
-      (p.description || '').toLowerCase().includes(filters.description.toLowerCase()) &&
       catName.toLowerCase().includes(filters.category.toLowerCase()) && inDrop('category', catName) &&
       String(p.price).includes(filters.price) && inDrop('price', String(p.price)) &&
       (p.unit || '').toLowerCase().includes(filters.unit.toLowerCase()) && inDrop('unit', p.unit) &&
@@ -201,7 +202,6 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
 
   const PRODUCTS_COLS = [
     { key: 'name', label: 'name', filterable: true },
-    { key: 'description', label: 'description', filterable: true, noDropdown: true },
     { key: 'category', label: 'category', filterable: true },
     { key: 'price', label: `price (${sym})`, filterable: true },
     { key: 'unit', label: 'unit', filterable: true },
@@ -309,7 +309,6 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
       <DataTable
         columns={[
           { key: 'name', label: 'name', filterable: true },
-          { key: 'description', label: 'description', filterable: true, noDropdown: true },
           { key: 'category', label: 'category', filterable: true },
           { key: 'price', label: `price (${sym})`, filterable: true },
           { key: 'unit', label: 'unit', filterable: true },
@@ -327,8 +326,6 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
           <tr key={p._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
             {/* name */}
             <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900 max-w-[140px] truncate">{p.name}</td>
-            {/* description */}
-            <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[160px] truncate">{p.description || '—'}</td>
             {/* category */}
             <td className="px-4 py-3 border-r border-zinc-100 max-w-[140px]">
               {p.category ? (
@@ -384,6 +381,13 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                   <ShoppingBasket size={14} />
                 </button>
                 <button
+                  onClick={() => setDetailProduct(p)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
+                  title="Details"
+                >
+                  <ClipboardList size={14} />
+                </button>
+                <button
                   onClick={() => onEdit(p)}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
                   title="Edit"
@@ -405,6 +409,45 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
         mobileFiltersOpen={mobileFiltersOpen}
         onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />
+
+      {/* Product Detail Sheet — always mounted */}
+      <BottomSheet
+        open={!!detailProduct}
+        onClose={() => setDetailProduct(null)}
+        title="Product Details"
+      >
+        {detailProduct && (
+          <div className="space-y-0 divide-y divide-zinc-100">
+            {/* Header */}
+            <div className="flex items-center gap-4 pb-4">
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0"
+                style={{ backgroundColor: detailProduct.category?.color ? `${detailProduct.category.color}22` : '#f4f4f5' }}
+              >
+                {detailProduct.category?.icon || '📦'}
+              </div>
+              <div className="min-w-0">
+                <p className="text-lg font-bold text-zinc-900 truncate">{detailProduct.name}</p>
+                <p className="text-sm text-zinc-400">{detailProduct.category?.name || 'Uncategorised'}</p>
+              </div>
+            </div>
+
+            {/* Fields */}
+            {[
+              { label: 'Price',        value: `${sym}${parseFloat(detailProduct.price || 0).toFixed(2)}` },
+              { label: 'Unit',         value: detailProduct.unit || '—' },
+              { label: 'Manufacturer', value: detailProduct.manufacturer || '—' },
+              { label: 'Description',  value: detailProduct.description || '—' },
+              { label: 'Inventory',    value: detailProduct.inventory ? 'Tracked' : 'Not tracked' },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex items-start justify-between gap-4 py-3">
+                <span className="text-sm text-zinc-400 flex-shrink-0 w-28">{label}</span>
+                <span className="text-sm font-medium text-zinc-900 text-right">{value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </BottomSheet>
     </>
   )
 }
