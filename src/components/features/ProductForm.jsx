@@ -30,10 +30,11 @@ export default function ProductForm({ open, onClose, editing }) {
         category: editing.category?._id || editing.category,
         description: editing.description || '',
         manufacturer: editing.manufacturer || '',
+        taxRate: editing.taxRate ?? 0,
         inventory: editing.inventory ?? false,
       })
     } else {
-      reset({ name: '', price: '', unit: 'pcs', category: '', description: '', manufacturer: '', inventory: isBusiness })
+      reset({ name: '', price: '', unit: 'pcs', category: '', description: '', manufacturer: '', taxRate: 0, inventory: isBusiness })
     }
   }, [editing, open, isBusiness])
 
@@ -65,7 +66,7 @@ export default function ProductForm({ open, onClose, editing }) {
           {...register('name', { required: 'Name is required' })}
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Input
             label="Price"
             type="number"
@@ -85,6 +86,16 @@ export default function ProductForm({ open, onClose, editing }) {
               {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
+
+          <Input
+            label="Tax (%)"
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            placeholder="e.g. 18"
+            {...register('taxRate')}
+          />
         </div>
 
         <div className="flex flex-col gap-1.5">

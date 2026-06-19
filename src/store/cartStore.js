@@ -6,8 +6,6 @@ function uuid() {
   try { return crypto.randomUUID() } catch { return Math.random().toString(36).slice(2) }
 }
 
-function sortedIds(arr) { return [...arr].sort().join(',') }
-
 function readCart(groupId) {
   if (!groupId) return []
   try { return JSON.parse(localStorage.getItem(lsKey(groupId))) || [] } catch { return [] }
@@ -18,29 +16,11 @@ function writeCart(groupId, items) {
   try { localStorage.setItem(lsKey(groupId), JSON.stringify(items)) } catch {}
 }
 
-// Returns [idxA, idxB] if two items in the array are now identical, else null
-function findDuplicate(items) {
-  for (let i = 0; i < items.length; i++) {
-    for (let j = i + 1; j < items.length; j++) {
-      const a = items[i], b = items[j]
-      if (
-        a._id === b._id &&
-        a.unit === b.unit &&
-        a._splitType === b._splitType &&
-        sortedIds(a._splitAmong) === sortedIds(b._splitAmong) &&
-        a._price === b._price
-      ) return [i, j]
-    }
-  }
-  return null
-}
-
 const useCartStore = create((set, get) => ({
   items: [],
   groupId: null,
   cartOpen: false,
   lastRemoved: null,
-  pendingMerge: null,  // { next: [...], idxA, idxB } — awaiting user confirmation
 
   openCart:  () => set({ cartOpen: true }),
   closeCart: () => set({ cartOpen: false }),
@@ -62,13 +42,10 @@ const useCartStore = create((set, get) => ({
       : []
 
     const newPrice = product._price ?? parseFloat(product.price)
+    const taxRate  = parseFloat(product.taxRate ?? 0)
+
     const existingIdx = items.findIndex(
-      (i) =>
-        i._id === product._id &&
-        i.unit === resolvedUnit &&
-        i._splitType === splitType &&
-        sortedIds(i._splitAmong) === sortedIds(resolvedSplit) &&
-        i._price === newPrice
+      (i) => i._id === product._id && i.unit === resolvedUnit && i._price === newPrice
     )
 
     let next
@@ -81,6 +58,7 @@ const useCartStore = create((set, get) => ({
         ...product,
         _cartId: uuid(),
         _price: newPrice,
+        _taxRate: taxRate,
         _splitType: splitType,
         _splitAmong: resolvedSplit,
         quantity: initialQty,
@@ -106,13 +84,17 @@ const useCartStore = create((set, get) => ({
     const next = items.map((i) =>
       i._cartId === _cartId ? { ...i, _price: Math.max(0, parseFloat(price.toFixed(2))) } : i
     )
-    const dup = findDuplicate(next)
-    if (dup) {
-      set({ pendingMerge: { next, idxA: dup[0], idxB: dup[1] } })
-    } else {
-      set({ items: next })
-      writeCart(groupId, next)
-    }
+    set({ items: next })
+    writeCart(groupId, next)
+  },
+
+  updateTax: (_cartId, taxRate) => {
+    const { items, groupId } = get()
+    const next = items.map((i) =>
+      i._cartId === _cartId ? { ...i, _taxRate: Math.max(0, parseFloat(taxRate.toFixed(2))) } : i
+    )
+    set({ items: next })
+    writeCart(groupId, next)
   },
 
   updateSplit: (_cartId, { splitType, splitAmong }) => {
@@ -120,28 +102,9 @@ const useCartStore = create((set, get) => ({
     const next = items.map((i) =>
       i._cartId === _cartId ? { ...i, _splitType: splitType, _splitAmong: splitAmong } : i
     )
-    const dup = findDuplicate(next)
-    if (dup) {
-      set({ pendingMerge: { next, idxA: dup[0], idxB: dup[1] } })
-    } else {
-      set({ items: next })
-      writeCart(groupId, next)
-    }
+    set({ items: next })
+    writeCart(groupId, next)
   },
-
-  confirmMerge: () => {
-    const { pendingMerge, groupId } = get()
-    if (!pendingMerge) return
-    const { next, idxA, idxB } = pendingMerge
-    const merged = next[idxA].quantity + next[idxB].quantity
-    const mergedItems = next
-      .map((item, i) => i === idxA ? { ...item, quantity: merged } : item)
-      .filter((_, i) => i !== idxB)
-    set({ items: mergedItems, pendingMerge: null })
-    writeCart(groupId, mergedItems)
-  },
-
-  cancelMerge: () => set({ pendingMerge: null }),
 
   removeItem: (_cartId) => {
     const { items, groupId } = get()
@@ -167,8 +130,23 @@ const useCartStore = create((set, get) => ({
     set({ items: [], lastRemoved: null })
   },
 
-  getTotal: () =>
+  // subtotal before tax
+  getSubtotal: () =>
     get().items.reduce((sum, i) => sum + i._price * i.quantity, 0),
+
+  // total tax across all items
+  getTax: () =>
+    get().items.reduce((sum, i) => sum + (i._price * i.quantity * (i._taxRate ?? 0)) / 100, 0),
+
+  // grand total = subtotal + tax
+  getTotal: () => {
+    const items = get().items
+    return items.reduce((sum, i) => {
+      const subtotal = i._price * i.quantity
+      const tax = subtotal * (i._taxRate ?? 0) / 100
+      return sum + subtotal + tax
+    }, 0)
+  },
 
   getItemCount: () =>
     get().items.reduce((sum, i) => sum + i.quantity, 0),
