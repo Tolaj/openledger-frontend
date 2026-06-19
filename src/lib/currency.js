@@ -1,18 +1,6 @@
-export const CURRENCIES = {
-  INR: '₹',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  JPY: '¥',
-  AUD: 'A$',
-}
+export { currencySymbol, CURRENCY_META as CURRENCIES, CURRENCIES as CURRENCY_LIST } from './countries.js'
 
-export const DEFAULT_CURRENCY = 'INR'
-
-/** Returns the symbol for a given currency code */
-export function currencySymbol(code) {
-  return CURRENCIES[code] || CURRENCIES[DEFAULT_CURRENCY]
-}
+import { currencySymbol } from './countries.js'
 
 /** Formats a number with the currency symbol prefix */
 export function formatAmount(amount, code) {

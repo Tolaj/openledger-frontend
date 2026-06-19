@@ -9,7 +9,10 @@ import {
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import { useForm, Controller } from 'react-hook-form'
 import { logout } from '../api/auth'
+import { convertCurrency as convertCurrencyApi } from '../api/products'
 import { getTemplates } from '../api/templates'
+import { CURRENCIES as CURRENCY_LIST, CURRENCY_META, currencySymbol } from '../lib/countries'
+import { getRate } from '../lib/exchangeRate'
 import api from '../lib/axios'
 import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
@@ -881,6 +884,44 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
 function ConfigurationTab() {
   const { data: me, isLoading } = useMe()
   const { mutate: updateUser, isPending: saving } = useUpdateUser()
+  const queryClient = useQueryClient()
+
+  // Currency conversion state
+  const [pendingCurrency, setPendingCurrency] = useState(null) // { code, label }
+  const [converting, setConverting] = useState(false)
+  const [convertError, setConvertError] = useState(null)
+
+  const handleCurrencySelect = (newCode) => {
+    const old = me?.currency || 'INR'
+    if (newCode === old) return
+    setPendingCurrency(newCode)
+    setConvertError(null)
+  }
+
+  const confirmCurrencyChange = async (convertPrices) => {
+    const fromCode = me?.currency || 'INR'
+    const toCode = pendingCurrency
+    setConverting(true)
+    setConvertError(null)
+    try {
+      if (convertPrices) {
+        const rate = await getRate(fromCode, toCode)
+        await convertCurrencyApi(rate)
+        queryClient.invalidateQueries({ queryKey: ['products'] })
+        queryClient.invalidateQueries({ queryKey: ['inventory'] })
+        queryClient.invalidateQueries({ queryKey: ['wishlists'] })
+        queryClient.invalidateQueries({ queryKey: ['orders'] })
+        queryClient.invalidateQueries({ queryKey: ['finance'] })
+        queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      }
+      updateUser({ id: me._id, data: { currency: toCode } })
+      setPendingCurrency(null)
+    } catch (err) {
+      setConvertError(err.message || 'Failed to fetch exchange rate. Try again.')
+    } finally {
+      setConverting(false)
+    }
+  }
 
   if (isLoading) return <Spinner className="py-12" />
 
@@ -904,23 +945,79 @@ function ConfigurationTab() {
         {/* Currency */}
         <div className="border-t border-zinc-100 p-4">
           <p className="text-sm font-semibold text-zinc-900 mb-1">Currency</p>
-          <p className="text-xs text-zinc-400 mb-3">Used across Finance, Orders and Dashboard.</p>
-          <select
-            defaultValue={me?.currency || 'INR'}
-            onChange={(e) => updateUser({ id: me._id, data: { currency: e.target.value } })}
-            className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
-          >
-            {[
-              { code: 'INR', label: '₹ INR — Indian Rupee' },
-              { code: 'USD', label: '$ USD — US Dollar' },
-              { code: 'EUR', label: '€ EUR — Euro' },
-              { code: 'GBP', label: '£ GBP — British Pound' },
-              { code: 'JPY', label: '¥ JPY — Japanese Yen' },
-              { code: 'AUD', label: 'A$ AUD — Australian Dollar' },
-            ].map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
-          </select>
+          <p className="text-xs text-zinc-400 mb-3">
+            Changing currency can also convert all your product prices using live exchange rates.
+          </p>
+          <div className="flex gap-2">
+            <select
+              key={me?.currency}
+              defaultValue={me?.currency || 'INR'}
+              onChange={(e) => handleCurrencySelect(e.target.value)}
+              className="flex-1 h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
+            >
+              {[...CURRENCY_LIST].sort((a, b) => {
+                if (a.code === (me?.currency || 'INR')) return -1
+                if (b.code === (me?.currency || 'INR')) return 1
+                return a.code.localeCompare(b.code)
+              }).map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.symbol} {c.code} — {c.name}
+                </option>
+              ))}
+            </select>
+            <div className="h-11 w-12 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-center text-lg font-semibold text-zinc-700 select-none">
+              {currencySymbol(me?.currency || 'INR')}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Currency conversion confirmation sheet */}
+      <BottomSheet
+        open={!!pendingCurrency}
+        onClose={() => !converting && setPendingCurrency(null)}
+        title="Change currency"
+      >
+        <div className="flex flex-col gap-4 px-1">
+          {/* From → To */}
+          <div className="flex items-center justify-center gap-4 py-2">
+            <div className="text-center">
+              <p className="text-2xl font-bold text-zinc-900">{currencySymbol(me?.currency || 'INR')}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{me?.currency || 'INR'}</p>
+            </div>
+            <div className="text-zinc-300 text-xl">→</div>
+            <div className="text-center">
+              <p className="text-2xl font-bold text-zinc-900">{currencySymbol(pendingCurrency)}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{pendingCurrency}</p>
+            </div>
+          </div>
+
+          <p className="text-sm text-zinc-600 text-center leading-relaxed">
+            Do you also want to convert all your <strong>product prices</strong> from{' '}
+            <strong>{me?.currency}</strong> to <strong>{pendingCurrency}</strong> using live exchange rates?
+          </p>
+
+          {convertError && (
+            <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2 text-center">{convertError}</p>
+          )}
+
+          <Button
+            fullWidth
+            loading={converting}
+            onClick={() => confirmCurrencyChange(true)}
+          >
+            Yes, convert prices too
+          </Button>
+          <Button
+            fullWidth
+            variant="secondary"
+            disabled={converting}
+            onClick={() => confirmCurrencyChange(false)}
+          >
+            Just change the symbol
+          </Button>
+        </div>
+      </BottomSheet>
     </div>
   )
 }

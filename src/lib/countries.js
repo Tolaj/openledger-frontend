@@ -1,0 +1,122 @@
+/** Country list with default currency code */
+export const COUNTRIES = [
+  { code: 'IN', name: 'India', currency: 'INR', flag: '🇮🇳' },
+  { code: 'US', name: 'United States', currency: 'USD', flag: '🇺🇸' },
+  { code: 'GB', name: 'United Kingdom', currency: 'GBP', flag: '🇬🇧' },
+  { code: 'AU', name: 'Australia', currency: 'AUD', flag: '🇦🇺' },
+  { code: 'DE', name: 'Germany', currency: 'EUR', flag: '🇩🇪' },
+  { code: 'FR', name: 'France', currency: 'EUR', flag: '🇫🇷' },
+  { code: 'IT', name: 'Italy', currency: 'EUR', flag: '🇮🇹' },
+  { code: 'ES', name: 'Spain', currency: 'EUR', flag: '🇪🇸' },
+  { code: 'NL', name: 'Netherlands', currency: 'EUR', flag: '🇳🇱' },
+  { code: 'BE', name: 'Belgium', currency: 'EUR', flag: '🇧🇪' },
+  { code: 'AT', name: 'Austria', currency: 'EUR', flag: '🇦🇹' },
+  { code: 'PT', name: 'Portugal', currency: 'EUR', flag: '🇵🇹' },
+  { code: 'GR', name: 'Greece', currency: 'EUR', flag: '🇬🇷' },
+  { code: 'FI', name: 'Finland', currency: 'EUR', flag: '🇫🇮' },
+  { code: 'IE', name: 'Ireland', currency: 'EUR', flag: '🇮🇪' },
+  { code: 'JP', name: 'Japan', currency: 'JPY', flag: '🇯🇵' },
+  { code: 'CA', name: 'Canada', currency: 'CAD', flag: '🇨🇦' },
+  { code: 'NZ', name: 'New Zealand', currency: 'NZD', flag: '🇳🇿' },
+  { code: 'CH', name: 'Switzerland', currency: 'CHF', flag: '🇨🇭' },
+  { code: 'SE', name: 'Sweden', currency: 'SEK', flag: '🇸🇪' },
+  { code: 'NO', name: 'Norway', currency: 'NOK', flag: '🇳🇴' },
+  { code: 'DK', name: 'Denmark', currency: 'DKK', flag: '🇩🇰' },
+  { code: 'SG', name: 'Singapore', currency: 'SGD', flag: '🇸🇬' },
+  { code: 'HK', name: 'Hong Kong', currency: 'HKD', flag: '🇭🇰' },
+  { code: 'CN', name: 'China', currency: 'CNY', flag: '🇨🇳' },
+  { code: 'KR', name: 'South Korea', currency: 'KRW', flag: '🇰🇷' },
+  { code: 'BR', name: 'Brazil', currency: 'BRL', flag: '🇧🇷' },
+  { code: 'MX', name: 'Mexico', currency: 'MXN', flag: '🇲🇽' },
+  { code: 'ZA', name: 'South Africa', currency: 'ZAR', flag: '🇿🇦' },
+  { code: 'AE', name: 'UAE', currency: 'AED', flag: '🇦🇪' },
+  { code: 'SA', name: 'Saudi Arabia', currency: 'SAR', flag: '🇸🇦' },
+  { code: 'PK', name: 'Pakistan', currency: 'PKR', flag: '🇵🇰' },
+  { code: 'BD', name: 'Bangladesh', currency: 'BDT', flag: '🇧🇩' },
+  { code: 'LK', name: 'Sri Lanka', currency: 'LKR', flag: '🇱🇰' },
+  { code: 'NP', name: 'Nepal', currency: 'NPR', flag: '🇳🇵' },
+  { code: 'TH', name: 'Thailand', currency: 'THB', flag: '🇹🇭' },
+  { code: 'MY', name: 'Malaysia', currency: 'MYR', flag: '🇲🇾' },
+  { code: 'ID', name: 'Indonesia', currency: 'IDR', flag: '🇮🇩' },
+  { code: 'PH', name: 'Philippines', currency: 'PHP', flag: '🇵🇭' },
+  { code: 'VN', name: 'Vietnam', currency: 'VND', flag: '🇻🇳' },
+  { code: 'RU', name: 'Russia', currency: 'RUB', flag: '🇷🇺' },
+  { code: 'TR', name: 'Turkey', currency: 'TRY', flag: '🇹🇷' },
+  { code: 'PL', name: 'Poland', currency: 'PLN', flag: '🇵🇱' },
+  { code: 'CZ', name: 'Czech Republic', currency: 'CZK', flag: '🇨🇿' },
+  { code: 'HU', name: 'Hungary', currency: 'HUF', flag: '🇭🇺' },
+  { code: 'RO', name: 'Romania', currency: 'RON', flag: '🇷🇴' },
+  { code: 'EG', name: 'Egypt', currency: 'EGP', flag: '🇪🇬' },
+  { code: 'NG', name: 'Nigeria', currency: 'NGN', flag: '🇳🇬' },
+  { code: 'KE', name: 'Kenya', currency: 'KES', flag: '🇰🇪' },
+  { code: 'GH', name: 'Ghana', currency: 'GHS', flag: '🇬🇭' },
+  { code: 'AR', name: 'Argentina', currency: 'ARS', flag: '🇦🇷' },
+  { code: 'CL', name: 'Chile', currency: 'CLP', flag: '🇨🇱' },
+  { code: 'CO', name: 'Colombia', currency: 'COP', flag: '🇨🇴' },
+]
+
+/** Currency metadata: symbol + full name */
+export const CURRENCY_META = {
+  INR: { symbol: '₹',  name: 'Indian Rupee' },
+  USD: { symbol: '$',  name: 'US Dollar' },
+  EUR: { symbol: '€',  name: 'Euro' },
+  GBP: { symbol: '£',  name: 'British Pound' },
+  JPY: { symbol: '¥',  name: 'Japanese Yen' },
+  AUD: { symbol: 'A$', name: 'Australian Dollar' },
+  CAD: { symbol: 'C$', name: 'Canadian Dollar' },
+  NZD: { symbol: 'NZ$',name: 'New Zealand Dollar' },
+  CHF: { symbol: 'Fr', name: 'Swiss Franc' },
+  SEK: { symbol: 'kr', name: 'Swedish Krona' },
+  NOK: { symbol: 'kr', name: 'Norwegian Krone' },
+  DKK: { symbol: 'kr', name: 'Danish Krone' },
+  SGD: { symbol: 'S$', name: 'Singapore Dollar' },
+  HKD: { symbol: 'HK$',name: 'Hong Kong Dollar' },
+  CNY: { symbol: '¥',  name: 'Chinese Yuan' },
+  KRW: { symbol: '₩',  name: 'South Korean Won' },
+  BRL: { symbol: 'R$', name: 'Brazilian Real' },
+  MXN: { symbol: '$',  name: 'Mexican Peso' },
+  ZAR: { symbol: 'R',  name: 'South African Rand' },
+  AED: { symbol: 'د.إ',name: 'UAE Dirham' },
+  SAR: { symbol: '﷼',  name: 'Saudi Riyal' },
+  PKR: { symbol: '₨',  name: 'Pakistani Rupee' },
+  BDT: { symbol: '৳',  name: 'Bangladeshi Taka' },
+  LKR: { symbol: '₨',  name: 'Sri Lankan Rupee' },
+  NPR: { symbol: '₨',  name: 'Nepalese Rupee' },
+  THB: { symbol: '฿',  name: 'Thai Baht' },
+  MYR: { symbol: 'RM', name: 'Malaysian Ringgit' },
+  IDR: { symbol: 'Rp', name: 'Indonesian Rupiah' },
+  PHP: { symbol: '₱',  name: 'Philippine Peso' },
+  VND: { symbol: '₫',  name: 'Vietnamese Dong' },
+  RUB: { symbol: '₽',  name: 'Russian Ruble' },
+  TRY: { symbol: '₺',  name: 'Turkish Lira' },
+  PLN: { symbol: 'zł', name: 'Polish Zloty' },
+  CZK: { symbol: 'Kč', name: 'Czech Koruna' },
+  HUF: { symbol: 'Ft', name: 'Hungarian Forint' },
+  RON: { symbol: 'lei',name: 'Romanian Leu' },
+  EGP: { symbol: '£',  name: 'Egyptian Pound' },
+  NGN: { symbol: '₦',  name: 'Nigerian Naira' },
+  KES: { symbol: 'KSh',name: 'Kenyan Shilling' },
+  GHS: { symbol: '₵',  name: 'Ghanaian Cedi' },
+  ARS: { symbol: '$',  name: 'Argentine Peso' },
+  CLP: { symbol: '$',  name: 'Chilean Peso' },
+  COP: { symbol: '$',  name: 'Colombian Peso' },
+}
+
+/** Get currency symbol — falls back to the code itself */
+export function currencySymbol(code) {
+  return CURRENCY_META[code]?.symbol || code || '₹'
+}
+
+/** Get all unique currencies from the country list, deduplicated */
+export const CURRENCIES = [...new Map(
+  COUNTRIES.map(c => [c.currency, {
+    code: c.currency,
+    symbol: CURRENCY_META[c.currency]?.symbol || c.currency,
+    name: CURRENCY_META[c.currency]?.name || c.currency,
+  }])
+).values()].sort((a, b) => a.code.localeCompare(b.code))
+
+/** Given a country code, return its default currency code */
+export function currencyForCountry(countryCode) {
+  return COUNTRIES.find(c => c.code === countryCode)?.currency || 'INR'
+}
