@@ -280,10 +280,12 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                     </div>
                   </div>
                   {/* splitAmong */}
-                  <div className="flex items-center px-4 py-2.5">
-                    <span className="text-xs text-zinc-400 w-24 flex-shrink-0">splitAmong</span>
-                    <SplitDropdown members={groupMemberObjects} splitAmong={split} onChange={(arr) => setSplit(p, arr)} />
-                  </div>
+                  {!isBusiness && (
+                    <div className="flex items-center px-4 py-2.5">
+                      <span className="text-xs text-zinc-400 w-24 flex-shrink-0">splitAmong</span>
+                      <SplitDropdown members={groupMemberObjects} splitAmong={split} onChange={(arr) => setSplit(p, arr)} />
+                    </div>
+                  )}
                   {/* description */}
                   <div className="flex items-center px-4 py-2.5">
                     <span className="text-xs text-zinc-400 w-24 flex-shrink-0">description</span>
@@ -312,7 +314,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
           { key: 'category', label: 'category', filterable: true },
           { key: 'price', label: `price (${sym})`, filterable: true },
           { key: 'unit', label: 'unit', filterable: true },
-          { key: 'splitAmong', label: 'splitAmong' },
+          ...(!isBusiness ? [{ key: 'splitAmong', label: 'splitAmong' }] : []),
           { key: 'manufacturer', label: 'manufacturer', filterable: true },
           { key: 'action', label: 'action' },
         ]}
@@ -361,13 +363,15 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
             {/* unit — plain text */}
             <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{p.unit}</td>
             {/* splitAmong */}
-            <td className="px-4 py-3 border-r border-zinc-100">
-              <SplitDropdown
-                members={groupMemberObjects}
-                splitAmong={getSplit(p)}
-                onChange={(arr) => setSplit(p, arr)}
-              />
-            </td>
+            {!isBusiness && (
+              <td className="px-4 py-3 border-r border-zinc-100">
+                <SplitDropdown
+                  members={groupMemberObjects}
+                  splitAmong={getSplit(p)}
+                  onChange={(arr) => setSplit(p, arr)}
+                />
+              </td>
+            )}
             {/* manufacturer */}
             <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[120px] truncate">{p.manufacturer || '—'}</td>
             {/* actions */}
@@ -687,7 +691,7 @@ function WishlistMobileCard({ w, onAddToCart, onEdit, onDelete, memberName }) {
 }
 
 // ── Wish List tab ─────────────────────────────────────────────────────────────
-function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelete, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const { openEdit } = useWishlistStore()
   const { addItem } = useCartStore()
   const sym = useCurrencySymbol()
@@ -816,7 +820,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
                   <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
                     <thead>
                       <tr className="border-b border-zinc-200">
-                        {['product', 'price', 'count', 'unit', 'splitAmong'].map((h, i, arr) => (
+                        {['product', 'price', 'count', 'unit', ...(!isBusiness ? ['splitAmong'] : [])].map((h, i, arr) => (
                           <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
                         ))}
                       </tr>
@@ -827,13 +831,15 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
                           <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
-                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
-                          <td className="px-3 py-2 text-zinc-600">
-                            {(item.splitAmong || []).map((u) => {
-                              const id = typeof u === 'object' ? u._id : u
-                              return u?.name || u?.email || memberName(id)
-                            }).join(', ')}
-                          </td>
+                          <td className={`px-3 py-2 text-zinc-600 ${!isBusiness ? 'border-r border-zinc-100' : ''}`}>{item.unit}</td>
+                          {!isBusiness && (
+                            <td className="px-3 py-2 text-zinc-600">
+                              {(item.splitAmong || []).map((u) => {
+                                const id = typeof u === 'object' ? u._id : u
+                                return u?.name || u?.email || memberName(id)
+                              }).join(', ')}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -852,7 +858,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
 }
 
 // ── OrderMobileCard ───────────────────────────────────────────────────────────
-function OrderMobileCard({ o, onDelete }) {
+function OrderMobileCard({ o, onDelete, isBusiness }) {
   const sym = useCurrencySymbol()
   const [isOpen, setIsOpen] = useState(false)
   const [itemsOpen, setItemsOpen] = useState(false)
@@ -901,7 +907,7 @@ function OrderMobileCard({ o, onDelete }) {
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-zinc-100 bg-zinc-50">
-                      {['Product', 'Price', 'Unit', 'Count', 'Split'].map((h, i, arr) => (
+                      {['Product', 'Price', 'Unit', 'Count', ...(!isBusiness ? ['Split'] : [])].map((h, i, arr) => (
                         <th key={h} className={`px-2 py-1.5 text-left font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-100' : ''}`}>{h}</th>
                       ))}
                     </tr>
@@ -912,8 +918,8 @@ function OrderMobileCard({ o, onDelete }) {
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-800 font-medium">{item.product?.name || '—'}</td>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
                         <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
-                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.count}</td>
-                        <td className="px-2 py-1.5 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>
+                        <td className={`px-2 py-1.5 text-zinc-600 ${!isBusiness ? 'border-r border-zinc-100' : ''}`}>{item.count}</td>
+                        {!isBusiness && <td className="px-2 py-1.5 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>}
                       </tr>
                     ))}
                   </tbody>
@@ -940,7 +946,7 @@ function OrderMobileCard({ o, onDelete }) {
 }
 
 // ── Orders tab ────────────────────────────────────────────────────────────────
-function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const sym = useCurrencySymbol()
   const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ name: '', totalPrice: '', date: '', paidBy: '', createdBy: '' })
@@ -994,7 +1000,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((o) => (
-          <OrderMobileCard key={o._id} o={o} onDelete={onDelete} />
+          <OrderMobileCard key={o._id} o={o} onDelete={onDelete} isBusiness={isBusiness} />
         ))}
       </div>
 
@@ -1046,7 +1052,7 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
                   <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
                     <thead>
                       <tr className="border-b border-zinc-200">
-                        {['product', 'price', 'count', 'unit', 'splitAmong'].map((h, i, arr) => (
+                        {['product', 'price', 'count', 'unit', ...(!isBusiness ? ['splitAmong'] : [])].map((h, i, arr) => (
                           <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
                         ))}
                       </tr>
@@ -1057,8 +1063,8 @@ function OrdersTab({ orders = [], loading, onDelete, mobileFiltersOpen, onMobile
                           <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || '—'}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{item.price}</td>
                           <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.count}</td>
-                          <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unit}</td>
-                          <td className="px-3 py-2 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>
+                          <td className={`px-3 py-2 text-zinc-600 ${!isBusiness ? 'border-r border-zinc-100' : ''}`}>{item.unit}</td>
+                          {!isBusiness && <td className="px-3 py-2 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>}
                         </tr>
                       ))}
                     </tbody>
@@ -1734,6 +1740,7 @@ export default function Products() {
               onDelete={(id) => deleteWishlist(id)}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
+              isBusiness={isBusiness}
             />
           )}
 
@@ -1759,6 +1766,7 @@ export default function Products() {
               onDelete={(id) => deleteOrder(id)}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
+              isBusiness={isBusiness}
             />
           )}
 
