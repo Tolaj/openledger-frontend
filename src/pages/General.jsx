@@ -10,6 +10,7 @@ import Input from '../components/ui/Input'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import DataTable, { DataTableFilterIcon } from '../components/ui/DataTable'
+import Spinner from '../components/ui/Spinner'
 import Tabs from '../components/ui/Tabs'
 import ProductPicker from '../components/features/ProductPicker'
 import { useRecipients, useCreateRecipient, useUpdateRecipient, useDeleteRecipient } from '../hooks/useRecipients'
@@ -108,9 +109,11 @@ function RecipientsTab({ mobileFiltersOpen, onAdd }) {
     </>
   )
 
+  if (isLoading) return <Spinner className="py-12" />
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {!isLoading && recipients.length === 0 ? (
+      {recipients.length === 0 ? (
         <EmptyState title="No recipients" description="Add payees and payers to get started"
           action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recipient</Button>} />
       ) : (
@@ -248,6 +251,8 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
   const onDelete = (id) => { if (confirm('Delete this order?')) deleteOrder.mutate(id) }
 
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
+
+  if (isLoading) return <Spinner className="py-12" />
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -596,9 +601,11 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
     </React.Fragment>
   )
 
+  if (isLoading) return <Spinner className="py-12" />
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {!isLoading && invoices.length === 0 ? (
+      {invoices.length === 0 ? (
         <EmptyState title="No invoices" description="Create your first general invoice"
           action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create Invoice</Button>} />
       ) : (
@@ -761,7 +768,8 @@ const RECURRING_COLS = [
   { key: 'frequency',   label: 'Frequency',   filterable: true  },
   { key: 'nextRunDate', label: 'Next Run',    filterable: false },
   { key: 'status',      label: 'Status',      filterable: true  },
-  { key: 'grandTotal',  label: 'Amount',      filterable: false },
+  { key: 'items',       label: 'Items',       filterable: false },
+  { key: 'grandTotal',  label: 'Total',       filterable: false },
   { key: 'action',      label: 'Action'                         },
 ]
 
@@ -777,19 +785,28 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing]     = useState(null)
+  const [statusSheet, setStatusSheet] = useState(null)
   const [filters, setFilters]     = useState({ name: '', recipient: '', frequency: '', status: '' })
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
-    defaultValues: { frequency: 'monthly', status: 'active', direction: 'payable', autoCreate: false },
+  const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm({
+    defaultValues: { frequency: 'monthly', status: 'active', direction: 'payable', autoCreate: false, items: [] },
   })
+  const { fields: recFields, append: recAppend, remove: recRemove } = useFieldArray({ control, name: 'items' })
+  const recItems = watch('items') || []
+  const calcRecAmount = (idx) => {
+    const it = recItems[idx] || {}
+    return (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0)
+  }
+  const recGrandTotal = recItems.reduce((s, it, i) => s + calcRecAmount(i), 0)
 
-  const openCreate = () => { setEditing(null); reset({ frequency: 'monthly', status: 'active', direction: 'payable', autoCreate: false }); setSheetOpen(true) }
+  const openCreate = () => { setEditing(null); reset({ frequency: 'monthly', status: 'active', direction: 'payable', autoCreate: false, items: [] }); setSheetOpen(true) }
   const openEdit   = (r) => {
     setEditing(r)
     reset({
       ...r,
       recipient:   r.recipient?._id || r.recipient,
       nextRunDate: r.nextRunDate ? new Date(r.nextRunDate).toISOString().slice(0, 10) : '',
+      items:       r.items || [],
     })
     setSheetOpen(true)
   }
@@ -801,7 +818,16 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
 
   const onSubmit = async (data) => {
     try {
-      const payload = { ...data, grandTotal: parseFloat(data.grandTotal) || 0 }
+      const items = (data.items || []).map((it) => ({
+        description: it.description || '',
+        qty:         parseFloat(it.qty)       || 0,
+        unit:        it.unit || '',
+        unitPrice:   parseFloat(it.unitPrice) || 0,
+        taxRate:     parseFloat(it.taxRate)   || 0,
+        amount:      (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0),
+      }))
+      const grandTotal = items.reduce((s, it) => s + it.amount, 0)
+      const payload = { ...data, items, grandTotal }
       if (!payload.recipient) delete payload.recipient
       if (editing) await updateRecurring.mutateAsync({ id: editing._id, data: payload })
       else         await createRecurring.mutateAsync(payload)
@@ -817,7 +843,7 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
   )
 
   const renderRow = (r) => (
-    <>
+    <tr key={r._id} className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
       <td className="px-4 py-3 font-medium text-zinc-900">{r.name}</td>
       <td className="px-4 py-3 text-zinc-600">{r.recipient?.name || '—'}</td>
       <td className="px-4 py-3">
@@ -827,27 +853,17 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
       <td className="px-4 py-3">
         <Badge variant={REC_STATUS_VARIANT[r.status] || 'default'}>{r.status}</Badge>
       </td>
+      <td className="px-4 py-3 text-sm text-zinc-500">{(r.items || []).length || '—'}</td>
       <td className="px-4 py-3 font-semibold text-zinc-900">{fmt(r.grandTotal, sym)}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1">
-          {r.status === 'active' && (
-            <button
-              title="Pause"
-              onClick={() => updateRecurring.mutate({ id: r._id, data: { status: 'paused' } })}
-              className="p-1.5 rounded-lg hover:bg-yellow-50 text-zinc-500 hover:text-yellow-600 transition-colors"
-            >
-              <RefreshCw size={14} />
-            </button>
-          )}
-          {r.status === 'paused' && (
-            <button
-              title="Resume"
-              onClick={() => updateRecurring.mutate({ id: r._id, data: { status: 'active' } })}
-              className="p-1.5 rounded-lg hover:bg-green-50 text-zinc-500 hover:text-green-600 transition-colors"
-            >
-              <RefreshCw size={14} />
-            </button>
-          )}
+          <button
+            title="Update status"
+            onClick={() => setStatusSheet(r)}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 transition-colors"
+          >
+            <RefreshCw size={14} />
+          </button>
           <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors">
             <Pencil size={14} />
           </button>
@@ -856,12 +872,14 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
           </button>
         </div>
       </td>
-    </>
+    </tr>
   )
+
+  if (isLoading) return <Spinner className="py-12" />
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {!isLoading && recurrings.length === 0 ? (
+      {recurrings.length === 0 ? (
         <EmptyState title="No recurring entries" description="Set up subscriptions and renewals"
           action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recurring</Button>} />
       ) : (
@@ -875,6 +893,28 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
           emptyMessage="No recurring entries match filters"
         />
       )}
+
+      <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Status">
+        <div className="grid grid-cols-2 gap-2 pb-2">
+          {['active', 'paused', 'cancelled'].map((s) => (
+            <button
+              key={s}
+              onClick={async () => {
+                await updateRecurring.mutateAsync({ id: statusSheet._id, data: { status: s } })
+                setStatusSheet(null)
+              }}
+              className={[
+                'py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
+                statusSheet?.status === s
+                  ? 'bg-zinc-900 text-white border-zinc-900'
+                  : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50',
+              ].join(' ')}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
 
       <BottomSheet open={sheetOpen} onClose={close} title={editing ? 'Edit Recurring' : 'New Recurring'}>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -922,7 +962,64 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
             </div>
           </div>
 
-          <Input label="Amount" type="number" step="0.01" placeholder="0.00" {...register('grandTotal')} />
+          {/* Items */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-zinc-700">Items</label>
+              <button
+                type="button"
+                onClick={() => recAppend({ description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 })}
+                className="text-xs text-zinc-500 hover:text-zinc-900 flex items-center gap-1 outline-none focus:outline-none focus-visible:outline-none"
+              >
+                <Plus size={13} /> Add Item
+              </button>
+            </div>
+            {recFields.length === 0 && (
+              <p className="text-xs text-zinc-400 text-center py-3 border border-dashed border-zinc-200 rounded-xl">No items yet — click Add Item</p>
+            )}
+            {recFields.map((field, idx) => (
+              <div key={field.id} className="border border-zinc-200 rounded-xl p-3 space-y-2 relative">
+                <button type="button" onClick={() => recRemove(idx)} className="absolute top-2 right-2 p-1 rounded text-zinc-300 hover:text-red-500 outline-none focus:outline-none">
+                  <Minus size={13} />
+                </button>
+                <input
+                  {...register(`items.${idx}.description`)}
+                  placeholder="Description *"
+                  className="w-full h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900 pr-6"
+                />
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Qty</label>
+                    <input type="number" min="0" step="any" {...register(`items.${idx}.qty`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Unit</label>
+                    <input placeholder="pcs" {...register(`items.${idx}.unit`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Unit Price</label>
+                    <input type="number" min="0" step="any" {...register(`items.${idx}.unitPrice`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Tax %</label>
+                    <input type="number" min="0" step="any" {...register(`items.${idx}.taxRate`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-400 text-right">
+                  Amount: <span className="font-semibold text-zinc-800">{sym}{calcRecAmount(idx).toFixed(2)}</span>
+                </p>
+              </div>
+            ))}
+            {recFields.length > 0 && (
+              <p className="text-xs text-zinc-500 text-right pr-1">
+                Total: <span className="font-semibold text-zinc-900">{sym}{recGrandTotal.toFixed(2)}</span>
+              </p>
+            )}
+          </div>
 
           <div className="flex items-center gap-3 py-1">
             <input type="checkbox" id="autoCreate" {...register('autoCreate')} className="w-4 h-4 rounded border-zinc-300 accent-zinc-900" />

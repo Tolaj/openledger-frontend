@@ -16,6 +16,7 @@ import PageActions from '../components/layout/PageActions'
 import { useProducts, useDeleteProduct } from '../hooks/useProducts'
 import { useCategories, useDeleteCategory } from '../hooks/useCategories'
 import { useOrders, useDeleteOrder } from '../hooks/useOrders'
+import { useGeneralOrders, useDeleteGeneralOrder } from '../hooks/useGeneralOrders'
 import { usePurchaseOrders, useDeletePurchaseOrder } from '../hooks/usePurchaseOrders'
 import { useSalesOrders, useDeleteSalesOrder } from '../hooks/useSalesOrders'
 import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
@@ -951,8 +952,8 @@ function OrderMobileCard({ o, onDelete, isBusiness }) {
 }
 
 // ── Orders tab ────────────────────────────────────────────────────────────────
-const ORDER_TYPE_LABELS  = { general: 'General', po: 'Purchase Order', so: 'Sales Order' }
-const ORDER_TYPE_COLORS  = { general: 'bg-zinc-100 text-zinc-600', po: 'bg-blue-50 text-blue-600', so: 'bg-emerald-50 text-emerald-600' }
+const ORDER_TYPE_LABELS  = { general: 'General', go: 'General Order', po: 'Purchase Order', so: 'Sales Order' }
+const ORDER_TYPE_COLORS  = { general: 'bg-zinc-100 text-zinc-600', go: 'bg-violet-50 text-violet-600', po: 'bg-blue-50 text-blue-600', so: 'bg-emerald-50 text-emerald-600' }
 const ORDER_STATUS_VARIANT = {
   draft: 'default', sent: 'warning', confirmed: 'warning',
   partial: 'warning', received: 'success', delivered: 'success', cancelled: 'danger',
@@ -970,15 +971,17 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
   const sym = useCurrencySymbol()
 
   const { data: generalOrders = [], isLoading: loadingGeneral } = useOrders()
+  const { data: goOrders = [], isLoading: loadingGO } = useGeneralOrders()
   const { data: purchaseOrders = [], isLoading: loadingPO } = usePurchaseOrders()
   const { data: salesOrders = [], isLoading: loadingSO } = useSalesOrders()
   const { data: purchaseInvoices = [] } = usePurchaseInvoices()
   const { data: salesInvoices = [] } = useSalesInvoices()
   const { mutate: deleteGeneral } = useDeleteOrder()
+  const { mutate: deleteGO } = useDeleteGeneralOrder()
   const { mutate: deletePO } = useDeletePurchaseOrder()
   const { mutate: deleteSO } = useDeleteSalesOrder()
 
-  const loading = loadingGeneral || loadingPO || loadingSO
+  const loading = loadingGeneral || loadingGO || loadingPO || loadingSO
 
   // Settlement lookup: poId → latest invoice status, soId → latest invoice status
   const poSettlement = {}
@@ -999,17 +1002,19 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
     if (!prev || new Date(inv.createdAt) > new Date(prev.createdAt)) soSettlement[key] = inv
   })
 
-  // Normalise all three into one shape
+  // Normalise all into one shape
   const orders = [
     ...generalOrders.map((o) => ({ ...o, _type: 'general', _label: o.name,     _date: o.date,         _total: o.totalPrice, _party: o.paidBy?.name || o.paidBy?.email || '—', _status: o.status || 'received', _settlement: 'paid' })),
-    ...purchaseOrders.map((o) => ({ ...o, _type: 'po',     _label: o.poNumber, _date: o.expectedDate, _total: o.grandTotal, _party: o.vendor?.name || '—',                        _status: o.status || '—',       _settlement: poSettlement[String(o._id)]?.status || 'uninvoiced' })),
-    ...salesOrders.map((o)    => ({ ...o, _type: 'so',     _label: o.soNumber, _date: o.deliveryDate, _total: o.grandTotal, _party: o.customer?.name || '—',                      _status: o.status || '—',       _settlement: soSettlement[String(o._id)]?.status || 'uninvoiced' })),
+    ...goOrders.map((o)       => ({ ...o, _type: 'go',     _label: o.goNumber, _date: o.orderDate,    _total: o.grandTotal, _party: o.recipient?.name || '—',                   _status: o.status || 'draft',   _settlement: 'uninvoiced' })),
+    ...purchaseOrders.map((o) => ({ ...o, _type: 'po',     _label: o.poNumber, _date: o.expectedDate, _total: o.grandTotal, _party: o.vendor?.name || '—',                      _status: o.status || '—',       _settlement: poSettlement[String(o._id)]?.status || 'uninvoiced' })),
+    ...salesOrders.map((o)    => ({ ...o, _type: 'so',     _label: o.soNumber, _date: o.deliveryDate, _total: o.grandTotal, _party: o.customer?.name || '—',                    _status: o.status || '—',       _settlement: soSettlement[String(o._id)]?.status || 'uninvoiced' })),
   ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
 
   const handleDelete = (o) => {
     const label = o._label || 'this order'
     if (!confirm(`Delete "${label}"?`)) return
     if (o._type === 'general') deleteGeneral(o._id)
+    else if (o._type === 'go') deleteGO(o._id)
     else if (o._type === 'po') deletePO(o._id)
     else deleteSO(o._id)
   }
@@ -1024,7 +1029,7 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
   const inDrop = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
 
   const dropOpts = {
-    _type:       ['general', 'po', 'so'],
+    _type:       ['general', 'go', 'po', 'so'],
     _status:     ['draft', 'sent', 'confirmed', 'partial', 'received', 'delivered', 'cancelled'],
     _settlement: ['paid', 'overdue', 'sent', 'draft', 'uninvoiced', 'cancelled'],
   }
@@ -1627,7 +1632,6 @@ const BUSINESS_TABS = [
   { key: 'products',  label: 'Products',  mobileLabel: 'Products'  },
   { key: 'category',  label: 'Category',  mobileLabel: 'Category'  },
   { key: 'wishlist',  label: 'Wish List', mobileLabel: 'Wishlist'  },
-  { key: 'stock',     label: 'Stock',     mobileLabel: 'Stock'     },
   { key: 'orders',    label: 'Orders',    mobileLabel: 'Orders'    },
 ]
 
@@ -1757,15 +1761,6 @@ export default function Products() {
             />
           )}
 
-          {tab === 'stock' && (
-            <StockTab
-              inventory={inventory}
-              loading={loadingInventory}
-              groupMembers={groupMembers}
-              mobileFiltersOpen={mobileFiltersOpen}
-              onMobileFiltersOpenChange={setMobileFiltersOpen}
-            />
-          )}
         </div>
       </div>
 

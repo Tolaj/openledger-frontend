@@ -19,8 +19,8 @@ import Finance from './pages/Finance'
 import Settings from './pages/Settings'
 import Purchases from './pages/Purchases'
 import Sales from './pages/Sales'
-import Reports from './pages/Reports'
 import General from './pages/General'
+import Stock from './pages/Stock'
 
 function SessionLoader({ children }) {
   const { setSession, clearSession } = useAuthStore()
@@ -78,7 +78,7 @@ export default function App() {
               <Route path="/general"   element={<General />} />
               <Route path="/purchases" element={<Purchases />} />
               <Route path="/sales"     element={<Sales />} />
-              <Route path="/reports"   element={<Reports />} />
+              <Route path="/stock"     element={<Stock />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

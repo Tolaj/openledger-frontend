@@ -138,7 +138,7 @@ export default function Dashboard() {
     <>
       <TopBar title="OpenLedger" />
 
-      <div className="px-4 py-5 md:px-0 md:py-0 flex flex-col gap-4 md:gap-6">
+      <div className="px-4 py-5 pb-8 md:px-0 md:py-0 md:pb-6 flex flex-col gap-4 md:gap-6">
 
         {/* Greeting */}
         <div>
