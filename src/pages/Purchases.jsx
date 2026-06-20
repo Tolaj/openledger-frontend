@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Construction, Plus, Pencil, Trash2, Users, ShoppingCart, Minus, PackageCheck, RefreshCw, ChevronDown, FileText } from 'lucide-react'
+import { Construction, Plus, Pencil, Trash2, Users, ShoppingCart, Minus, PackageCheck, RefreshCw, ChevronDown, FileText, Send, Eye, Download } from 'lucide-react'
 import React from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import TopBar from '../components/layout/TopBar'
@@ -12,7 +12,9 @@ import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import { useVendors, useCreateVendor, useUpdateVendor, useDeleteVendor } from '../hooks/useVendors'
-import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useDeletePurchaseOrder } from '../hooks/usePurchaseOrders'
+import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePurchaseOrder, useDeletePurchaseOrder, useSendPurchaseOrder } from '../hooks/usePurchaseOrders'
+import { getPurchaseOrderPDF } from '../api/purchaseOrders'
+import useGroupStore from '../store/groupStore'
 import { useGRNs, useCreateGRN, useDeleteGRN } from '../hooks/useGRNs'
 import { usePurchaseInvoices, useCreatePurchaseInvoice, useUpdatePurchaseInvoice, useDeletePurchaseInvoice } from '../hooks/usePurchaseInvoices'
 import { useProducts } from '../hooks/useProducts'
@@ -199,10 +201,16 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
   const createPO = useCreatePurchaseOrder()
   const updatePO = useUpdatePurchaseOrder()
   const deletePO = useDeletePurchaseOrder()
+  const sendPO = useSendPurchaseOrder()
   const sym = useCurrencySymbol()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [sendSheet, setSendSheet] = useState(null) // PO object to send
+  const [sendEmail, setSendEmail] = useState('')
+  const [sendError, setSendError] = useState('')
+  const [pdfLoading, setPdfLoading] = useState({})
   const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ poNumber: '', vendor: '', status: '' })
   const [dropSel, setDropSel] = useState({})
@@ -265,6 +273,27 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
 
   const onDelete = async (id) => { if (confirm('Delete this purchase order?')) await deletePO.mutateAsync(id) }
   const onStatusChange = async (s) => { await updatePO.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }
+
+  const handlePDFAction = async (id, poNumber, disposition) => {
+    setPdfLoading((p) => ({ ...p, [id]: true }))
+    try {
+      const res = await getPurchaseOrderPDF(id, activeGroupId, disposition)
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      if (disposition === 'inline') {
+        window.open(url, '_blank')
+      } else {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${poNumber}.pdf`
+        a.click()
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch (e) {
+      alert('Failed to generate PDF')
+    } finally {
+      setPdfLoading((p) => ({ ...p, [id]: false }))
+    }
+  }
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><span className="h-6 w-6 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" /></div>
 
@@ -336,6 +365,10 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <button onClick={(e) => { e.stopPropagation(); handlePDFAction(o._id, o.poNumber, 'inline') }} disabled={pdfLoading[o._id]} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-50" title="Preview PDF">
+                    {pdfLoading[o._id] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Send size={14} /></button>
                   <button onClick={(e) => { e.stopPropagation(); setStatusSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status"><RefreshCw size={14} /></button>
                   <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                 </div>
@@ -446,6 +479,87 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               {s}
             </button>
           ))}
+        </div>
+      </BottomSheet>
+
+      {/* Send PO Sheet */}
+      <BottomSheet
+        open={!!sendSheet}
+        onClose={() => setSendSheet(null)}
+        title={`Send ${sendSheet?.poNumber || 'PO'} to Vendor`}
+        footer={
+          <Button
+            fullWidth
+            loading={sendPO.isPending}
+            onClick={async () => {
+              setSendError('')
+              try {
+                await sendPO.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail })
+                setSendSheet(null)
+              } catch (e) {
+                setSendError(e?.response?.data?.error || e?.response?.data?.message || 'Failed to send')
+              }
+            }}
+          >
+            <Send size={15} /> Send PO
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          {/* PO summary */}
+          <div className="bg-zinc-50 rounded-xl border border-zinc-200 p-4 space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">PO Number</span>
+              <span className="font-mono font-semibold text-zinc-900">{sendSheet?.poNumber}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">Vendor</span>
+              <span className="font-semibold text-zinc-900">{sendSheet?.vendor?.name || '—'}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">Grand Total</span>
+              <span className="font-semibold text-zinc-900">{sym}{(sendSheet?.grandTotal || 0).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">Items</span>
+              <span className="text-zinc-700">{sendSheet?.items?.length || 0} line items</span>
+            </div>
+          </div>
+
+          {/* Recipient email */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Recipient Email *</label>
+            <input
+              type="email"
+              value={sendEmail}
+              onChange={(e) => setSendEmail(e.target.value)}
+              placeholder="vendor@example.com"
+              className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+            />
+            {!sendSheet?.vendor?.email && (
+              <p className="text-xs text-amber-600">This vendor has no email on file. Enter one above to send.</p>
+            )}
+          </div>
+
+          {/* Preview / Download */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => handlePDFAction(sendSheet._id, sendSheet.poNumber, 'inline')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              <Eye size={14} /> Preview PDF
+            </button>
+            <button
+              onClick={() => handlePDFAction(sendSheet._id, sendSheet.poNumber, 'attachment')}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              <Download size={14} /> Download PDF
+            </button>
+          </div>
+
+          <p className="text-xs text-zinc-400">A PDF of the purchase order will be attached and the PO status will be updated to <strong>Sent</strong>.</p>
+
+          {sendError && <p className="text-sm text-red-500">{sendError}</p>}
         </div>
       </BottomSheet>
     </div>

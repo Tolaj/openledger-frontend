@@ -37,3 +37,12 @@ export function useDeletePurchaseOrder() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['purchase-orders', activeGroupId] }),
   })
 }
+
+export function useSendPurchaseOrder() {
+  const qc = useQueryClient()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, recipientEmail }) => api.sendPurchaseOrder(id, activeGroupId, { recipientEmail }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['purchase-orders', activeGroupId] }),
+  })
+}
