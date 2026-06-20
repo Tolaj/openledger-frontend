@@ -1,36 +1,48 @@
-import { useState, useMemo, useEffect } from 'react'
-import { useForm, useFieldArray, Controller } from 'react-hook-form'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
+import { createPortal } from 'react-dom'
+import { useForm, useFieldArray } from 'react-hook-form'
 import {
   TrendingUp, TrendingDown, Landmark, BarChart3,
   Plus, Pencil, Trash2, CheckCircle2, CircleDollarSign,
-  ChevronDown, ChevronUp, Wallet,
+  ChevronDown, Wallet, FileText, ReceiptText,
+  AlertTriangle,
 } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
 import PageActions from '../components/layout/PageActions'
-import { DataTableFilterIcon } from '../components/ui/DataTable'
+import DataTable, { DataTableMobileFilters, DataTableFilterIcon } from '../components/ui/DataTable'
 import BottomSheet from '../components/ui/BottomSheet'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
 import EmptyState from '../components/ui/EmptyState'
 import useGroupStore from '../store/groupStore'
-import { useMe, useUpdateUser } from '../hooks/useUser'
+import { useMe } from '../hooks/useUser'
 import {
   useFinance, useFinanceSummary, useCreateFinance, useUpdateFinance, useDeleteFinance, useSettleDebt,
   useBudgets, useCreateBudget, useUpdateBudget, useDeleteBudget,
 } from '../hooks/useFinance'
+import { useSalesInvoices } from '../hooks/useSalesInvoices'
+import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
+import { useOrders } from '../hooks/useOrders'
 import { useGroups } from '../hooks/useGroups'
 import { useCategories } from '../hooks/useCategories'
 import { useCurrencySymbol } from '../hooks/useCurrency'
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths } from 'date-fns'
+import { useIsBusiness } from '../hooks/useActiveGroupType'
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays, parseISO } from 'date-fns'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TABS = [
-  { key: 'overview',     label: 'Overview',     mobileLabel: 'Overview'  },
-  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns'      },
-  { key: 'budgets',      label: 'Budgets',      mobileLabel: 'Budgets'   },
-  { key: 'debts',        label: 'Debts',        mobileLabel: 'Debts'     },
+const PERSONAL_TABS = [
+  { key: 'overview',     label: 'Overview',     mobileLabel: 'Overview' },
+  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns'     },
+  { key: 'budgets',      label: 'Budgets',      mobileLabel: 'Budgets'  },
+  { key: 'debts',        label: 'Debts',        mobileLabel: 'Debts'    },
+]
+const BUSINESS_TABS = [
+  { key: 'overview',     label: 'Overview',     mobileLabel: 'Overview' },
+  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns'     },
+  { key: 'budgets',      label: 'Budgets',      mobileLabel: 'Budgets'  },
+  { key: 'debts',        label: 'AR / AP',      mobileLabel: 'AR/AP'    },
 ]
 
 const PERIODS = [
@@ -170,19 +182,24 @@ function FinanceMobileFilters({ open, period, setPeriod, custom, setCustom, type
 }
 
 // ── Transaction Form ──────────────────────────────────────────────────────────
-function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], categories = [], symbol }) {
+function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], categories = [], symbol, isBusiness = false }) {
   const { mutate: create, isPending: creating } = useCreateFinance()
   const { mutate: update, isPending: updating } = useUpdateFinance()
   const { register, handleSubmit, watch, setValue, control, reset, formState: { errors } } = useForm({
-    defaultValues: { type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [] },
+    defaultValues: { type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] },
   })
+  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({ control, name: 'items' })
 
   const splitAmong = watch('splitAmong') || []
+  const watchedItems = watch('items') || []
+  const watchedCategory = watch('category')
   const amount = parseFloat(watch('amount')) || 0
   const paidBy = watch('paidBy')
+  const hasItems = watchedItems.length > 0
 
   // when editing populate form
-  useState(() => {
+  useEffect(() => {
+    if (!open) return
     if (editing) {
       reset({
         type: editing.type,
@@ -192,9 +209,10 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         category: editing.category?._id || editing.category || '',
         paidBy: editing.paidBy?._id || editing.paidBy || '',
         splitAmong: (editing.splitAmong || []).map((s) => ({ user: s.user?._id || s.user, amount: s.amount })),
+        items: (editing.items || []).map((it) => ({ name: it.name || '', qty: it.qty || '', amount: it.amount || '', category: it.category?._id || it.category || '' })),
       })
     } else {
-      reset({ type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [] })
+      reset({ type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] })
     }
   }, [editing, open])
 
@@ -221,6 +239,12 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
       group: groupId,
       date: new Date(data.date).toISOString(),
       splitAmong: data.splitAmong.map((s) => ({ user: s.user, amount: parseFloat(s.amount) })),
+      items: (data.items || []).filter((it) => it.name).map((it) => ({
+        name: it.name,
+        qty: it.qty ? parseFloat(it.qty) : undefined,
+        amount: it.amount ? parseFloat(it.amount) : 0,
+        category: it.category || undefined,
+      })),
     }
     if (editing) {
       update({ id: editing._id, data: payload }, { onSuccess: onClose })
@@ -263,19 +287,24 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         <Input label="Description" placeholder="What was this for?" {...register('description')} />
         <Input label="Date" type="date" {...register('date')} />
 
-        {/* Category */}
-        {categories.length > 0 && (
+        {/* Category — hidden when items are added */}
+        {!hasItems && (
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Category</label>
-            <select {...register('category')} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
-              <option value="">No category</option>
-              {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-            </select>
+            <CategoryCombobox
+              globalCategories={categories}
+              value={categories.find((c) => c._id === watchedCategory)?.name || ''}
+              categoryRef={watchedCategory || ''}
+              onChange={({ name, categoryRef }) => {
+                const match = categories.find((c) => c._id === categoryRef || c.name === name)
+                setValue('category', match?._id || '')
+              }}
+            />
           </div>
         )}
 
-        {/* Paid By */}
-        {groupMembers.length > 0 && (
+        {/* Paid By — personal groups only */}
+        {!isBusiness && groupMembers.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Paid by</label>
             <select {...register('paidBy')} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
@@ -285,8 +314,8 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
           </div>
         )}
 
-        {/* Split Among */}
-        {groupMembers.length > 0 && (
+        {/* Split Among — personal groups only */}
+        {!isBusiness && groupMembers.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-zinc-700">Split among</label>
@@ -327,8 +356,139 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
             </div>
           </div>
         )}
+
+        {/* Line Items */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-700">Line Items</label>
+            <button type="button" onClick={() => appendItem({ name: '', qty: '', amount: '', category: '' })}
+              className="text-xs text-zinc-500 underline flex items-center gap-1">
+              <Plus size={12} /> Add item
+            </button>
+          </div>
+          {itemFields.length === 0 && (
+            <p className="text-xs text-zinc-400">Optional — add items to track per-category spending</p>
+          )}
+          {itemFields.map((field, idx) => (
+            <div key={field.id} className="flex flex-col gap-1.5 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+              <div className="flex gap-2">
+                <input {...register(`items.${idx}.name`)} placeholder="Item name"
+                  className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
+                <button type="button" onClick={() => removeItem(idx)} className="p-1 text-zinc-400 active:text-red-500">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <input {...register(`items.${idx}.qty`)} type="number" step="1" placeholder="Qty"
+                  className="w-20 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right bg-white" />
+                <input {...register(`items.${idx}.amount`)} type="number" step="0.01" placeholder="Amount"
+                  className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right bg-white" />
+                {categories.length > 0 && (
+                  <select {...register(`items.${idx}.category`)}
+                    className="flex-1 h-9 px-2 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white">
+                    <option value="">Category</option>
+                    {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </form>
     </BottomSheet>
+  )
+}
+
+// ── Category Combobox ─────────────────────────────────────────────────────────
+function CategoryCombobox({ globalCategories = [], value, categoryRef, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const wrapRef = useRef(null)
+  const inputRef = useRef(null)
+
+  // Resolve selected category object (for icon display)
+  const selectedCat = categoryRef ? globalCategories.find((c) => c._id === categoryRef) : null
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => {
+      if (!wrapRef.current?.contains(e.target) && !document.getElementById('cat-combo-portal')?.contains(e.target))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const openDropdown = () => {
+    if (wrapRef.current) setRect(wrapRef.current.getBoundingClientRect())
+    setOpen(true)
+  }
+
+  const suggestions = value
+    ? globalCategories.filter((c) => c.name.toLowerCase().includes(value.toLowerCase()))
+    : globalCategories
+
+  const handleInput = (e) => {
+    onChange({ name: e.target.value, categoryRef: '' })
+    openDropdown()
+  }
+
+  const handleSelect = (cat) => {
+    onChange({ name: cat.name, categoryRef: cat._id })
+    setOpen(false)
+  }
+
+  return (
+    <div className="flex-1">
+      <div
+        ref={wrapRef}
+        onClick={() => { inputRef.current?.focus(); openDropdown() }}
+        className={[
+          'w-full h-9 flex items-center gap-1.5 px-3 border rounded-xl bg-white cursor-text',
+          categoryRef ? 'border-emerald-400 bg-emerald-50' : 'border-zinc-200',
+          open ? 'border-zinc-900' : '',
+        ].join(' ')}
+      >
+        {selectedCat?.icon && (
+          <span className="text-base leading-none flex-shrink-0">{selectedCat.icon}</span>
+        )}
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={handleInput}
+          onFocus={openDropdown}
+          placeholder="Type or pick a category…"
+          className="flex-1 text-sm outline-none bg-transparent min-w-0"
+        />
+      </div>
+      {open && suggestions.length > 0 && rect && createPortal(
+        <div
+          id="cat-combo-portal"
+          style={{ position: 'fixed', bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, zIndex: 9999 }}
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden"
+        >
+          {suggestions.slice(0, 6).map((cat) => (
+            <button
+              key={cat._id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleSelect(cat)}
+              className="w-full px-3 py-2 text-sm text-left hover:bg-zinc-50 flex items-center justify-between gap-2 border-b border-zinc-100 last:border-0"
+            >
+              <span className="flex items-center gap-2 truncate">
+                {cat.icon && <span className="text-base leading-none flex-shrink-0">{cat.icon}</span>}
+                <span className="truncate">{cat.name}</span>
+              </span>
+              {cat._id === categoryRef && (
+                <span className="text-[10px] text-emerald-600 font-semibold flex-shrink-0">linked</span>
+              )}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
   )
 }
 
@@ -336,12 +496,15 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
 function BudgetForm({ open, onClose, editing, groupId }) {
   const { mutate: create, isPending: creating } = useCreateBudget()
   const { mutate: update, isPending: updating } = useUpdateBudget()
-  const { register, handleSubmit, control, reset, watch, formState: { errors } } = useForm({
+  const { data: globalCategories = [] } = useCategories()
+  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm({
     defaultValues: { name: '', totalAmount: '', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(new Date().setMonth(new Date().getMonth() + 1)), 'yyyy-MM-dd'), notes: '', categories: [] },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'categories' })
+  const watchedCategories = watch('categories')
 
-  useState(() => {
+  useEffect(() => {
+    if (!open) return
     if (editing) {
       reset({
         name: editing.name,
@@ -349,7 +512,11 @@ function BudgetForm({ open, onClose, editing, groupId }) {
         startDate: editing.startDate ? format(new Date(editing.startDate), 'yyyy-MM-dd') : '',
         endDate: editing.endDate ? format(new Date(editing.endDate), 'yyyy-MM-dd') : '',
         notes: editing.notes || '',
-        categories: editing.categories || [],
+        categories: (editing.categories || []).map((c) => ({
+          categoryRef: c.categoryRef?._id || c.categoryRef || '',
+          name: c.name,
+          allocatedAmount: c.allocatedAmount,
+        })),
       })
     } else {
       reset({ name: '', totalAmount: '', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(new Date().setMonth(new Date().getMonth() + 1)), 'yyyy-MM-dd'), notes: '', categories: [] })
@@ -363,7 +530,11 @@ function BudgetForm({ open, onClose, editing, groupId }) {
       group: groupId,
       startDate: new Date(data.startDate).toISOString(),
       endDate: new Date(data.endDate).toISOString(),
-      categories: data.categories.map((c) => ({ ...c, allocatedAmount: parseFloat(c.allocatedAmount) })),
+      categories: data.categories.map((c) => ({
+        categoryRef: c.categoryRef || undefined,
+        name: c.name,
+        allocatedAmount: parseFloat(c.allocatedAmount),
+      })),
     }
     if (editing) {
       update({ id: editing._id, data: payload }, { onSuccess: onClose })
@@ -391,22 +562,35 @@ function BudgetForm({ open, onClose, editing, groupId }) {
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-zinc-700">Categories</label>
-            <button type="button" onClick={() => append({ name: '', allocatedAmount: '' })}
+            <button type="button" onClick={() => append({ categoryRef: '', name: '', allocatedAmount: '' })}
               className="text-xs text-zinc-500 underline flex items-center gap-1">
               <Plus size={12} /> Add
             </button>
           </div>
           {fields.map((field, idx) => (
             <div key={field.id} className="flex gap-2 items-center">
-              <input {...register(`categories.${idx}.name`)} placeholder="Category name"
-                className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900" />
-              <input {...register(`categories.${idx}.allocatedAmount`)} type="number" step="0.01" placeholder="Amount"
-                className="w-24 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right" />
-              <button type="button" onClick={() => remove(idx)} className="p-1 text-zinc-400 active:text-red-500">
+              <CategoryCombobox
+                globalCategories={globalCategories}
+                value={watchedCategories[idx]?.name || ''}
+                categoryRef={watchedCategories[idx]?.categoryRef || ''}
+                onChange={({ name, categoryRef }) => {
+                  setValue(`categories.${idx}.name`, name)
+                  setValue(`categories.${idx}.categoryRef`, categoryRef)
+                }}
+              />
+              <input
+                {...register(`categories.${idx}.allocatedAmount`)}
+                type="number" step="0.01" placeholder="Budget"
+                className="w-28 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right bg-white"
+              />
+              <button type="button" onClick={() => remove(idx)} className="p-1 text-zinc-400 active:text-red-500 flex-shrink-0">
                 <Trash2 size={14} />
               </button>
             </div>
           ))}
+          {fields.length === 0 && (
+            <p className="text-xs text-zinc-400 text-center py-2">No categories — spending tracked at budget level only</p>
+          )}
         </div>
       </form>
     </BottomSheet>
@@ -414,9 +598,18 @@ function BudgetForm({ open, onClose, editing, groupId }) {
 }
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, budgets, recentTxns, mobileFiltersOpen }) {
+function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, budgets, recentTxns, mobileFiltersOpen, isBusiness }) {
   const dates = getPeriodDates(period, custom)
   const { data: summary, isLoading } = useFinanceSummary({ groupId, ...dates })
+  const { data: salesInvoices    = [] } = useSalesInvoices()
+  const { data: purchaseInvoices = [] } = usePurchaseInvoices()
+
+  const unpaidSInv  = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const unpaidPInv  = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const overdueSInv = salesInvoices.filter((i) => i.status === 'overdue')
+  const overduePInv = purchaseInvoices.filter((i) => i.status === 'overdue')
+  const totalAR = unpaidSInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
+  const totalAP = unpaidPInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
 
   return (
     <div className="flex flex-col gap-4">
@@ -454,6 +647,38 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
           </>
         )}
       </div>
+
+      {/* Business: AR / AP */}
+      {isBusiness && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <TrendingUp size={14} className="text-emerald-600" />
+              </div>
+              <p className="text-xs font-semibold text-zinc-600">Receivable</p>
+            </div>
+            <p className="text-xl font-bold text-emerald-600">{fmt(totalAR, symbol)}</p>
+            <p className="text-xs text-zinc-400 mt-1">{unpaidSInv.length} unpaid invoice{unpaidSInv.length !== 1 ? 's' : ''}</p>
+            {overdueSInv.length > 0 && (
+              <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1"><AlertTriangle size={10} />{overdueSInv.length} overdue</p>
+            )}
+          </div>
+          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
+                <TrendingDown size={14} className="text-red-500" />
+              </div>
+              <p className="text-xs font-semibold text-zinc-600">Payable</p>
+            </div>
+            <p className="text-xl font-bold text-red-500">{fmt(totalAP, symbol)}</p>
+            <p className="text-xs text-zinc-400 mt-1">{unpaidPInv.length} unpaid invoice{unpaidPInv.length !== 1 ? 's' : ''}</p>
+            {overduePInv.length > 0 && (
+              <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1"><AlertTriangle size={10} />{overduePInv.length} overdue</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Active budgets */}
       {budgets?.length > 0 && (
@@ -503,184 +728,556 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
 }
 
 // ── Transactions Tab ──────────────────────────────────────────────────────────
-function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen }) {
+function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen, isBusiness }) {
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState(null)
+  const [editing, setEditing]   = useState(null)
+  const [filters, setFilters]   = useState({})
+  const [dropSel, setDropSel]   = useState({})
+  const [expanded, setExpanded] = useState(null)
+  const { mutate: del } = useDeleteFinance()
 
   useEffect(() => {
     if (externalOpen) { setShowForm(true); onExternalClose?.() }
   }, [externalOpen])
-  const [typeFilter, setTypeFilter] = useState('')
-  const { mutate: del } = useDeleteFinance()
 
   const dates = getPeriodDates(period, custom)
-  const { data: txns = [], isLoading } = useFinance({ groupId, ...dates, type: typeFilter || undefined })
+  const { data: txns = [], isLoading } = useFinance({ groupId, ...dates })
+  const { data: salesInvoices    = [] } = useSalesInvoices()
+  const { data: purchaseInvoices = [] } = usePurchaseInvoices()
+  const { data: orders           = [] } = useOrders()
+
+  // categoryMap: id → { _id, name } for resolving ObjectId refs in order items
+  const categoryMap = useMemo(() => {
+    const map = {}
+    categories.forEach((c) => { map[String(c._id)] = c })
+    return map
+  }, [categories])
+
+  const resolveCategory = (catVal) => {
+    if (!catVal) return null
+    // already populated object
+    if (catVal.name) return catVal
+    // ObjectId string or object — look up in categoryMap
+    return categoryMap[String(catVal)] || null
+  }
+
+  // Reverse-lookup: financeEntryId → items[]
+  // Works for ALL existing data since invoices/orders store financeEntryId
+  const sourceItemsMap = useMemo(() => {
+    const map = {}
+    salesInvoices.forEach((inv) => {
+      if (!inv.financeEntryId) return
+      map[String(inv.financeEntryId)] = (inv.items || []).map((it) => ({
+        name:     it.product?.name || it.description || 'Item',
+        qty:      it.qty,
+        amount:   it.amount || 0,
+        category: resolveCategory(it.product?.category),
+      }))
+    })
+    purchaseInvoices.forEach((inv) => {
+      if (!inv.financeEntryId) return
+      map[String(inv.financeEntryId)] = (inv.items || []).map((it) => ({
+        name:     it.product?.name || it.description || 'Item',
+        qty:      it.qty,
+        amount:   it.amount || 0,
+        category: resolveCategory(it.product?.category),
+      }))
+    })
+    orders.forEach((order) => {
+      if (!order.financeEntryId) return
+      map[String(order.financeEntryId)] = (order.items || []).map((it) => ({
+        name:     it.product?.name || 'Item',
+        qty:      parseFloat(it.count) || 1,
+        amount:   (parseFloat(it.price) || 0) * (parseFloat(it.count) || 1),
+        category: resolveCategory(it.product?.category),
+      }))
+    })
+    return map
+  }, [salesInvoices, purchaseInvoices, orders, categoryMap])
+
+  // Get items for a transaction: prefer Finance-stored items, fall back to source lookup
+  const getItems = (t) => {
+    if (t.items?.length) return t.items
+    return sourceItemsMap[String(t._id)] || []
+  }
+
+  const inDrop = (key, val) => !dropSel[key]?.length || dropSel[key].includes(val)
+  const inText = (key, val) => !filters[key] || String(val || '').toLowerCase().includes(filters[key].toLowerCase())
+
+  const txnCategories = (t) => {
+    const seen = new Set()
+    const cats = []
+    const add = (cat) => {
+      if (!cat?.name) return
+      if (seen.has(cat.name)) return
+      seen.add(cat.name)
+      cats.push(cat)
+    }
+    if (t.category?.name) add(t.category)
+    getItems(t).forEach((it) => { if (it.category?.name) add(it.category) })
+    return cats // array of { _id, name, icon? }
+  }
+
+  const filtered = useMemo(() => txns.filter((t) => {
+    if (!inDrop('type', TYPE_META[t.type]?.label || t.type)) return false
+    if (!inText('description', t.description)) return false
+    // category filter: match if ANY category on the txn matches
+    if (dropSel.category?.length) {
+      const cats = txnCategories(t).map((c) => c.name)
+      if (!dropSel.category.some((sel) => cats.includes(sel))) return false
+    }
+    return true
+  }), [txns, filters, dropSel])
+
+  // Collect all category names for dropdown filter
+  const allCategoryNames = useMemo(() => {
+    const names = new Set()
+    txns.forEach((t) => {
+      txnCategories(t).forEach((c) => names.add(c.name))
+    })
+    return [...names]
+  }, [txns, sourceItemsMap])
+
+  const dropOpts = useMemo(() => ({
+    type:     Object.values(TYPE_META).map((m) => m.label),
+    category: allCategoryNames,
+  }), [allCategoryNames])
+
+  const columns = useMemo(() => [
+    { key: 'type',        label: 'Type',        filterable: true  },
+    { key: 'description', label: 'Description', filterable: true,  noDropdown: true },
+    { key: 'date',        label: 'Date',        filterable: false },
+    ...(!isBusiness ? [{ key: 'paidBy', label: 'Paid By', filterable: false }] : []),
+    { key: 'category',    label: 'Categories',  filterable: true  },
+    { key: 'amount',      label: 'Amount',      filterable: false },
+    { key: 'action',      label: 'Action',      filterable: false },
+  ], [isBusiness])
+
+  // +1 for leadingCol
+  const txnColSpan = useMemo(() => columns.length, [columns])
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Mobile: filter panel behind filter icon */}
+    <div className="flex flex-col gap-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
+      {/* Mobile: period + type filter panel */}
       <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod}
-        custom={custom} setCustom={setCustom} typeFilter={typeFilter} setTypeFilter={setTypeFilter} showTypeFilter />
+        custom={custom} setCustom={setCustom} showTypeFilter={false} setTypeFilter={() => {}} />
 
-      {/* Desktop: inline filters */}
-      <div className="hidden md:flex flex-col gap-3">
+      {/* Mobile: DataTable column filters */}
+      <DataTableMobileFilters
+        open={mobileFiltersOpen}
+        columns={columns}
+        filters={filters}
+        onFilterChange={(key, val) => setFilters((f) => ({ ...f, [key]: val }))}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDropSel((s) => ({ ...s, [key]: vals }))}
+      />
+
+      {/* Desktop: period picker */}
+      <div className="hidden md:flex flex-col gap-3 flex-shrink-0">
         <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
-        <div className="flex gap-1.5 flex-wrap">
-          <button onClick={() => setTypeFilter('')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${!typeFilter ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
-            All
-          </button>
-          {Object.entries(TYPE_META).map(([key, meta]) => (
-            <button key={key} onClick={() => setTypeFilter(key === typeFilter ? '' : key)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${typeFilter === key ? `${meta.bg} ${meta.color} ${meta.border}` : 'bg-white text-zinc-500 border-zinc-200'}`}>
-              {meta.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
 
-      {!isLoading && txns.length === 0 && (
-        <EmptyState icon={CircleDollarSign} title="No transactions" description="Add your first transaction" />
+      {/* Desktop DataTable */}
+      {!isLoading && (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          filters={filters}
+          onFilterChange={(key, val) => setFilters((f) => ({ ...f, [key]: val }))}
+          dropOpts={dropOpts}
+          dropSel={dropSel}
+          onDropChange={(key, vals) => setDropSel((s) => ({ ...s, [key]: vals }))}
+          leadingCol
+          emptyMessage="No transactions found"
+          renderRow={(t) => {
+            const meta = TYPE_META[t.type] || TYPE_META.expense
+            const Icon = meta.icon
+            const isExpanded = expanded === t._id
+            const items = getItems(t)
+            const hasItems = items.length > 0
+            const cats = txnCategories(t)
+            return (
+              <Fragment key={t._id}>
+                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
+                  {/* expand chevron — leading col */}
+                  <td className="w-8 px-2 py-3 border-r border-zinc-100 text-center">
+                    {hasItems && (
+                      <button onClick={() => setExpanded(isExpanded ? null : t._id)}
+                        className="p-0.5 rounded text-zinc-400 hover:text-zinc-600">
+                        <ChevronDown size={14} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${meta.bg} ${meta.color}`}>
+                      <Icon size={11} />{meta.label}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-sm text-zinc-900 truncate border-r border-zinc-100">{t.description || '—'}</td>
+                  <td className="px-3 py-3 text-xs text-zinc-500 whitespace-nowrap border-r border-zinc-100">{formatDate(t.date)}</td>
+                  {!isBusiness && <td className="px-3 py-3 text-xs text-zinc-500 border-r border-zinc-100">{t.paidBy?.name || t.paidBy?.email || '—'}</td>}
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    {cats.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {cats.map((c) => (
+                          <div key={c.name} title={c.name}
+                            className="flex items-center gap-1 px-1.5 py-0.5 bg-zinc-100 rounded-lg text-[10px] font-medium text-zinc-600 flex-shrink-0">
+                            {c.icon && <span className="text-sm leading-none">{c.icon}</span>}
+                            <span>{c.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <span className="text-xs text-zinc-400">—</span>}
+                  </td>
+                  <td className={`px-3 py-3 text-sm font-semibold text-right border-r border-zinc-100 ${meta.color}`}>{fmt(t.amount, symbol)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
+                      <button onClick={() => del(t._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+                {isExpanded && hasItems && (
+                  <tr className="bg-zinc-50 border-b border-zinc-100">
+                    <td /><td colSpan={txnColSpan} className="px-4 py-3">
+                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                        <thead>
+                          <tr className="border-b border-zinc-200">
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Item</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Category</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Qty</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((it, i, arr) => (
+                            <tr key={i} className={i < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                              <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{it.name || '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100">
+                                {it.category?.name
+                                  ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded-md font-medium">
+                                      {it.category.icon && <span className="text-sm leading-none">{it.category.icon}</span>}
+                                      {it.category.name}
+                                    </span>
+                                  )
+                                  : <span className="text-zinc-400">—</span>}
+                              </td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{it.qty ?? '—'}</td>
+                              <td className="px-3 py-2 font-semibold text-zinc-900">{fmt(it.amount, symbol)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            )
+          }}
+        />
       )}
 
-      {txns.map((t) => {
-        const meta = TYPE_META[t.type]
-        const Icon = meta.icon
-        return (
-          <div key={t._id} className="bg-white rounded-2xl border border-zinc-100 p-4">
-            <div className="flex items-start gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
-                <Icon size={18} className={meta.color} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-zinc-900 truncate">{t.description || meta.label}</p>
-                    <p className="text-xs text-zinc-400 mt-0.5">{formatDate(t.date)}{t.category?.name ? ` · ${t.category.name}` : ''}</p>
-                    {t.paidBy && <p className="text-[10px] text-zinc-400">Paid by {t.paidBy.name || t.paidBy.email}</p>}
+      {/* Mobile cards */}
+      {!isLoading && (
+        <div className="md:hidden flex flex-col gap-2">
+          {filtered.length === 0 && (
+            <EmptyState icon={CircleDollarSign} title="No transactions" description="Add your first transaction" />
+          )}
+          {filtered.map((t) => {
+            const meta = TYPE_META[t.type] || TYPE_META.expense
+            const Icon = meta.icon
+            const isExpanded = expanded === t._id
+            const items = getItems(t)
+            const hasItems = items.length > 0
+            const cats = txnCategories(t)
+            return (
+              <div key={t._id} className="bg-white rounded-2xl border border-zinc-100 p-4">
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                    <Icon size={18} className={meta.color} />
                   </div>
-                  <p className={`text-sm font-bold flex-shrink-0 ${meta.color}`}>{fmt(t.amount, symbol)}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-zinc-900 truncate">{t.description || meta.label}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">{formatDate(t.date)}</p>
+                        {!isBusiness && t.paidBy && <p className="text-[10px] text-zinc-400">Paid by {t.paidBy.name || t.paidBy.email}</p>}
+                      </div>
+                      <p className={`text-sm font-bold flex-shrink-0 ${meta.color}`}>{fmt(t.amount, symbol)}</p>
+                    </div>
+                    {cats.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 items-center">
+                        {cats.map((c) => (
+                          <div key={c.name}
+                            className="flex items-center gap-1 px-1.5 py-0.5 bg-zinc-100 rounded-lg text-[10px] font-medium text-zinc-600 flex-shrink-0">
+                            {c.icon && <span className="text-sm leading-none">{c.icon}</span>}
+                            <span>{c.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!isBusiness && t.splitAmong?.length > 0 && (
+                      <p className="text-[10px] text-zinc-400 mt-1">Split: {t.splitAmong.map((s) => s.user?.name || s.user?.email).join(', ')}</p>
+                    )}
+                  </div>
                 </div>
-                {t.splitAmong?.length > 0 && (
-                  <p className="text-[10px] text-zinc-400 mt-1">Split: {t.splitAmong.map((s) => s.user?.name || s.user?.email).join(', ')}</p>
+                {/* Items expand */}
+                {hasItems && (
+                  <>
+                    <button onClick={() => setExpanded(isExpanded ? null : t._id)}
+                      className="mt-2 flex items-center gap-1 text-xs text-zinc-400">
+                      <ChevronDown size={12} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      {items.length} item{items.length !== 1 ? 's' : ''}
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-2 pt-2 border-t border-zinc-100 flex flex-col gap-1.5">
+                        {items.map((it, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-zinc-800 truncate">{it.name || '—'}</span>
+                              {it.category?.name && (
+                                <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 bg-zinc-100 text-zinc-500 rounded-md">
+                                  {it.category.icon && <span className="text-sm leading-none">{it.category.icon}</span>}
+                                  {it.category.name}
+                                </span>
+                              )}
+                            </div>
+                            {it.qty && <span className="text-zinc-400">×{it.qty}</span>}
+                            <span className="font-semibold text-zinc-900">{fmt(it.amount, symbol)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
+                <div className="flex justify-end gap-1 mt-2 pt-2 border-t border-zinc-50">
+                  <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
+                  <button onClick={() => del(t._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
+                </div>
               </div>
-            </div>
-            <div className="flex justify-end gap-0 mt-2 pt-2 border-t border-zinc-50">
-              <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
-              <button onClick={() => del(t._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
-            </div>
-          </div>
-        )
-      })}
+            )
+          })}
+        </div>
+      )}
 
       <TransactionForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }}
-        editing={editing} groupId={groupId} groupMembers={groupMembers} categories={categories} symbol={symbol} />
+        editing={editing} groupId={groupId} groupMembers={isBusiness ? [] : groupMembers}
+        categories={categories} symbol={symbol} isBusiness={isBusiness} />
     </div>
   )
 }
 
 // ── Budgets Tab ───────────────────────────────────────────────────────────────
+const BUDGET_COLS = [
+  { key: 'name',      label: 'Name',      filterable: true, noDropdown: true },
+  { key: 'period',    label: 'Period',    filterable: false, width: 'w-52' },
+  { key: 'spent',     label: 'Spent',     filterable: false },
+  { key: 'total',     label: 'Total',     filterable: false },
+  { key: 'progress',  label: 'Progress',  filterable: false },
+  { key: 'remaining', label: 'Remaining', filterable: false },
+  { key: 'action',    label: 'Action',    filterable: false },
+]
+
 function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, onExternalClose }) {
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState(null)
+  const [editing, setEditing]   = useState(null)
+  const [expanded, setExpanded] = useState(null)
+  const [filters, setFilters]   = useState({})
+  const { mutate: del } = useDeleteBudget()
 
   useEffect(() => {
     if (externalOpen) { setShowForm(true); onExternalClose?.() }
   }, [externalOpen])
-  const [expanded, setExpanded] = useState(null)
-  const { mutate: del } = useDeleteBudget()
+
+  const filtered = useMemo(() => budgets.filter((b) =>
+    !filters.name || b.name.toLowerCase().includes(filters.name.toLowerCase())
+  ), [budgets, filters])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
 
-      {!isLoading && budgets.length === 0 && (
-        <EmptyState icon={Wallet} title="No budgets" description="Create a budget to track your spending" />
+      {/* Desktop DataTable */}
+      {!isLoading && (
+        <DataTable
+          columns={BUDGET_COLS}
+          data={filtered}
+          filters={filters}
+          onFilterChange={(key, val) => setFilters((f) => ({ ...f, [key]: val }))}
+          dropOpts={{}}
+          dropSel={{}}
+          onDropChange={() => {}}
+          leadingCol
+          emptyMessage="No budgets yet — create one to start tracking"
+          renderRow={(b) => {
+            const pct = b.totalAmount > 0 ? Math.min((b.amountSpent / b.totalAmount) * 100, 100) : 0
+            const isExpanded = expanded === b._id
+            const danger = pct >= 90
+            return (
+              <Fragment key={b._id}>
+                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
+                  {/* expand chevron */}
+                  <td className="w-8 px-3 py-3 border-r border-zinc-100">
+                    {b.categories?.length > 0 ? (
+                      <button onClick={() => setExpanded(isExpanded ? null : b._id)}
+                        className="p-0.5 rounded text-zinc-400 hover:text-zinc-600">
+                        <ChevronDown size={14} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      </button>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{b.name}</p>
+                    {b.notes && <p className="text-[10px] text-zinc-400 italic truncate">{b.notes}</p>}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-zinc-500 whitespace-nowrap border-r border-zinc-100">
+                    {formatDate(b.startDate)} — {formatDate(b.endDate)}
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold text-zinc-900 border-r border-zinc-100">{fmt(b.amountSpent, symbol)}</td>
+                  <td className="px-3 py-3 text-sm text-zinc-500 border-r border-zinc-100">{fmt(b.totalAmount, symbol)}</td>
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    <div className="flex flex-col gap-1">
+                      <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${danger ? 'bg-red-500' : 'bg-emerald-500'}`}
+                          style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-[10px] text-zinc-400">{pct.toFixed(0)}% used</p>
+                    </div>
+                  </td>
+                  <td className={`px-3 py-3 text-sm font-semibold border-r border-zinc-100 ${danger ? 'text-red-500' : 'text-emerald-600'}`}>
+                    {fmt(b.amountRemaining, symbol)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <button onClick={() => { setEditing(b); setShowForm(true) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
+                      <button onClick={() => del(b._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+                {/* expanded categories sub-row */}
+                {isExpanded && b.categories?.length > 0 && (
+                  <tr className="bg-zinc-50 border-b border-zinc-100">
+                    <td /><td colSpan={7} className="px-4 py-3">
+                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                        <thead>
+                          <tr className="border-b border-zinc-200">
+                            <th className="px-3 py-2 w-40 text-left font-semibold text-zinc-500 border-r border-zinc-200">Category</th>
+                            <th className="px-3 py-2 w-48 text-left font-semibold text-zinc-500 border-r border-zinc-200">Progress</th>
+                            <th className="px-3 py-2 w-40 text-left font-semibold text-zinc-500 border-r border-zinc-200">Spent / Allocated</th>
+                            <th className="px-3 py-2 w-40 text-left font-semibold text-zinc-500">Used</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {b.categories.map((cat, i, arr) => {
+                            const catPct = cat.allocatedAmount > 0 ? Math.min((cat.spentAmount / cat.allocatedAmount) * 100, 100) : 0
+                            return (
+                              <tr key={i} className={i < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                                <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800 truncate max-w-0">{cat.name}</td>
+                                <td className="px-3 py-2 border-r border-zinc-100">
+                                  <div className="w-full bg-zinc-200 rounded-full h-1.5 overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all ${catPct >= 90 ? 'bg-red-500' : 'bg-blue-500'}`}
+                                      style={{ width: `${catPct}%` }} />
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600 whitespace-nowrap">{fmt(cat.spentAmount, symbol)} / {fmt(cat.allocatedAmount, symbol)}</td>
+                                <td className="px-3 py-2 text-zinc-400 whitespace-nowrap">{catPct.toFixed(0)}%</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            )
+          }}
+        />
       )}
 
-      {budgets.map((b) => {
-        const pct = b.totalAmount > 0 ? Math.min((b.amountSpent / b.totalAmount) * 100, 100) : 0
-        const isExpanded = expanded === b._id
-        return (
-          <div key={b._id} className="bg-white rounded-2xl border border-zinc-100 p-4 flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-zinc-900 truncate">{b.name}</p>
-                <p className="text-[10px] text-zinc-400">{formatDate(b.startDate)} — {formatDate(b.endDate)}</p>
-              </div>
-              <div className="flex items-center gap-0 flex-shrink-0">
-                <button onClick={() => { setEditing(b); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
-                <button onClick={() => del(b._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Spent: <span className="font-semibold text-zinc-900">{fmt(b.amountSpent, symbol)}</span></span>
-                <span className="text-zinc-500">Total: <span className="font-semibold text-zinc-900">{fmt(b.totalAmount, symbol)}</span></span>
-              </div>
-              <ProgressBar value={b.amountSpent} max={b.totalAmount} />
-              <p className="text-[10px] text-zinc-400">{fmt(b.amountRemaining, symbol)} remaining · {pct.toFixed(0)}% used</p>
-            </div>
-
-            {b.categories?.length > 0 && (
-              <>
-                <button onClick={() => setExpanded(isExpanded ? null : b._id)}
-                  className="flex items-center gap-1 text-xs text-zinc-400">
-                  {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  {b.categories.length} categories
-                </button>
-                {isExpanded && (
-                  <div className="flex flex-col gap-2 pt-1 border-t border-zinc-50">
-                    {b.categories.map((cat, i) => (
-                      <div key={i} className="flex flex-col gap-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-700 font-medium">{cat.name}</span>
-                          <span className="text-zinc-500">{fmt(cat.spentAmount, symbol)} / {fmt(cat.allocatedAmount, symbol)}</span>
-                        </div>
-                        <ProgressBar value={cat.spentAmount} max={cat.allocatedAmount} color="bg-blue-500" />
-                      </div>
-                    ))}
+      {/* Mobile cards */}
+      {!isLoading && (
+        <div className="md:hidden flex flex-col gap-3">
+          {filtered.length === 0 && (
+            <EmptyState icon={Wallet} title="No budgets" description="Create a budget to track your spending" />
+          )}
+          {filtered.map((b) => {
+            const pct = b.totalAmount > 0 ? Math.min((b.amountSpent / b.totalAmount) * 100, 100) : 0
+            const isExpanded = expanded === b._id
+            return (
+              <div key={b._id} className="bg-white rounded-2xl border border-zinc-100 p-4 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{b.name}</p>
+                    <p className="text-[10px] text-zinc-400">{formatDate(b.startDate)} — {formatDate(b.endDate)}</p>
                   </div>
+                  <div className="flex items-center gap-0 flex-shrink-0">
+                    <button onClick={() => { setEditing(b); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
+                    <button onClick={() => del(b._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-500">Spent: <span className="font-semibold text-zinc-900">{fmt(b.amountSpent, symbol)}</span></span>
+                    <span className="text-zinc-500">Total: <span className="font-semibold text-zinc-900">{fmt(b.totalAmount, symbol)}</span></span>
+                  </div>
+                  <ProgressBar value={b.amountSpent} max={b.totalAmount} />
+                  <p className="text-[10px] text-zinc-400">{fmt(b.amountRemaining, symbol)} remaining · {pct.toFixed(0)}% used</p>
+                </div>
+                {b.categories?.length > 0 && (
+                  <>
+                    <button onClick={() => setExpanded(isExpanded ? null : b._id)}
+                      className="flex items-center gap-1 text-xs text-zinc-400">
+                      <ChevronDown size={13} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      {b.categories.length} categories
+                    </button>
+                    {isExpanded && (
+                      <div className="flex flex-col gap-2 pt-1 border-t border-zinc-50">
+                        {b.categories.map((cat, i) => (
+                          <div key={i} className="flex flex-col gap-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-zinc-700 font-medium">{cat.name}</span>
+                              <span className="text-zinc-500">{fmt(cat.spentAmount, symbol)} / {fmt(cat.allocatedAmount, symbol)}</span>
+                            </div>
+                            <ProgressBar value={cat.spentAmount} max={cat.allocatedAmount} color="bg-blue-500" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-
-            {b.notes && <p className="text-xs text-zinc-400 italic">{b.notes}</p>}
-          </div>
-        )
-      })}
+                {b.notes && <p className="text-xs text-zinc-400 italic">{b.notes}</p>}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <BudgetForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} editing={editing} groupId={groupId} />
     </div>
   )
 }
 
-// ── Debts Tab ─────────────────────────────────────────────────────────────────
-function DebtsTab({ groupId, symbol, currentUserId }) {
+// ── Debts Tab — Personal ──────────────────────────────────────────────────────
+function PersonalDebtsTab({ groupId, symbol, currentUserId }) {
   const { data: txns = [], isLoading } = useFinance({ groupId })
   const { mutate: settle } = useSettleDebt()
 
-  // Compute net balances from debtTracking
   const netDebts = useMemo(() => {
-    const map = {} // key: `${from}-${to}`, value: { from, to, net, entries: [{financeId, debtIndex}] }
+    const map = {}
     for (const txn of txns) {
       for (let i = 0; i < (txn.debtTracking || []).length; i++) {
         const d = txn.debtTracking[i]
         if (d.settled) continue
         const fromId = d.from?._id || d.from
-        const toId = d.to?._id || d.to
+        const toId   = d.to?._id   || d.to
         const key = [fromId, toId].sort().join('-')
         if (!map[key]) map[key] = { fromId, toId, fromName: d.from?.name || d.from?.email || fromId, toName: d.to?.name || d.to?.email || toId, amount: 0, entries: [] }
-        // from owes to
-        if (String(fromId) < String(toId)) {
-          map[key].amount += d.amount
-        } else {
-          map[key].amount -= d.amount
-        }
+        if (String(fromId) < String(toId)) map[key].amount += d.amount
+        else map[key].amount -= d.amount
         map[key].entries.push({ financeId: txn._id, debtIndex: i })
       }
     }
@@ -688,7 +1285,6 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
   }, [txns])
 
   if (isLoading) return <div className="flex justify-center py-8"><Spinner /></div>
-
   if (netDebts.length === 0) return (
     <EmptyState icon={CheckCircle2} title="All settled up!" description="No outstanding debts in this group" />
   )
@@ -696,9 +1292,9 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
   return (
     <div className="flex flex-col gap-3">
       {netDebts.map((d, idx) => {
-        const owes = d.amount > 0 ? d.fromName : d.toName
-        const owed = d.amount > 0 ? d.toName : d.fromName
-        const amt = Math.abs(d.amount)
+        const owes  = d.amount > 0 ? d.fromName : d.toName
+        const owed  = d.amount > 0 ? d.toName   : d.fromName
+        const amt   = Math.abs(d.amount)
         const isMine = String(d.fromId) === String(currentUserId) || String(d.toId) === String(currentUserId)
         return (
           <div key={idx} className={`bg-white rounded-2xl border p-4 flex items-center gap-3 ${isMine ? 'border-zinc-300' : 'border-zinc-100'}`}>
@@ -713,10 +1309,8 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
               </p>
               <p className={`text-sm font-bold ${d.amount > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{fmt(amt, symbol)}</p>
             </div>
-            <button
-              onClick={() => d.entries.forEach((e) => settle({ id: e.financeId, debtIndex: e.debtIndex }))}
-              className="px-3 py-1.5 text-xs font-semibold bg-zinc-900 text-white rounded-xl active:scale-95 transition-transform"
-            >
+            <button onClick={() => d.entries.forEach((e) => settle({ id: e.financeId, debtIndex: e.debtIndex }))}
+              className="px-3 py-1.5 text-xs font-semibold bg-zinc-900 text-white rounded-xl active:scale-95 transition-transform">
               Settle
             </button>
           </div>
@@ -724,6 +1318,117 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
       })}
     </div>
   )
+}
+
+// ── Debts Tab — Business (AR/AP aging) ───────────────────────────────────────
+function BusinessDebtsTab({ symbol }) {
+  const { data: salesInvoices    = [], isLoading: loadingSI } = useSalesInvoices()
+  const { data: purchaseInvoices = [], isLoading: loadingPI } = usePurchaseInvoices()
+  const [view, setView] = useState('ar') // 'ar' | 'ap'
+
+  const unpaidSI = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+    .map((i) => ({ ...i, daysOverdue: i.dueDate ? Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))) : 0 }))
+    .sort((a, b) => b.daysOverdue - a.daysOverdue)
+
+  const unpaidPI = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+    .map((i) => ({ ...i, daysOverdue: i.dueDate ? Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))) : 0 }))
+    .sort((a, b) => b.daysOverdue - a.daysOverdue)
+
+  const totalAR = unpaidSI.reduce((s, i) => s + (i.grandTotal || 0), 0)
+  const totalAP = unpaidPI.reduce((s, i) => s + (i.grandTotal || 0), 0)
+
+  const isLoading = loadingSI || loadingPI
+  if (isLoading) return <div className="flex justify-center py-8"><Spinner /></div>
+
+  const items = view === 'ar' ? unpaidSI : unpaidPI
+  const total = view === 'ar' ? totalAR  : totalAP
+
+  const agingColor = (days) => {
+    if (days === 0) return 'bg-zinc-100 text-zinc-500'
+    if (days <= 30)  return 'bg-amber-50 text-amber-600'
+    if (days <= 60)  return 'bg-orange-50 text-orange-600'
+    return 'bg-red-50 text-red-600'
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* AR / AP toggle + totals */}
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={() => setView('ar')}
+          className={`rounded-2xl border p-4 text-left transition-all ${view === 'ar' ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-200'}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <FileText size={14} className={view === 'ar' ? 'text-emerald-400' : 'text-emerald-600'} />
+            <p className={`text-xs font-semibold ${view === 'ar' ? 'text-zinc-300' : 'text-zinc-500'}`}>Receivable (AR)</p>
+          </div>
+          <p className={`text-xl font-bold ${view === 'ar' ? 'text-emerald-400' : 'text-emerald-600'}`}>{fmt(totalAR, symbol)}</p>
+          <p className={`text-xs mt-0.5 ${view === 'ar' ? 'text-zinc-400' : 'text-zinc-400'}`}>{unpaidSI.length} invoice{unpaidSI.length !== 1 ? 's' : ''}</p>
+        </button>
+        <button onClick={() => setView('ap')}
+          className={`rounded-2xl border p-4 text-left transition-all ${view === 'ap' ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-200'}`}>
+          <div className="flex items-center gap-2 mb-1">
+            <ReceiptText size={14} className={view === 'ap' ? 'text-red-400' : 'text-red-500'} />
+            <p className={`text-xs font-semibold ${view === 'ap' ? 'text-zinc-300' : 'text-zinc-500'}`}>Payable (AP)</p>
+          </div>
+          <p className={`text-xl font-bold ${view === 'ap' ? 'text-red-400' : 'text-red-500'}`}>{fmt(totalAP, symbol)}</p>
+          <p className={`text-xs mt-0.5 ${view === 'ap' ? 'text-zinc-400' : 'text-zinc-400'}`}>{unpaidPI.length} invoice{unpaidPI.length !== 1 ? 's' : ''}</p>
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <EmptyState icon={CheckCircle2}
+          title={view === 'ar' ? 'No outstanding receivables' : 'No outstanding payables'}
+          description={view === 'ar' ? 'All customer invoices are paid' : 'All vendor invoices are paid'} />
+      ) : (
+        <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="bg-zinc-50 border-b border-zinc-200">
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Invoice</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">{view === 'ar' ? 'Customer' : 'Vendor'}</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Due Date</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Overdue</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Status</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-zinc-500">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((inv) => (
+                <tr key={inv._id} className="border-b border-zinc-100 hover:bg-zinc-50">
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-zinc-900">{inv.invoiceNumber}</td>
+                  <td className="px-4 py-3 text-sm text-zinc-700">{(view === 'ar' ? inv.customer?.name : inv.vendor?.name) || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-zinc-500">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>
+                  <td className="px-4 py-3">
+                    {inv.daysOverdue > 0
+                      ? <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${agingColor(inv.daysOverdue)}`}>{inv.daysOverdue}d</span>
+                      : <span className="text-xs text-zinc-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${
+                      inv.status === 'overdue' ? 'bg-red-50 text-red-600' :
+                      inv.status === 'sent'    ? 'bg-amber-50 text-amber-600' : 'bg-zinc-100 text-zinc-500'
+                    }`}>{inv.status}</span>
+                  </td>
+                  <td className="px-4 py-3 text-sm font-semibold text-right text-zinc-900">{fmt(inv.grandTotal, symbol)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-zinc-50 border-t border-zinc-200">
+                <td colSpan={5} className="px-4 py-2.5 text-xs font-semibold text-zinc-500">Total Outstanding</td>
+                <td className="px-4 py-2.5 text-sm font-bold text-right text-zinc-900">{fmt(total, symbol)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Debts Tab — router ────────────────────────────────────────────────────────
+function DebtsTab({ groupId, symbol, currentUserId, isBusiness }) {
+  if (isBusiness) return <BusinessDebtsTab symbol={symbol} />
+  return <PersonalDebtsTab groupId={groupId} symbol={symbol} currentUserId={currentUserId} />
 }
 
 // ── Main Finance Page ─────────────────────────────────────────────────────────
@@ -740,6 +1445,8 @@ export default function Finance() {
   const { activeGroupId } = useGroupStore()
   const { data: me }      = useMe()
   const { data: groups }  = useGroups()
+  const isBusiness        = useIsBusiness()
+  const TABS              = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
   const { data: categories = [] } = useCategories()
 
   const symbol = useCurrencySymbol()
@@ -821,20 +1528,20 @@ export default function Finance() {
           {tab === 'overview' && (
             <OverviewTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} budgets={budgets} recentTxns={allTxns}
-              mobileFiltersOpen={mobileFiltersOpen} />
+              mobileFiltersOpen={mobileFiltersOpen} isBusiness={isBusiness} />
           )}
           {tab === 'transactions' && (
             <TransactionsTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} groupMembers={groupMembers} categories={categories}
               externalOpen={showAddTxn} onExternalClose={() => setShowAddTxn(false)}
-              mobileFiltersOpen={mobileFiltersOpen} />
+              mobileFiltersOpen={mobileFiltersOpen} isBusiness={isBusiness} />
           )}
           {tab === 'budgets' && (
             <BudgetsTab groupId={activeGroupId} symbol={symbol} budgets={budgets} isLoading={budgetsLoading}
               externalOpen={showAddBudget} onExternalClose={() => setShowAddBudget(false)} />
           )}
           {tab === 'debts' && (
-            <DebtsTab groupId={activeGroupId} symbol={symbol} currentUserId={me?._id} />
+            <DebtsTab groupId={activeGroupId} symbol={symbol} currentUserId={me?._id} isBusiness={isBusiness} />
           )}
         </div>
       </div>
