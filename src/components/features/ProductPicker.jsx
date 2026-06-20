@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, Search, X } from 'lucide-react'
 
 /**
  * ProductPicker — custom dropdown showing category icon, name, price, unit.
+ * Uses a portal so it's never clipped by BottomSheet overflow.
  * Props:
  *   products  — array of product objects (category must be populated: { icon, name })
  *   value     — currently selected product _id ('' = ad-hoc)
@@ -12,16 +14,28 @@ import { ChevronDown, Search, X } from 'lucide-react'
 export default function ProductPicker({ products = [], value, onChange, sym = '₹' }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const ref = useRef(null)
+  const [rect, setRect] = useState(null)
+  const triggerRef = useRef(null)
 
   const selected = products.find((p) => p._id === value) || null
 
   // Close on outside click
   useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    if (!open) return
+    const handler = (e) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        !document.getElementById('product-picker-portal')?.contains(e.target)
+      ) setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  }, [open])
+
+  const openDropdown = () => {
+    if (triggerRef.current) setRect(triggerRef.current.getBoundingClientRect())
+    setOpen(true)
+  }
 
   const filtered = products.filter((p) =>
     !query || p.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -30,15 +44,26 @@ export default function ProductPicker({ products = [], value, onChange, sym = '�
 
   const select = (id) => { onChange(id); setOpen(false); setQuery('') }
 
+  const DROPDOWN_H = 300
+  const posStyle = rect
+    ? (rect.bottom + DROPDOWN_H > window.innerHeight
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 })
+    : {}
+
   return (
-    <div className="flex flex-col gap-1" ref={ref}>
+    <div className="flex flex-col gap-1">
       <label className="text-xs font-medium text-zinc-500">From catalog</label>
 
       {/* Trigger */}
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="h-9 w-full flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 text-sm text-zinc-700 hover:border-zinc-300 transition-colors"
+        onClick={openDropdown}
+        className={[
+          'h-9 w-full flex items-center justify-between gap-2 rounded-xl border bg-white px-3 text-sm text-zinc-700 transition-colors',
+          open ? 'border-zinc-900' : 'border-zinc-200 hover:border-zinc-300',
+        ].join(' ')}
       >
         {selected ? (
           <span className="flex items-center gap-2 min-w-0">
@@ -52,12 +77,15 @@ export default function ProductPicker({ products = [], value, onChange, sym = '�
         <ChevronDown size={14} className={`flex-shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Dropdown panel */}
-      {open && (
-        <div className="absolute z-50 mt-1 w-full min-w-[260px] rounded-xl border border-zinc-200 bg-white shadow-lg overflow-hidden"
-          style={{ maxHeight: 280 }}>
+      {/* Portal dropdown */}
+      {open && rect && createPortal(
+        <div
+          id="product-picker-portal"
+          style={{ position: 'fixed', left: rect.left, width: rect.width, zIndex: 9999, maxHeight: DROPDOWN_H, ...posStyle }}
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden flex flex-col"
+        >
           {/* Search */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100 flex-shrink-0">
             <Search size={13} className="text-zinc-400 flex-shrink-0" />
             <input
               autoFocus
@@ -72,47 +100,51 @@ export default function ProductPicker({ products = [], value, onChange, sym = '�
           {/* Ad-hoc option */}
           <button
             type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => select('')}
             className={[
-              'w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-zinc-50 transition-colors border-b border-zinc-100',
+              'w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-zinc-50 transition-colors border-b border-zinc-100 flex-shrink-0',
               !value ? 'bg-zinc-50 font-medium text-zinc-900' : 'text-zinc-500',
             ].join(' ')}
           >
-            <span className="w-6 text-center">—</span>
+            <span className="w-7 h-7 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-400 flex-shrink-0">—</span>
             <span>Ad-hoc item (free text)</span>
           </button>
 
           {/* Product list */}
-          <div className="overflow-y-auto" style={{ maxHeight: 200 }}>
+          <div className="overflow-y-auto flex-1">
             {filtered.length === 0 ? (
               <p className="px-3 py-4 text-sm text-zinc-400 text-center">No products found</p>
-            ) : (
-              filtered.map((p) => (
-                <button
-                  key={p._id}
-                  type="button"
-                  onClick={() => select(p._id)}
-                  className={[
-                    'w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-zinc-50 transition-colors text-left',
-                    value === p._id ? 'bg-zinc-50' : '',
-                  ].join(' ')}
+            ) : filtered.map((p) => (
+              <button
+                key={p._id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => select(p._id)}
+                className={[
+                  'w-full flex items-center gap-3 px-3 py-2.5 text-sm hover:bg-zinc-50 transition-colors text-left border-b border-zinc-100 last:border-0',
+                  value === p._id ? 'bg-zinc-50' : '',
+                ].join(' ')}
+              >
+                <span
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                  style={{ backgroundColor: p.category?.color ? `${p.category.color}22` : '#f4f4f5' }}
                 >
-                  <span className="w-6 text-center text-base leading-none flex-shrink-0">
-                    {p.category?.icon || '📦'}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block font-medium text-zinc-900 truncate">{p.name}</span>
-                    {p.category?.name && <span className="text-xs text-zinc-400">{p.category.name}</span>}
-                  </span>
-                  <span className="flex-shrink-0 text-right">
-                    <span className="block text-sm font-semibold text-zinc-900">{sym}{Number(p.price || 0).toFixed(2)}</span>
-                    <span className="text-xs text-zinc-400">{p.unit}</span>
-                  </span>
-                </button>
-              ))
-            )}
+                  {p.category?.icon || '📦'}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block font-medium text-zinc-900 truncate">{p.name}</span>
+                  {p.category?.name && <span className="text-xs text-zinc-400">{p.category.name}</span>}
+                </span>
+                <span className="flex-shrink-0 text-right">
+                  <span className="block text-sm font-semibold text-zinc-900">{sym}{Number(p.price || 0).toFixed(2)}</span>
+                  <span className="text-xs text-zinc-400">{p.unit}</span>
+                </span>
+              </button>
+            ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

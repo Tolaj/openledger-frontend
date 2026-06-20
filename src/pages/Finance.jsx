@@ -27,45 +27,46 @@ import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
 import { useOrders } from '../hooks/useOrders'
 import { useGroups } from '../hooks/useGroups'
 import { useCategories } from '../hooks/useCategories'
+import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import { useIsBusiness } from '../hooks/useActiveGroupType'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays, parseISO } from 'date-fns'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PERSONAL_TABS = [
-  { key: 'overview',     label: 'Overview',     mobileLabel: 'Overview' },
-  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns'     },
-  { key: 'budgets',      label: 'Budgets',      mobileLabel: 'Budgets'  },
-  { key: 'debts',        label: 'Debts',        mobileLabel: 'Debts'    },
+  { key: 'overview', label: 'Overview', mobileLabel: 'Overview' },
+  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns' },
+  { key: 'budgets', label: 'Budgets', mobileLabel: 'Budgets' },
+  { key: 'debts', label: 'Debts', mobileLabel: 'Debts' },
 ]
 const BUSINESS_TABS = [
-  { key: 'overview',     label: 'Overview',     mobileLabel: 'Overview' },
-  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns'     },
-  { key: 'budgets',      label: 'Budgets',      mobileLabel: 'Budgets'  },
-  { key: 'debts',        label: 'AR / AP',      mobileLabel: 'AR/AP'    },
+  { key: 'overview', label: 'Overview', mobileLabel: 'Overview' },
+  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns' },
+  { key: 'budgets', label: 'Budgets', mobileLabel: 'Budgets' },
+  { key: 'debts', label: 'AR / AP', mobileLabel: 'AR/AP' },
 ]
 
 const PERIODS = [
-  { key: 'week',    label: 'This Week'  },
-  { key: 'month',   label: 'This Month' },
-  { key: 'quarter', label: 'Quarter'    },
-  { key: 'year',    label: 'This Year'  },
-  { key: 'custom',  label: 'Custom'     },
+  { key: 'week', label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: 'quarter', label: 'Quarter' },
+  { key: 'year', label: 'This Year' },
+  { key: 'custom', label: 'Custom' },
 ]
 
 const TYPE_META = {
-  income:     { label: 'Income',     icon: TrendingUp,    color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-100' },
-  expense:    { label: 'Expense',    icon: TrendingDown,  color: 'text-red-500',     bg: 'bg-red-50',      border: 'border-red-100'     },
-  loan:       { label: 'Loan',       icon: Landmark,      color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-100'   },
-  investment: { label: 'Investment', icon: BarChart3,     color: 'text-blue-600',    bg: 'bg-blue-50',     border: 'border-blue-100'    },
+  income: { label: 'Income', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+  expense: { label: 'Expense', icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100' },
+  loan: { label: 'Loan', icon: Landmark, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+  investment: { label: 'Investment', icon: BarChart3, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
 }
 
 const CURRENCIES = [
   { code: 'INR', symbol: '₹', label: '₹ INR — Indian Rupee' },
-  { code: 'USD', symbol: '$', label: '$ USD — US Dollar'     },
-  { code: 'EUR', symbol: '€', label: '€ EUR — Euro'          },
+  { code: 'USD', symbol: '$', label: '$ USD — US Dollar' },
+  { code: 'EUR', symbol: '€', label: '€ EUR — Euro' },
   { code: 'GBP', symbol: '£', label: '£ GBP — British Pound' },
-  { code: 'JPY', symbol: '¥', label: '¥ JPY — Japanese Yen'  },
+  { code: 'JPY', symbol: '¥', label: '¥ JPY — Japanese Yen' },
   { code: 'AUD', symbol: 'A$', label: 'A$ AUD — Australian Dollar' },
 ]
 
@@ -73,12 +74,12 @@ const CURRENCIES = [
 function getPeriodDates(period, custom) {
   const now = new Date()
   switch (period) {
-    case 'week':    return { startDate: startOfWeek(now).toISOString(),    endDate: endOfWeek(now).toISOString()    }
-    case 'month':   return { startDate: startOfMonth(now).toISOString(),   endDate: endOfMonth(now).toISOString()   }
+    case 'week': return { startDate: startOfWeek(now).toISOString(), endDate: endOfWeek(now).toISOString() }
+    case 'month': return { startDate: startOfMonth(now).toISOString(), endDate: endOfMonth(now).toISOString() }
     case 'quarter': return { startDate: startOfQuarter(now).toISOString(), endDate: endOfQuarter(now).toISOString() }
-    case 'year':    return { startDate: startOfYear(now).toISOString(),    endDate: endOfYear(now).toISOString()    }
-    case 'custom':  return { startDate: custom.start, endDate: custom.end  }
-    default:        return {}
+    case 'year': return { startDate: startOfYear(now).toISOString(), endDate: endOfYear(now).toISOString() }
+    case 'custom': return { startDate: custom.start, endDate: custom.end }
+    default: return {}
   }
 }
 
@@ -185,6 +186,7 @@ function FinanceMobileFilters({ open, period, setPeriod, custom, setCustom, type
 function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], categories = [], symbol, isBusiness = false }) {
   const { mutate: create, isPending: creating } = useCreateFinance()
   const { mutate: update, isPending: updating } = useUpdateFinance()
+  const { data: products = [] } = useProducts()
   const { register, handleSubmit, watch, setValue, control, reset, formState: { errors } } = useForm({
     defaultValues: { type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] },
   })
@@ -209,7 +211,7 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         category: editing.category?._id || editing.category || '',
         paidBy: editing.paidBy?._id || editing.paidBy || '',
         splitAmong: (editing.splitAmong || []).map((s) => ({ user: s.user?._id || s.user, amount: s.amount })),
-        items: (editing.items || []).map((it) => ({ name: it.name || '', qty: it.qty || '', amount: it.amount || '', category: it.category?._id || it.category || '' })),
+        items: (editing.items || []).map((it) => ({ product: '', name: it.name || '', qty: it.qty || 1, unitPrice: it.amount && it.qty ? (it.amount / it.qty).toFixed(2) : it.amount || '', taxRate: 0, amount: it.amount || 0, category: it.category?._id || it.category || '' })),
       })
     } else {
       reset({ type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] })
@@ -239,12 +241,17 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
       group: groupId,
       date: new Date(data.date).toISOString(),
       splitAmong: data.splitAmong.map((s) => ({ user: s.user, amount: parseFloat(s.amount) })),
-      items: (data.items || []).filter((it) => it.name).map((it) => ({
-        name: it.name,
-        qty: it.qty ? parseFloat(it.qty) : undefined,
-        amount: it.amount ? parseFloat(it.amount) : 0,
-        category: it.category || undefined,
-      })),
+      items: (data.items || []).filter((it) => it.name).map((it) => {
+        const qty = parseFloat(it.qty) || 1
+        const unitPrice = parseFloat(it.unitPrice) || 0
+        const taxRate = parseFloat(it.taxRate) || 0
+        return {
+          name: it.name,
+          qty,
+          amount: qty * unitPrice * (1 + taxRate / 100),
+          category: it.category || undefined,
+        }
+      }),
     }
     if (editing) {
       update({ id: editing._id, data: payload }, { onSuccess: onClose })
@@ -360,42 +367,213 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         {/* Line Items */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700">Line Items</label>
-            <button type="button" onClick={() => appendItem({ name: '', qty: '', amount: '', category: '' })}
+            <label className="text-sm font-medium text-zinc-700">Items</label>
+            <button type="button" onClick={() => appendItem({ product: '', name: '', qty: 1, unitPrice: '', taxRate: 0, amount: 0, category: '' })}
               className="text-xs text-zinc-500 underline flex items-center gap-1">
-              <Plus size={12} /> Add item
+              <Plus size={12} /> Add Item
             </button>
           </div>
           {itemFields.length === 0 && (
             <p className="text-xs text-zinc-400">Optional — add items to track per-category spending</p>
           )}
-          {itemFields.map((field, idx) => (
-            <div key={field.id} className="flex flex-col gap-1.5 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-              <div className="flex gap-2">
-                <input {...register(`items.${idx}.name`)} placeholder="Item name"
-                  className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
-                <button type="button" onClick={() => removeItem(idx)} className="p-1 text-zinc-400 active:text-red-500">
-                  <Trash2 size={14} />
-                </button>
+          {itemFields.map((field, idx) => {
+            const qty = parseFloat(watchedItems[idx]?.qty) || 0
+            const unitPrice = parseFloat(watchedItems[idx]?.unitPrice) || 0
+            const taxRate = parseFloat(watchedItems[idx]?.taxRate) || 0
+            const lineAmt = qty * unitPrice * (1 + taxRate / 100)
+            return (
+              <div key={field.id} className="flex flex-col gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                {/* From catalog */}
+                <ProductCombobox
+                  products={products}
+                  value={watchedItems[idx]?.product || ''}
+                  onSelect={(p) => {
+                    if (p) {
+                      setValue(`items.${idx}.product`, p._id)
+                      setValue(`items.${idx}.name`, p.name)
+                      setValue(`items.${idx}.unitPrice`, p.price ?? '')
+                      setValue(`items.${idx}.category`, p.category?._id || p.category || '')
+                    } else {
+                      setValue(`items.${idx}.product`, '')
+                    }
+                  }}
+                />
+                {/* Description */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-zinc-500">Description</label>
+                  <div className="flex gap-2 items-start">
+                    <textarea
+                      {...register(`items.${idx}.name`)}
+                      placeholder="Item description"
+                      rows={2}
+                      className="flex-1 px-3 py-2 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white resize-none"
+                    />
+                    <button type="button" onClick={() => removeItem(idx)} className="p-1 mt-1 text-zinc-400 hover:text-red-500">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                {/* Qty / Unit Price / Tax */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500">Qty</label>
+                    <input {...register(`items.${idx}.qty`)} type="number" step="1" min="0" placeholder="1"
+                      className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500">Unit Price</label>
+                    <input {...register(`items.${idx}.unitPrice`)} type="number" step="0.01" min="0" placeholder="0"
+                      className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500">Tax %</label>
+                    <input {...register(`items.${idx}.taxRate`)} type="number" step="0.1" min="0" placeholder="0"
+                      className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
+                  </div>
+                </div>
+                {/* Computed amount */}
+                <p className="text-xs text-zinc-400 text-right">
+                  Amount: <span className="font-semibold text-zinc-900">{fmt(lineAmt, symbol)}</span>
+                </p>
               </div>
-              <div className="flex gap-2">
-                <input {...register(`items.${idx}.qty`)} type="number" step="1" placeholder="Qty"
-                  className="w-20 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right bg-white" />
-                <input {...register(`items.${idx}.amount`)} type="number" step="0.01" placeholder="Amount"
-                  className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right bg-white" />
-                {categories.length > 0 && (
-                  <select {...register(`items.${idx}.category`)}
-                    className="flex-1 h-9 px-2 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white">
-                    <option value="">Category</option>
-                    {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
-                  </select>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </form>
     </BottomSheet>
+  )
+}
+
+// ── Product Combobox ──────────────────────────────────────────────────────────
+function ProductCombobox({ products = [], value, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [rect, setRect] = useState(null)
+  const wrapRef = useRef(null)
+
+  const selected = products.find((p) => p._id === value)
+
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => {
+      if (!wrapRef.current?.contains(e.target) && !document.getElementById('prod-combo-portal')?.contains(e.target))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const openDropdown = () => {
+    if (wrapRef.current) setRect(wrapRef.current.getBoundingClientRect())
+    setOpen(true)
+  }
+
+  const filtered = search
+    ? products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.category?.name?.toLowerCase().includes(search.toLowerCase()))
+    : products
+
+  const handleSelect = (p) => {
+    onSelect(p)
+    setSearch('')
+    setOpen(false)
+  }
+
+  const handleAdHoc = () => {
+    onSelect(null)
+    setSearch('')
+    setOpen(false)
+  }
+
+  return (
+    <div ref={wrapRef} className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-zinc-500">From catalog</label>
+      <button
+        type="button"
+        onClick={openDropdown}
+        className={[
+          'h-9 px-3 text-sm border rounded-xl bg-white flex items-center justify-between gap-2 text-left w-full',
+          open ? 'border-zinc-900' : 'border-zinc-200',
+        ].join(' ')}
+      >
+        {selected ? (
+          <span className="flex items-center gap-2 truncate">
+            {selected.category?.icon && (
+              <span className="w-5 h-5 rounded flex items-center justify-center text-sm flex-shrink-0"
+                style={{ backgroundColor: selected.category?.color ? `${selected.category.color}22` : '#f4f4f5' }}>
+                {selected.category.icon}
+              </span>
+            )}
+            <span className="truncate">{selected.name}</span>
+          </span>
+        ) : (
+          <span className="text-zinc-400">— Ad-hoc item —</span>
+        )}
+        <ChevronDown size={14} className={`flex-shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && rect && createPortal(
+        <div
+          id="prod-combo-portal"
+          style={{ position: 'fixed', ...(rect.bottom + 320 > window.innerHeight ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }), left: rect.left, width: rect.width, zIndex: 9999, maxHeight: 320 }}
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden flex flex-col"
+        >
+          {/* Search */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100">
+            <svg className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            </svg>
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search products..."
+              className="flex-1 text-sm outline-none bg-transparent"
+            />
+          </div>
+          {/* List */}
+          <div className="overflow-y-auto">
+            {/* Ad-hoc option */}
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleAdHoc}
+              className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-zinc-50 border-b border-zinc-100 text-left"
+            >
+              <span className="w-7 h-7 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-400 text-base flex-shrink-0">—</span>
+              <span className="text-sm font-medium text-zinc-700">Ad-hoc item (free text)</span>
+            </button>
+            {filtered.map((p) => (
+              <button
+                key={p._id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelect(p)}
+                className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-zinc-50 border-b border-zinc-100 last:border-0 text-left"
+              >
+                <span
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                  style={{ backgroundColor: p.category?.color ? `${p.category.color}22` : '#f4f4f5' }}
+                >
+                  {p.category?.icon || '📦'}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-medium text-zinc-900 truncate">{p.name}</span>
+                  {p.category?.name && <span className="block text-xs text-zinc-400">{p.category.name}</span>}
+                </span>
+                <span className="flex-shrink-0 text-right">
+                  <span className="block text-sm font-semibold text-zinc-900">${Number(p.price || 0).toFixed(2)}</span>
+                  {p.unit && <span className="block text-xs text-zinc-400">{p.unit}</span>}
+                </span>
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-4 text-xs text-zinc-400 text-center">No products found</p>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
   )
 }
 
@@ -403,8 +581,14 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
 function CategoryCombobox({ globalCategories = [], value, categoryRef, onChange }) {
   const [open, setOpen] = useState(false)
   const [rect, setRect] = useState(null)
+  const [inputText, setInputText] = useState(value || '')
   const wrapRef = useRef(null)
   const inputRef = useRef(null)
+
+  // Sync inputText when value changes externally (e.g. form reset or edit populate)
+  useEffect(() => {
+    setInputText(value || '')
+  }, [value])
 
   // Resolve selected category object (for icon display)
   const selectedCat = categoryRef ? globalCategories.find((c) => c._id === categoryRef) : null
@@ -425,16 +609,18 @@ function CategoryCombobox({ globalCategories = [], value, categoryRef, onChange 
     setOpen(true)
   }
 
-  const suggestions = value
-    ? globalCategories.filter((c) => c.name.toLowerCase().includes(value.toLowerCase()))
+  const suggestions = inputText
+    ? globalCategories.filter((c) => c.name.toLowerCase().includes(inputText.toLowerCase()))
     : globalCategories
 
   const handleInput = (e) => {
+    setInputText(e.target.value)
     onChange({ name: e.target.value, categoryRef: '' })
     openDropdown()
   }
 
   const handleSelect = (cat) => {
+    setInputText(cat.name)
     onChange({ name: cat.name, categoryRef: cat._id })
     setOpen(false)
   }
@@ -455,7 +641,7 @@ function CategoryCombobox({ globalCategories = [], value, categoryRef, onChange 
         )}
         <input
           ref={inputRef}
-          value={value}
+          value={inputText}
           onChange={handleInput}
           onFocus={openDropdown}
           placeholder="Type or pick a category…"
@@ -601,11 +787,11 @@ function BudgetForm({ open, onClose, editing, groupId }) {
 function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, budgets, recentTxns, mobileFiltersOpen, isBusiness }) {
   const dates = getPeriodDates(period, custom)
   const { data: summary, isLoading } = useFinanceSummary({ groupId, ...dates })
-  const { data: salesInvoices    = [] } = useSalesInvoices()
+  const { data: salesInvoices = [] } = useSalesInvoices()
   const { data: purchaseInvoices = [] } = usePurchaseInvoices()
 
-  const unpaidSInv  = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
-  const unpaidPInv  = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const unpaidSInv = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const unpaidPInv = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
   const overdueSInv = salesInvoices.filter((i) => i.status === 'overdue')
   const overduePInv = purchaseInvoices.filter((i) => i.status === 'overdue')
   const totalAR = unpaidSInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
@@ -614,7 +800,7 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
   return (
     <div className="flex flex-col gap-4">
       {/* Mobile: filter panel */}
-      <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} setTypeFilter={() => {}} />
+      <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} setTypeFilter={() => { }} />
       {/* Desktop: inline period picker */}
       <div className="hidden md:block">
         <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
@@ -730,9 +916,9 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
 // ── Transactions Tab ──────────────────────────────────────────────────────────
 function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen, isBusiness }) {
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing]   = useState(null)
-  const [filters, setFilters]   = useState({})
-  const [dropSel, setDropSel]   = useState({})
+  const [editing, setEditing] = useState(null)
+  const [filters, setFilters] = useState({})
+  const [dropSel, setDropSel] = useState({})
   const [expanded, setExpanded] = useState(null)
   const { mutate: del } = useDeleteFinance()
 
@@ -742,9 +928,9 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
 
   const dates = getPeriodDates(period, custom)
   const { data: txns = [], isLoading } = useFinance({ groupId, ...dates })
-  const { data: salesInvoices    = [] } = useSalesInvoices()
+  const { data: salesInvoices = [] } = useSalesInvoices()
   const { data: purchaseInvoices = [] } = usePurchaseInvoices()
-  const { data: orders           = [] } = useOrders()
+  const { data: orders = [] } = useOrders()
 
   // categoryMap: id → { _id, name } for resolving ObjectId refs in order items
   const categoryMap = useMemo(() => {
@@ -768,27 +954,27 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
     salesInvoices.forEach((inv) => {
       if (!inv.financeEntryId) return
       map[String(inv.financeEntryId)] = (inv.items || []).map((it) => ({
-        name:     it.product?.name || it.description || 'Item',
-        qty:      it.qty,
-        amount:   it.amount || 0,
+        name: it.product?.name || it.description || 'Item',
+        qty: it.qty,
+        amount: it.amount || 0,
         category: resolveCategory(it.product?.category),
       }))
     })
     purchaseInvoices.forEach((inv) => {
       if (!inv.financeEntryId) return
       map[String(inv.financeEntryId)] = (inv.items || []).map((it) => ({
-        name:     it.product?.name || it.description || 'Item',
-        qty:      it.qty,
-        amount:   it.amount || 0,
+        name: it.product?.name || it.description || 'Item',
+        qty: it.qty,
+        amount: it.amount || 0,
         category: resolveCategory(it.product?.category),
       }))
     })
     orders.forEach((order) => {
       if (!order.financeEntryId) return
       map[String(order.financeEntryId)] = (order.items || []).map((it) => ({
-        name:     it.product?.name || 'Item',
-        qty:      parseFloat(it.count) || 1,
-        amount:   (parseFloat(it.price) || 0) * (parseFloat(it.count) || 1),
+        name: it.product?.name || 'Item',
+        qty: parseFloat(it.count) || 1,
+        amount: (parseFloat(it.price) || 0) * (parseFloat(it.count) || 1),
         category: resolveCategory(it.product?.category),
       }))
     })
@@ -839,18 +1025,18 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
   }, [txns, sourceItemsMap])
 
   const dropOpts = useMemo(() => ({
-    type:     Object.values(TYPE_META).map((m) => m.label),
+    type: Object.values(TYPE_META).map((m) => m.label),
     category: allCategoryNames,
   }), [allCategoryNames])
 
   const columns = useMemo(() => [
-    { key: 'type',        label: 'Type',        filterable: true  },
-    { key: 'description', label: 'Description', filterable: true,  noDropdown: true },
-    { key: 'date',        label: 'Date',        filterable: false },
+    { key: 'type', label: 'Type', filterable: true },
+    { key: 'description', label: 'Description', filterable: true, noDropdown: true },
+    { key: 'date', label: 'Date', filterable: false },
     ...(!isBusiness ? [{ key: 'paidBy', label: 'Paid By', filterable: false }] : []),
-    { key: 'category',    label: 'Categories',  filterable: true  },
-    { key: 'amount',      label: 'Amount',      filterable: false },
-    { key: 'action',      label: 'Action',      filterable: false },
+    { key: 'category', label: 'Categories', filterable: true },
+    { key: 'amount', label: 'Amount', filterable: false },
+    { key: 'action', label: 'Action', filterable: false },
   ], [isBusiness])
 
   // +1 for leadingCol
@@ -860,7 +1046,7 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
     <div className="flex flex-col gap-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
       {/* Mobile: period + type filter panel */}
       <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod}
-        custom={custom} setCustom={setCustom} showTypeFilter={false} setTypeFilter={() => {}} />
+        custom={custom} setCustom={setCustom} showTypeFilter={false} setTypeFilter={() => { }} />
 
       {/* Mobile: DataTable column filters */}
       <DataTableMobileFilters
@@ -1073,20 +1259,20 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
 
 // ── Budgets Tab ───────────────────────────────────────────────────────────────
 const BUDGET_COLS = [
-  { key: 'name',      label: 'Name',      filterable: true, noDropdown: true },
-  { key: 'period',    label: 'Period',    filterable: false, width: 'w-52' },
-  { key: 'spent',     label: 'Spent',     filterable: false },
-  { key: 'total',     label: 'Total',     filterable: false },
-  { key: 'progress',  label: 'Progress',  filterable: false },
+  { key: 'name', label: 'Name', filterable: true, noDropdown: true },
+  { key: 'period', label: 'Period', filterable: false, width: 'w-52' },
+  { key: 'spent', label: 'Spent', filterable: false },
+  { key: 'total', label: 'Total', filterable: false },
+  { key: 'progress', label: 'Progress', filterable: false },
   { key: 'remaining', label: 'Remaining', filterable: false },
-  { key: 'action',    label: 'Action',    filterable: false },
+  { key: 'action', label: 'Action', filterable: false },
 ]
 
 function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, onExternalClose }) {
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing]   = useState(null)
+  const [editing, setEditing] = useState(null)
   const [expanded, setExpanded] = useState(null)
-  const [filters, setFilters]   = useState({})
+  const [filters, setFilters] = useState({})
   const { mutate: del } = useDeleteBudget()
 
   useEffect(() => {
@@ -1110,7 +1296,7 @@ function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, on
           onFilterChange={(key, val) => setFilters((f) => ({ ...f, [key]: val }))}
           dropOpts={{}}
           dropSel={{}}
-          onDropChange={() => {}}
+          onDropChange={() => { }}
           leadingCol
           emptyMessage="No budgets yet — create one to start tracking"
           renderRow={(b) => {
@@ -1273,7 +1459,7 @@ function PersonalDebtsTab({ groupId, symbol, currentUserId }) {
         const d = txn.debtTracking[i]
         if (d.settled) continue
         const fromId = d.from?._id || d.from
-        const toId   = d.to?._id   || d.to
+        const toId = d.to?._id || d.to
         const key = [fromId, toId].sort().join('-')
         if (!map[key]) map[key] = { fromId, toId, fromName: d.from?.name || d.from?.email || fromId, toName: d.to?.name || d.to?.email || toId, amount: 0, entries: [] }
         if (String(fromId) < String(toId)) map[key].amount += d.amount
@@ -1292,9 +1478,9 @@ function PersonalDebtsTab({ groupId, symbol, currentUserId }) {
   return (
     <div className="flex flex-col gap-3">
       {netDebts.map((d, idx) => {
-        const owes  = d.amount > 0 ? d.fromName : d.toName
-        const owed  = d.amount > 0 ? d.toName   : d.fromName
-        const amt   = Math.abs(d.amount)
+        const owes = d.amount > 0 ? d.fromName : d.toName
+        const owed = d.amount > 0 ? d.toName : d.fromName
+        const amt = Math.abs(d.amount)
         const isMine = String(d.fromId) === String(currentUserId) || String(d.toId) === String(currentUserId)
         return (
           <div key={idx} className={`bg-white rounded-2xl border p-4 flex items-center gap-3 ${isMine ? 'border-zinc-300' : 'border-zinc-100'}`}>
@@ -1322,7 +1508,7 @@ function PersonalDebtsTab({ groupId, symbol, currentUserId }) {
 
 // ── Debts Tab — Business (AR/AP aging) ───────────────────────────────────────
 function BusinessDebtsTab({ symbol }) {
-  const { data: salesInvoices    = [], isLoading: loadingSI } = useSalesInvoices()
+  const { data: salesInvoices = [], isLoading: loadingSI } = useSalesInvoices()
   const { data: purchaseInvoices = [], isLoading: loadingPI } = usePurchaseInvoices()
   const [view, setView] = useState('ar') // 'ar' | 'ap'
 
@@ -1341,12 +1527,12 @@ function BusinessDebtsTab({ symbol }) {
   if (isLoading) return <div className="flex justify-center py-8"><Spinner /></div>
 
   const items = view === 'ar' ? unpaidSI : unpaidPI
-  const total = view === 'ar' ? totalAR  : totalAP
+  const total = view === 'ar' ? totalAR : totalAP
 
   const agingColor = (days) => {
     if (days === 0) return 'bg-zinc-100 text-zinc-500'
-    if (days <= 30)  return 'bg-amber-50 text-amber-600'
-    if (days <= 60)  return 'bg-orange-50 text-orange-600'
+    if (days <= 30) return 'bg-amber-50 text-amber-600'
+    if (days <= 60) return 'bg-orange-50 text-orange-600'
     return 'bg-red-50 text-red-600'
   }
 
@@ -1403,10 +1589,9 @@ function BusinessDebtsTab({ symbol }) {
                       : <span className="text-xs text-zinc-400">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${
-                      inv.status === 'overdue' ? 'bg-red-50 text-red-600' :
-                      inv.status === 'sent'    ? 'bg-amber-50 text-amber-600' : 'bg-zinc-100 text-zinc-500'
-                    }`}>{inv.status}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${inv.status === 'overdue' ? 'bg-red-50 text-red-600' :
+                        inv.status === 'sent' ? 'bg-amber-50 text-amber-600' : 'bg-zinc-100 text-zinc-500'
+                      }`}>{inv.status}</span>
                   </td>
                   <td className="px-4 py-3 text-sm font-semibold text-right text-zinc-900">{fmt(inv.grandTotal, symbol)}</td>
                 </tr>
@@ -1433,20 +1618,20 @@ function DebtsTab({ groupId, symbol, currentUserId, isBusiness }) {
 
 // ── Main Finance Page ─────────────────────────────────────────────────────────
 export default function Finance() {
-  const [tab, setTab]       = useState('overview')
+  const [tab, setTab] = useState('overview')
   const [period, setPeriod] = useState('month')
   const [custom, setCustom] = useState({ start: '', end: '' })
-  const [showAddTxn, setShowAddTxn]       = useState(false)
+  const [showAddTxn, setShowAddTxn] = useState(false)
   const [showAddBudget, setShowAddBudget] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   const handleTabChange = (key) => { setTab(key); setMobileFiltersOpen(false) }
 
   const { activeGroupId } = useGroupStore()
-  const { data: me }      = useMe()
-  const { data: groups }  = useGroups()
-  const isBusiness        = useIsBusiness()
-  const TABS              = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
+  const { data: me } = useMe()
+  const { data: groups } = useGroups()
+  const isBusiness = useIsBusiness()
+  const TABS = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
   const { data: categories = [] } = useCategories()
 
   const symbol = useCurrencySymbol()
@@ -1455,7 +1640,7 @@ export default function Finance() {
   const groupMembers = activeGroup?.members || []
 
   const dates = getPeriodDates(period, custom)
-  const { data: allTxns = [] }  = useFinance({ groupId: activeGroupId, ...dates })
+  const { data: allTxns = [] } = useFinance({ groupId: activeGroupId, ...dates })
   const { data: budgets = [], isLoading: budgetsLoading } = useBudgets({ groupId: activeGroupId })
 
   const filterTabs = ['overview', 'transactions']
