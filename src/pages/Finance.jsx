@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Landmark, BarChart3,
   Plus, Pencil, Trash2, CheckCircle2, CircleDollarSign,
   ChevronDown, Wallet, FileText, ReceiptText,
-  AlertTriangle,
+  AlertTriangle, X,
 } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
@@ -383,35 +383,47 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
             const lineAmt = qty * unitPrice * (1 + taxRate / 100)
             return (
               <div key={field.id} className="flex flex-col gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                {/* From catalog */}
-                <ProductCombobox
-                  products={products}
-                  value={watchedItems[idx]?.product || ''}
-                  onSelect={(p) => {
-                    if (p) {
-                      setValue(`items.${idx}.product`, p._id)
-                      setValue(`items.${idx}.name`, p.name)
-                      setValue(`items.${idx}.unitPrice`, p.price ?? '')
-                      setValue(`items.${idx}.category`, p.category?._id || p.category || '')
-                    } else {
-                      setValue(`items.${idx}.product`, '')
-                    }
-                  }}
-                />
-                {/* Description */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-medium text-zinc-500">Description</label>
-                  <div className="flex gap-2 items-start">
-                    <textarea
-                      {...register(`items.${idx}.name`)}
-                      placeholder="Item description"
-                      rows={2}
-                      className="flex-1 px-3 py-2 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white resize-none"
+                {/* From catalog / custom name */}
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <ProductCombobox
+                      products={products}
+                      value={watchedItems[idx]?.product || ''}
+                      customName={watchedItems[idx]?.name || ''}
+                      onSelect={(p) => {
+                        if (p) {
+                          setValue(`items.${idx}.product`, p._id)
+                          setValue(`items.${idx}.name`, p.name)
+                          setValue(`items.${idx}.unitPrice`, p.price ?? '')
+                          setValue(`items.${idx}.category`, p.category?._id || p.category || '')
+                        } else {
+                          setValue(`items.${idx}.product`, '')
+                        }
+                      }}
+                      onCustomName={(val) => {
+                        setValue(`items.${idx}.name`, val)
+                        setValue(`items.${idx}.product`, '')
+                      }}
                     />
-                    <button type="button" onClick={() => removeItem(idx)} className="p-1 mt-1 text-zinc-400 hover:text-red-500">
-                      <Trash2 size={14} />
-                    </button>
                   </div>
+                  <button type="button" onClick={() => removeItem(idx)} className="p-1 mb-1 text-zinc-400 hover:text-red-500 flex-shrink-0">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <input type="hidden" {...register(`items.${idx}.name`)} />
+                {/* Category */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-zinc-500">Category</label>
+                  <select
+                    value={watchedItems[idx]?.category || ''}
+                    onChange={(e) => setValue(`items.${idx}.category`, e.target.value)}
+                    className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white"
+                  >
+                    <option value="">No category</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
+                    ))}
+                  </select>
                 </div>
                 {/* Qty / Unit Price / Tax */}
                 <div className="grid grid-cols-3 gap-2">
@@ -445,13 +457,16 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
 }
 
 // ── Product Combobox ──────────────────────────────────────────────────────────
-function ProductCombobox({ products = [], value, onSelect }) {
+function ProductCombobox({ products = [], value, customName = '', onSelect, onCustomName }) {
   const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
   const [rect, setRect] = useState(null)
+  const inputRef = useRef(null)
   const wrapRef = useRef(null)
 
   const selected = products.find((p) => p._id === value)
+
+  // The text shown in the input: selected product name, or the custom name being typed
+  const inputValue = selected ? selected.name : customName
 
   useEffect(() => {
     if (!open) return
@@ -464,112 +479,124 @@ function ProductCombobox({ products = [], value, onSelect }) {
   }, [open])
 
   const openDropdown = () => {
-    if (wrapRef.current) setRect(wrapRef.current.getBoundingClientRect())
+    if (inputRef.current) setRect(inputRef.current.getBoundingClientRect())
     setOpen(true)
   }
 
-  const filtered = search
-    ? products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.category?.name?.toLowerCase().includes(search.toLowerCase()))
+  const handleInputChange = (e) => {
+    const val = e.target.value
+    // If a product was selected, typing clears the selection and switches to custom text
+    if (selected) onSelect(null)
+    onCustomName?.(val)
+    if (!open) openDropdown()
+  }
+
+  const handleInputFocus = () => {
+    if (!open) openDropdown()
+  }
+
+  const filtered = customName && !selected
+    ? products.filter((p) =>
+        p.name.toLowerCase().includes(customName.toLowerCase()) ||
+        p.category?.name?.toLowerCase().includes(customName.toLowerCase())
+      )
     : products
 
   const handleSelect = (p) => {
     onSelect(p)
-    setSearch('')
-    setOpen(false)
-  }
-
-  const handleAdHoc = () => {
-    onSelect(null)
-    setSearch('')
     setOpen(false)
   }
 
   return (
     <div ref={wrapRef} className="flex flex-col gap-1">
-      <label className="text-xs font-medium text-zinc-500">From catalog</label>
-      <button
-        type="button"
-        onClick={openDropdown}
-        className={[
-          'h-9 px-3 text-sm border rounded-xl bg-white flex items-center justify-between gap-2 text-left w-full',
-          open ? 'border-zinc-900' : 'border-zinc-200',
-        ].join(' ')}
-      >
-        {selected ? (
-          <span className="flex items-center gap-2 truncate">
-            {selected.category?.icon && (
-              <span className="w-5 h-5 rounded flex items-center justify-center text-sm flex-shrink-0"
-                style={{ backgroundColor: selected.category?.color ? `${selected.category.color}22` : '#f4f4f5' }}>
-                {selected.category.icon}
-              </span>
-            )}
-            <span className="truncate">{selected.name}</span>
+      <label className="text-xs font-medium text-zinc-500">Item</label>
+      <div className="relative">
+        {/* Show category icon badge when a catalog product is selected */}
+        {selected?.category?.icon && (
+          <span
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center text-sm flex-shrink-0 pointer-events-none"
+            style={{ backgroundColor: selected.category?.color ? `${selected.category.color}22` : '#f4f4f5' }}
+          >
+            {selected.category.icon}
           </span>
-        ) : (
-          <span className="text-zinc-400">— Ad-hoc item —</span>
         )}
-        <ChevronDown size={14} className={`flex-shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={handleInputFocus}
+          placeholder="Type item name or search catalog…"
+          className={[
+            'h-9 w-full px-3 text-sm border rounded-xl outline-none bg-white transition-colors',
+            selected?.category?.icon ? 'pl-9' : '',
+            open ? 'border-zinc-900' : 'border-zinc-200 focus:border-zinc-900',
+          ].join(' ')}
+        />
+        {selected && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { onSelect(null); onCustomName?.('') }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
 
       {open && rect && createPortal(
         <div
           id="prod-combo-portal"
-          style={{ position: 'fixed', ...(rect.bottom + 320 > window.innerHeight ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }), left: rect.left, width: rect.width, zIndex: 9999, maxHeight: 320 }}
-          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden flex flex-col"
+          style={{
+            position: 'fixed',
+            left: rect.left,
+            width: rect.width,
+            zIndex: 9999,
+            maxHeight: 280,
+            ...(rect.bottom + 280 > window.innerHeight
+              ? { bottom: window.innerHeight - rect.top + 4 }
+              : { top: rect.bottom + 4 }),
+          }}
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-y-auto flex flex-col"
         >
-          {/* Search */}
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100">
-            <svg className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search products..."
-              className="flex-1 text-sm outline-none bg-transparent"
-            />
-          </div>
-          {/* List */}
-          <div className="overflow-y-auto">
-            {/* Ad-hoc option */}
+          {filtered.map((p) => (
+            <button
+              key={p._id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleSelect(p)}
+              className={[
+                'w-full px-3 py-2.5 flex items-center gap-3 hover:bg-zinc-50 border-b border-zinc-100 last:border-0 text-left',
+                value === p._id ? 'bg-zinc-50' : '',
+              ].join(' ')}
+            >
+              <span
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                style={{ backgroundColor: p.category?.color ? `${p.category.color}22` : '#f4f4f5' }}
+              >
+                {p.category?.icon || '📦'}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium text-zinc-900 truncate">{p.name}</span>
+                {p.category?.name && <span className="block text-xs text-zinc-400">{p.category.name}</span>}
+              </span>
+              <span className="flex-shrink-0 text-right">
+                <span className="block text-sm font-semibold text-zinc-900">${Number(p.price || 0).toFixed(2)}</span>
+                {p.unit && <span className="block text-xs text-zinc-400">{p.unit}</span>}
+              </span>
+            </button>
+          ))}
+          {filtered.length === 0 && (
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={handleAdHoc}
-              className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-zinc-50 border-b border-zinc-100 text-left"
+              onClick={() => setOpen(false)}
+              className="w-full px-3 py-4 text-xs text-zinc-400 text-center hover:bg-zinc-50 transition-colors"
             >
-              <span className="w-7 h-7 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-400 text-base flex-shrink-0">—</span>
-              <span className="text-sm font-medium text-zinc-700">Ad-hoc item (free text)</span>
+              No products match — use "<span className="font-medium text-zinc-600">{customName}</span>" as custom item
             </button>
-            {filtered.map((p) => (
-              <button
-                key={p._id}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelect(p)}
-                className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-zinc-50 border-b border-zinc-100 last:border-0 text-left"
-              >
-                <span
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-base flex-shrink-0"
-                  style={{ backgroundColor: p.category?.color ? `${p.category.color}22` : '#f4f4f5' }}
-                >
-                  {p.category?.icon || '📦'}
-                </span>
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-medium text-zinc-900 truncate">{p.name}</span>
-                  {p.category?.name && <span className="block text-xs text-zinc-400">{p.category.name}</span>}
-                </span>
-                <span className="flex-shrink-0 text-right">
-                  <span className="block text-sm font-semibold text-zinc-900">${Number(p.price || 0).toFixed(2)}</span>
-                  {p.unit && <span className="block text-xs text-zinc-400">{p.unit}</span>}
-                </span>
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <p className="px-3 py-4 text-xs text-zinc-400 text-center">No products found</p>
-            )}
-          </div>
+          )}
         </div>,
         document.body
       )}
