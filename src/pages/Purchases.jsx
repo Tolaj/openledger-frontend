@@ -982,7 +982,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-sm font-medium text-zinc-700">Items *</label>
-                  <button type="button" onClick={addManualItem} className="text-xs font-medium text-zinc-600 flex items-center gap-1 hover:text-zinc-900">
+                  <button type="button" onClick={addManualItem} className="text-xs font-medium text-zinc-600 flex items-center gap-1 hover:text-zinc-900 outline-none focus:outline-none">
                     <Plus size={13} /> Add Item
                   </button>
                 </div>

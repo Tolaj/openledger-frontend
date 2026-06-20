@@ -30,7 +30,8 @@ const INV_STATUS_VARIANT = {
   draft: 'default', sent: 'warning', paid: 'success', overdue: 'danger', cancelled: 'danger',
 }
 const ORD_STATUS_VARIANT = {
-  draft: 'default', confirmed: 'success', cancelled: 'danger',
+  draft: 'default', sent: 'warning', confirmed: 'success',
+  partial: 'warning', received: 'success', delivered: 'success', cancelled: 'danger',
 }
 const REC_STATUS_VARIANT = {
   active: 'success', paused: 'warning', cancelled: 'danger',
@@ -109,6 +110,10 @@ function RecipientsTab({ mobileFiltersOpen, onAdd }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {!isLoading && recipients.length === 0 ? (
+        <EmptyState title="No recipients" description="Add payees and payers to get started"
+          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recipient</Button>} />
+      ) : (
       <DataTable
         columns={RECIPIENT_COLS}
         data={filtered}
@@ -116,9 +121,10 @@ function RecipientsTab({ mobileFiltersOpen, onAdd }) {
         onFilterChange={setFilter}
         isLoading={isLoading}
         renderRow={renderRow}
-        emptyState={<EmptyState title="No recipients" description="Add payees and payers to get started" action={{ label: 'Add Recipient', onClick: openCreate }} />}
+        emptyMessage="No recipients match filters"
       />
 
+      )}
       <BottomSheet open={sheetOpen} onClose={close} title={editing ? 'Edit Recipient' : 'New Recipient'}>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <Input label="Name" placeholder="Full name or company" error={errors.name?.message}
@@ -394,7 +400,10 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
       {/* Status Sheet */}
       <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Status">
         <div className="grid grid-cols-2 gap-2 pb-2">
-          {['draft', 'confirmed', 'cancelled'].map((s) => (
+          {(statusSheet?.direction === 'payable'
+            ? ['draft', 'sent', 'partial', 'received', 'cancelled']
+            : ['draft', 'confirmed', 'partial', 'delivered', 'cancelled']
+          ).map((s) => (
             <button key={s} onClick={() => onStatusChange(s)}
               className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
                 statusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50',
@@ -410,12 +419,12 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
 
 // ── Invoices Tab ──────────────────────────────────────────────────────────────
 const INVOICE_COLS = [
-  { key: 'invoiceNumber', label: 'Invoice #',  filterable: true  },
+  { key: 'invoiceNumber', label: 'Invoice #',  filterable: true, noDropdown: true },
+  { key: 'go',            label: 'GO #',       filterable: true, noDropdown: true },
   { key: 'recipient',     label: 'Recipient',  filterable: true  },
   { key: 'direction',     label: 'Direction',  filterable: true  },
   { key: 'status',        label: 'Status',     filterable: true  },
-  { key: 'invoiceDate',   label: 'Date',       filterable: false },
-  { key: 'dueDate',       label: 'Due',        filterable: false },
+  { key: 'dueDate',       label: 'Due Date',   filterable: false },
   { key: 'grandTotal',    label: 'Total',      filterable: false },
   { key: 'action',        label: 'Action'                        },
 ]
@@ -426,31 +435,53 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
   const updateInvoice = useUpdateGeneralInvoice()
   const deleteInvoice = useDeleteGeneralInvoice()
 
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [editing, setEditing]     = useState(null)
-  const [expanded, setExpanded]   = useState({})
-  const [filters, setFilters]     = useState({ invoiceNumber: '', recipient: '', direction: '', status: '' })
+  const [sheetOpen, setSheetOpen]   = useState(false)
+  const [editing, setEditing]       = useState(null)
+  const [statusSheet, setStatusSheet] = useState(null)
+  const [expanded, setExpanded]     = useState({})
+  const [filters, setFilters]       = useState({ invoiceNumber: '', recipient: '', direction: '', status: '' })
+  const [sourceType, setSourceType] = useState('go') // 'go' | 'manual'
+  const [formError, setFormError]   = useState('')
 
   const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm({
     defaultValues: { direction: 'expense', status: 'draft', items: [{ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 }] },
   })
   const { fields: invFields, append: appendInvItem, remove: removeInvItem } = useFieldArray({ control, name: 'items' })
   const watchItems = watch('items')
+  const watchGoId  = watch('generalOrder')
   const calcInvAmount = (idx) => (parseFloat(watchItems?.[idx]?.qty) || 0) * (parseFloat(watchItems?.[idx]?.unitPrice) || 0)
 
-  const handleInvProductSelect = (idx, productId) => {
-    const p = products.find((x) => x._id === productId)
-    setValue(`items.${idx}.product`, productId)
-    if (p) {
-      setValue(`items.${idx}.description`, p.name)
-      setValue(`items.${idx}.unitPrice`, p.price ?? 0)
-      setValue(`items.${idx}.unit`, p.unit || '')
+  // When a GO is selected in "From GO" mode, auto-fill recipient + items
+  const handleGoSelect = (goId) => {
+    setValue('generalOrder', goId)
+    const go = orders.find((o) => o._id === goId)
+    if (go) {
+      setValue('recipient', go.recipient?._id || go.recipient || '')
+      setValue('direction', go.direction === 'payable' ? 'expense' : 'income')
+      // replace items with GO items
+      const goItems = (go.items || []).map((it) => ({
+        product:     it.product?._id || it.product || '',
+        description: it.product?.name || it.description || '',
+        qty:         it.qty ?? 1,
+        unit:        it.unit || '',
+        unitPrice:   it.unitPrice ?? 0,
+        taxRate:     it.taxRate ?? 0,
+      }))
+      reset((prev) => ({ ...prev, generalOrder: goId, recipient: go.recipient?._id || go.recipient || '', direction: go.direction === 'payable' ? 'expense' : 'income', items: goItems }))
     }
   }
 
-  const openCreate = () => { setEditing(null); reset({ direction: 'expense', status: 'draft', items: [] }); setSheetOpen(true) }
+  const openCreate = () => {
+    setEditing(null)
+    setSourceType('go')
+    setFormError('')
+    reset({ generalOrder: '', direction: 'expense', status: 'draft', items: [{ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 }] })
+    setSheetOpen(true)
+  }
   const openEdit   = (inv) => {
     setEditing(inv)
+    setSourceType(inv.generalOrder ? 'go' : 'manual')
+    setFormError('')
     reset({
       ...inv,
       recipient:    inv.recipient?._id || inv.recipient,
@@ -459,7 +490,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
     })
     setSheetOpen(true)
   }
-  const close = () => { setSheetOpen(false); setEditing(null) }
+  const close = () => { setSheetOpen(false); setEditing(null); setFormError('') }
 
   onAdd.current = openCreate
 
@@ -481,6 +512,8 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
   }
 
   const onSubmit = async (data) => {
+    if (sourceType === 'go' && !data.generalOrder) { setFormError('Please select a General Order'); return }
+    setFormError('')
     try {
       const payload = { ...data, ...calcTotals(data.items) }
       if (!payload.generalOrder) delete payload.generalOrder
@@ -499,109 +532,133 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
 
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
 
-  const renderRow = (inv) => {
-    const isExpanded = !!expanded[inv._id]
-    return (
-      <>
+  const renderRow = (inv) => (
+    <React.Fragment key={inv._id}>
+      <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggleExpand(inv._id)}>
+        <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+          <ChevronDown size={14} className={`transition-transform ${expanded[inv._id] ? '' : '-rotate-90'}`} />
+        </td>
         <td className="px-4 py-3 font-mono text-sm text-zinc-900">{inv.invoiceNumber}</td>
+        <td className="px-4 py-3 font-mono text-sm text-zinc-500">{inv.generalOrder?.goNumber || '—'}</td>
         <td className="px-4 py-3 font-medium text-zinc-900">{inv.recipient?.name || '—'}</td>
         <td className="px-4 py-3">
-          <Badge variant={inv.direction === 'income' ? 'info' : 'warning'}>
-            {inv.direction}
-          </Badge>
+          <Badge variant={inv.direction === 'income' ? 'info' : 'warning'}>{inv.direction}</Badge>
         </td>
         <td className="px-4 py-3">
           <Badge variant={INV_STATUS_VARIANT[inv.status] || 'default'}>{inv.status}</Badge>
         </td>
-        <td className="px-4 py-3 text-sm text-zinc-500">{fmtDate(inv.invoiceDate)}</td>
         <td className="px-4 py-3 text-sm text-zinc-500">{fmtDate(inv.dueDate)}</td>
         <td className="px-4 py-3 font-semibold text-zinc-900">{fmt(inv.grandTotal, sym)}</td>
         <td className="px-4 py-3">
-          <div className="flex items-center gap-1">
-            {inv.items?.length > 0 && (
-              <button onClick={() => toggleExpand(inv._id)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 transition-colors">
-                <ChevronDown size={14} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
-              </button>
-            )}
-            {inv.status !== 'paid' && (
-              <button
-                title="Mark as Paid"
-                onClick={() => updateInvoice.mutate({ id: inv._id, data: { status: 'paid' } })}
-                className="p-1.5 rounded-lg hover:bg-green-50 text-zinc-500 hover:text-green-600 transition-colors"
-              >
-                <FileText size={14} />
-              </button>
-            )}
-            <button onClick={() => openEdit(inv)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors">
-              <Pencil size={14} />
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setStatusSheet(inv)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status">
+              <RefreshCw size={14} />
             </button>
-            <button onClick={() => deleteInvoice.mutate(inv._id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-500 hover:text-red-600 transition-colors">
+            <button onClick={() => deleteInvoice.mutate(inv._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
               <Trash2 size={14} />
             </button>
           </div>
         </td>
-        {isExpanded && inv.items?.length > 0 && (
-          <tr className="bg-zinc-50 border-b border-zinc-100">
-            <td />
-            <td colSpan={7} className="px-4 py-3">
-              <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
-                <thead>
-                  <tr className="border-b border-zinc-200">
-                    <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Item</th>
-                    <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Qty</th>
-                    <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Unit Price</th>
-                    <th className="px-3 py-2 text-left font-semibold text-zinc-500">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inv.items.map((it, i, arr) => (
-                    <tr key={i} className={i < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
-                      <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{it.product?.name || it.description || '—'}</td>
-                      <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{it.qty}</td>
-                      <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{fmt(it.unitPrice, sym)}</td>
-                      <td className="px-3 py-2 font-semibold text-zinc-900">{fmt(it.amount, sym)}</td>
-                    </tr>
+      </tr>
+      {expanded[inv._id] && (
+        <tr className="border-b border-zinc-100 bg-zinc-50">
+          <td /><td colSpan={8} className="px-4 py-3">
+            <div className="flex gap-6 text-xs text-zinc-500 mb-2">
+              <span>Subtotal: <strong className="text-zinc-800">{sym}{(inv.subtotal || 0).toFixed(2)}</strong></span>
+              <span>Tax: <strong className="text-zinc-800">{sym}{(inv.taxAmount || 0).toFixed(2)}</strong></span>
+              <span>Total: <strong className="text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</strong></span>
+              {inv.dueDate && <span>Due: <strong className="text-zinc-800">{fmtDate(inv.dueDate)}</strong></span>}
+            </div>
+            <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+              <thead>
+                <tr className="border-b border-zinc-200">
+                  {['Product / Description', 'Qty', 'Unit Price', 'Tax %', 'Amount', 'Unit'].map((h, i, arr) => (
+                    <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
                   ))}
-                </tbody>
-              </table>
-            </td>
-          </tr>
-        )}
-      </>
-    )
-  }
+                </tr>
+              </thead>
+              <tbody>
+                {(inv.items || []).map((it, i, arr) => (
+                  <tr key={i} className={i < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                    <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{it.product?.name || it.description || '—'}</td>
+                    <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{it.qty}</td>
+                    <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{(it.unitPrice ?? 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{it.taxRate ?? 0}%</td>
+                    <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{sym}{(it.amount ?? 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-zinc-600">{it.unit || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      )}
+    </React.Fragment>
+  )
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <DataTable
-        columns={INVOICE_COLS}
-        data={filtered}
-        filters={filters}
-        onFilterChange={setFilter}
-        isLoading={isLoading}
-        renderRow={renderRow}
-        emptyState={<EmptyState title="No invoices" description="Create your first general invoice" action={{ label: 'New Invoice', onClick: openCreate }} />}
-      />
+      {!isLoading && invoices.length === 0 ? (
+        <EmptyState title="No invoices" description="Create your first general invoice"
+          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create Invoice</Button>} />
+      ) : (
+        <DataTable
+          columns={INVOICE_COLS}
+          data={filtered}
+          filters={filters}
+          onFilterChange={setFilter}
+          isLoading={isLoading}
+          renderRow={renderRow}
+          leadingCol={true}
+          emptyMessage="No invoices match filters"
+        />
+      )}
 
-      <BottomSheet open={sheetOpen} onClose={close} title={editing ? 'Edit Invoice' : 'New General Invoice'}>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-zinc-700">Recipient <span className="text-red-500">*</span></label>
-            <select {...register('recipient', { required: 'Recipient required' })}
-              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
-              <option value="">Select recipient…</option>
-              {recipients.map((r) => <option key={r._id} value={r._id}>{r.name}</option>)}
-            </select>
-            {errors.recipient && <p className="text-xs text-red-500">{errors.recipient.message}</p>}
-          </div>
+      <BottomSheet open={sheetOpen} onClose={close} title={editing ? 'Edit Invoice' : 'New General Invoice'}
+        footer={
+          <Button fullWidth loading={createInvoice.isPending || updateInvoice.isPending} onClick={handleSubmit(onSubmit)}>
+            {editing ? 'Save' : 'Create Invoice'}
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {/* Source type toggle (only on create) */}
+          {!editing && (
+            <div className="flex gap-1 bg-zinc-100 rounded-xl p-0.5">
+              {[['go', 'From GO'], ['manual', 'Manual']].map(([k, label]) => (
+                <button key={k} type="button"
+                  onClick={() => { setSourceType(k); setFormError(''); reset({ generalOrder: '', direction: 'expense', status: 'draft', items: [{ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 }] }) }}
+                  className={['flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all', sourceType === k ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400'].join(' ')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-zinc-700">Linked Order (optional)</label>
-            <select {...register('generalOrder')} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
-              <option value="">No linked order</option>
-              {orders.map((o) => <option key={o._id} value={o._id}>{o.goNumber} — {o.recipient?.name}</option>)}
-            </select>
-          </div>
+          {/* From GO: GO selector (auto-fills recipient + items) */}
+          {sourceType === 'go' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700">General Order <span className="text-red-500">*</span></label>
+              <select value={watchGoId || ''} onChange={(e) => handleGoSelect(e.target.value)}
+                className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
+                <option value="">Select GO…</option>
+                {orders.map((o) => <option key={o._id} value={o._id}>{o.goNumber} — {o.recipient?.name || '?'}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* Manual: recipient picker */}
+          {sourceType === 'manual' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700">Recipient <span className="text-red-500">*</span></label>
+              <select {...register('recipient', { required: 'Recipient required' })}
+                className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
+                <option value="">Select recipient…</option>
+                {recipients.map((r) => <option key={r._id} value={r._id}>{r.name}</option>)}
+              </select>
+              {errors.recipient && <p className="text-xs text-red-500">{errors.recipient.message}</p>}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -623,59 +680,75 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Invoice Date" type="date" {...register('invoiceDate')} />
-            <Input label="Due Date" type="date" {...register('dueDate')} />
-          </div>
+          <Input label="Due Date" type="date" {...register('dueDate')} />
 
           <Input label="Notes" placeholder="Optional notes" {...register('notes')} />
 
-          {/* Items */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-zinc-700">Items</label>
-              <button type="button"
-                onClick={() => appendInvItem({ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 })}
-                className="text-xs font-medium text-zinc-600 flex items-center gap-1 hover:text-zinc-900">
-                <Plus size={13} /> Add Item
-              </button>
-            </div>
-            <div className="space-y-3">
-              {invFields.map((field, idx) => (
-                <div key={field.id} className="border border-zinc-200 rounded-xl p-3 space-y-2 relative overflow-visible">
-                  {invFields.length > 1 && (
-                    <button type="button" onClick={() => removeInvItem(idx)} className="absolute top-2 right-2 p-1 text-zinc-400 hover:text-red-500">
-                      <Minus size={14} />
-                    </button>
-                  )}
-                  <ProductPicker
-                    products={products}
-                    value={watchItems?.[idx]?.product || ''}
-                    onChange={(id) => handleInvProductSelect(idx, id)}
-                    sym={sym}
-                  />
-                  <input type="hidden" {...register(`items.${idx}.unit`)} />
-                  <Input label="Description" {...register(`items.${idx}.description`)} placeholder="Item description" />
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input label="Qty"        type="number" min="0" step="0.01" {...register(`items.${idx}.qty`)} />
-                    <Input label="Unit Price" type="number" min="0" step="0.01" {...register(`items.${idx}.unitPrice`)} />
-                    <Input label="Tax %"      type="number" min="0" step="0.1"  {...register(`items.${idx}.taxRate`)} />
+          {/* Items — only shown in Manual mode */}
+          {sourceType === 'manual' && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-zinc-700">Items</label>
+                <button type="button"
+                  onClick={() => appendInvItem({ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 })}
+                  className="text-xs font-medium text-zinc-600 flex items-center gap-1 hover:text-zinc-900 outline-none focus:outline-none">
+                  <Plus size={13} /> Add Item
+                </button>
+              </div>
+              <div className="space-y-3">
+                {invFields.map((field, idx) => (
+                  <div key={field.id} className="border border-zinc-200 rounded-xl p-3 space-y-2 relative">
+                    {invFields.length > 1 && (
+                      <button type="button" onClick={() => removeInvItem(idx)} className="absolute top-2 right-2 p-1 text-zinc-400 hover:text-red-500"><Minus size={14} /></button>
+                    )}
+                    <input {...register(`items.${idx}.description`)} placeholder="Description *"
+                      className="w-full h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                    <div className="grid grid-cols-4 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">Qty</label>
+                        <input type="number" min="0" step="0.01" {...register(`items.${idx}.qty`)}
+                          className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">Unit</label>
+                        <input placeholder="pcs" {...register(`items.${idx}.unit`)}
+                          className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">Unit Price</label>
+                        <input type="number" min="0" step="0.01" {...register(`items.${idx}.unitPrice`)}
+                          className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-500">Tax %</label>
+                        <input type="number" min="0" step="0.1" {...register(`items.${idx}.taxRate`)}
+                          className="h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-400 text-right">
+                      Amount: <span className="font-semibold text-zinc-800">{sym}{calcInvAmount(idx).toFixed(2)}</span>
+                    </p>
                   </div>
-                  <p className="text-xs text-zinc-500 text-right">
-                    Amount: <span className="font-semibold text-zinc-900">{sym}{calcInvAmount(idx).toFixed(2)}</span>
-                  </p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={close}>Cancel</Button>
-            <Button type="submit" className="flex-1" disabled={createInvoice.isPending || updateInvoice.isPending}>
-              {editing ? 'Save' : 'Create Invoice'}
-            </Button>
-          </div>
-        </form>
+          {formError && <p className="text-xs text-red-500 font-medium">{formError}</p>}
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Invoice Status">
+        <div className="grid grid-cols-2 gap-2 pb-2">
+          {['draft', 'sent', 'paid', 'overdue', 'cancelled'].map((s) => (
+            <button key={s} onClick={async () => { await updateInvoice.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }}
+              className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
+                statusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50',
+              ].join(' ')}>
+              {s}
+            </button>
+          ))}
+        </div>
       </BottomSheet>
     </div>
   )
@@ -788,15 +861,20 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <DataTable
-        columns={RECURRING_COLS}
-        data={filtered}
-        filters={filters}
-        onFilterChange={setFilter}
-        isLoading={isLoading}
-        renderRow={renderRow}
-        emptyState={<EmptyState title="No recurring entries" description="Set up subscriptions and renewals" action={{ label: 'Add Recurring', onClick: openCreate }} />}
-      />
+      {!isLoading && recurrings.length === 0 ? (
+        <EmptyState title="No recurring entries" description="Set up subscriptions and renewals"
+          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recurring</Button>} />
+      ) : (
+        <DataTable
+          columns={RECURRING_COLS}
+          data={filtered}
+          filters={filters}
+          onFilterChange={setFilter}
+          isLoading={isLoading}
+          renderRow={renderRow}
+          emptyMessage="No recurring entries match filters"
+        />
+      )}
 
       <BottomSheet open={sheetOpen} onClose={close} title={editing ? 'Edit Recurring' : 'New Recurring'}>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">

@@ -11,8 +11,10 @@ import { useCreateWishlist } from '../../hooks/useWishlists'
 import { useCreateInventory } from '../../hooks/useInventory'
 import { useCreatePurchaseOrder } from '../../hooks/usePurchaseOrders'
 import { useCreateSalesOrder } from '../../hooks/useSalesOrders'
+import { useCreateGeneralOrder } from '../../hooks/useGeneralOrders'
 import { useVendors } from '../../hooks/useVendors'
 import { useCustomers } from '../../hooks/useCustomers'
+import { useRecipients } from '../../hooks/useRecipients'
 import { useIsBusiness } from '../../hooks/useActiveGroupType'
 import Button from '../ui/Button'
 
@@ -242,18 +244,26 @@ export default function CartPanel() {
   const { mutate: upsertInventory } = useCreateInventory()
   const { mutate: createPO,       isPending: placingPO      } = useCreatePurchaseOrder()
   const { mutate: createSO,       isPending: placingSO      } = useCreateSalesOrder()
-  const { data: vendors   = [] } = useVendors()
-  const { data: customers = [] } = useCustomers()
+  const { mutate: createGO,       isPending: placingGO      } = useCreateGeneralOrder()
+  const { data: vendors     = [] } = useVendors()
+  const { data: customers   = [] } = useCustomers()
+  const { data: recipients  = [] } = useRecipients()
   const isBusiness = useIsBusiness()
   const sym = useCurrencySymbol()
 
   const members = (group?.members || []).filter((m) => m._id || m)
   const userId  = user?._id ? String(user._id) : (user?.id ? String(user.id) : '')
 
-  // ── General order fields (personal + business general tab)
+  // ── Personal General order fields
   const [orderName, setOrderName] = useState('')
   const [paidBy,    setPaidBy]    = useState(() => userId)
   const [orderDate, setOrderDate] = useState(new Date().toISOString().split('T')[0])
+
+  // ── Business General Order fields
+  const [goRecipient,  setGoRecipient]  = useState('')
+  const [goDirection,  setGoDirection]  = useState('payable')
+  const [goOrderDate,  setGoOrderDate]  = useState(new Date().toISOString().split('T')[0])
+  const [goNotes,      setGoNotes]      = useState('')
 
   // ── Business order type
   const [orderType, setOrderType] = useState('general')
@@ -273,6 +283,10 @@ export default function CartPanel() {
       setOrderName(`order-${String(Math.floor(1000 + Math.random() * 9000))}`)
       setOrderDate(new Date().toISOString().split('T')[0])
       setPaidBy(userId || '')
+      setGoRecipient('')
+      setGoDirection('payable')
+      setGoOrderDate(new Date().toISOString().split('T')[0])
+      setGoNotes('')
       setOrderType('general')
       setVendorId('')
       setCustomerId('')
@@ -303,22 +317,43 @@ export default function CartPanel() {
   const handleGeneral = () => {
     if (!items.length) return
     setOrderError('')
-    const total = isBusiness ? grandTotal : personalTotal
-    createOrder({
-      name: orderName, date: orderDate, groupId: activeGroupId,
-      createdBy: userId, paidBy, totalPrice: total.toFixed(2),
-      items: items.map((i) => ({
-        product: i._id, unit: i.unit, price: i._price, count: i.quantity,
-        splitType: i._splitType, splitAmong: i._splitAmong, inventory: i.inventory ?? false,
-      })),
-    }, {
-      onSuccess: () => {
-        const tracked = items.filter((i) => i.inventory)
-        if (tracked.length) upsertInventory({ groupId: activeGroupId, inventoryData: tracked.map((i) => ({ product: i._id, price: i._price, splitAmong: i._splitAmong, quantityAvailable: i.quantity })) })
-        afterSuccess()
-      },
-      onError: (err) => setOrderError(err?.response?.data?.message || err?.message || 'Failed to place order'),
-    })
+    if (isBusiness) {
+      // Business → create a General Order
+      if (!goRecipient) { setOrderError('Please select a recipient'); return }
+      const goItems = buildBusinessItems()
+      const goSubtotal  = goItems.reduce((s, i) => s + i.amount, 0)
+      const goTax       = goItems.reduce((s, i) => s + i.amount * (i.taxRate / 100), 0)
+      createGO({
+        recipient:  goRecipient,
+        direction:  goDirection,
+        items:      goItems,
+        subtotal:   goSubtotal,
+        taxAmount:  goTax,
+        grandTotal: goSubtotal + goTax,
+        orderDate:  goOrderDate,
+        notes:      goNotes,
+      }, {
+        onSuccess: afterSuccess,
+        onError: (err) => setOrderError(err?.response?.data?.message || err?.message || 'Failed to create General Order'),
+      })
+    } else {
+      // Personal → legacy order
+      createOrder({
+        name: orderName, date: orderDate, groupId: activeGroupId,
+        createdBy: userId, paidBy, totalPrice: personalTotal.toFixed(2),
+        items: items.map((i) => ({
+          product: i._id, unit: i.unit, price: i._price, count: i.quantity,
+          splitType: i._splitType, splitAmong: i._splitAmong, inventory: i.inventory ?? false,
+        })),
+      }, {
+        onSuccess: () => {
+          const tracked = items.filter((i) => i.inventory)
+          if (tracked.length) upsertInventory({ groupId: activeGroupId, inventoryData: tracked.map((i) => ({ product: i._id, price: i._price, splitAmong: i._splitAmong, quantityAvailable: i.quantity })) })
+          afterSuccess()
+        },
+        onError: (err) => setOrderError(err?.response?.data?.message || err?.message || 'Failed to place order'),
+      })
+    }
   }
 
   const handlePO = () => {
@@ -434,8 +469,8 @@ export default function CartPanel() {
               </div>
             )}
 
-            {/* General fields (always shown for personal; shown on 'general' tab for business) */}
-            {(!isBusiness || orderType === 'general') && (
+            {/* Personal General fields */}
+            {!isBusiness && (
               <div className="grid grid-cols-3 gap-2">
                 <div className="flex flex-col gap-1">
                   <label className="text-[11px] text-zinc-500">Order name</label>
@@ -453,6 +488,40 @@ export default function CartPanel() {
                   <label className="text-[11px] text-zinc-500">Date</label>
                   <input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)}
                     className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-900 outline-none focus:border-zinc-900" />
+                </div>
+              </div>
+            )}
+
+            {/* Business General Order fields */}
+            {isBusiness && orderType === 'general' && (
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] text-zinc-500">Recipient *</label>
+                    <select value={goRecipient} onChange={(e) => setGoRecipient(e.target.value)}
+                      className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-900 outline-none focus:border-zinc-900">
+                      <option value="">— Select —</option>
+                      {recipients.map((r) => <option key={r._id} value={r._id}>{r.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] text-zinc-500">Direction</label>
+                    <select value={goDirection} onChange={(e) => setGoDirection(e.target.value)}
+                      className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-900 outline-none focus:border-zinc-900">
+                      <option value="payable">We pay</option>
+                      <option value="receivable">We receive</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[11px] text-zinc-500">Order Date</label>
+                    <input type="date" value={goOrderDate} onChange={(e) => setGoOrderDate(e.target.value)}
+                      className="h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-900 outline-none focus:border-zinc-900" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] text-zinc-500">Notes (optional)</label>
+                  <textarea value={goNotes} onChange={(e) => setGoNotes(e.target.value)} rows={2} placeholder="Any notes…"
+                    className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-900 outline-none focus:border-zinc-900 resize-none" />
                 </div>
               </div>
             )}
@@ -513,11 +582,14 @@ export default function CartPanel() {
             {orderError && <p className="text-xs text-red-500 font-medium">{orderError}</p>}
 
             {/* Action buttons */}
-            {(!isBusiness || orderType === 'general') && (
+            {!isBusiness && (
               <div className="grid grid-cols-2 gap-2">
                 <Button fullWidth loading={placingOrder} onClick={handleGeneral}>Place Order</Button>
                 <Button fullWidth variant="secondary" loading={savingWishlist} onClick={handleWishlist}>Add to Wish List</Button>
               </div>
+            )}
+            {isBusiness && orderType === 'general' && (
+              <Button fullWidth loading={placingGO} onClick={handleGeneral}>Create General Order</Button>
             )}
             {isBusiness && orderType === 'po' && (
               <Button fullWidth loading={placingPO} onClick={handlePO}>Create Purchase Order</Button>
