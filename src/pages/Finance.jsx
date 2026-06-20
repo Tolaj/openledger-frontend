@@ -311,15 +311,16 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         {!hasItems && (
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Category</label>
-            <CategoryCombobox
-              globalCategories={categories}
-              value={categories.find((c) => c._id === watchedCategory)?.name || ''}
-              categoryRef={watchedCategory || ''}
-              onChange={({ name, categoryRef }) => {
-                const match = categories.find((c) => c._id === categoryRef || c.name === name)
-                setValue('category', match?._id || '')
-              }}
-            />
+            <select
+              value={watchedCategory || ''}
+              onChange={(e) => setValue('category', e.target.value)}
+              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
+            >
+              <option value="">No category</option>
+              {categories.map((c) => (
+                <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
+              ))}
+            </select>
           </div>
         )}
 
