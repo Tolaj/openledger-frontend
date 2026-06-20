@@ -11,7 +11,7 @@ import { ChevronDown, Search, X } from 'lucide-react'
  *   onChange  — (productId) => void
  *   sym       — currency symbol string
  */
-export default function ProductPicker({ products = [], value, onChange, sym = '₹' }) {
+export default function ProductPicker({ products = [], value, onChange, sym = '₹', error }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [rect, setRect] = useState(null)
@@ -62,7 +62,7 @@ export default function ProductPicker({ products = [], value, onChange, sym = '�
         onClick={openDropdown}
         className={[
           'h-9 w-full flex items-center justify-between gap-2 rounded-xl border bg-white px-3 text-sm text-zinc-700 transition-colors',
-          open ? 'border-zinc-900' : 'border-zinc-200 hover:border-zinc-300',
+          error ? 'border-red-400 bg-red-50' : open ? 'border-zinc-900' : 'border-zinc-200 hover:border-zinc-300',
         ].join(' ')}
       >
         {selected ? (
@@ -76,6 +76,8 @@ export default function ProductPicker({ products = [], value, onChange, sym = '�
         )}
         <ChevronDown size={14} className={`flex-shrink-0 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
+
+      {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
 
       {/* Portal dropdown */}
       {open && rect && createPortal(

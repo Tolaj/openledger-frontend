@@ -755,15 +755,20 @@ function BudgetForm({ open, onClose, editing, groupId }) {
           </div>
           {fields.map((field, idx) => (
             <div key={field.id} className="flex gap-2 items-center">
-              <CategoryCombobox
-                globalCategories={globalCategories}
-                value={watchedCategories[idx]?.name || ''}
-                categoryRef={watchedCategories[idx]?.categoryRef || ''}
-                onChange={({ name, categoryRef }) => {
-                  setValue(`categories.${idx}.name`, name)
-                  setValue(`categories.${idx}.categoryRef`, categoryRef)
+              <select
+                value={watchedCategories[idx]?.categoryRef || ''}
+                onChange={(e) => {
+                  const cat = globalCategories.find((c) => c._id === e.target.value)
+                  setValue(`categories.${idx}.categoryRef`, cat?._id || '')
+                  setValue(`categories.${idx}.name`, cat?.name || '')
                 }}
-              />
+                className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white"
+              >
+                <option value="">Select category…</option>
+                {globalCategories.map((c) => (
+                  <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
+                ))}
+              </select>
               <input
                 {...register(`categories.${idx}.allocatedAmount`)}
                 type="number" step="0.01" placeholder="Budget"

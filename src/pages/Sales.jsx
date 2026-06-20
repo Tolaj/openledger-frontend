@@ -203,10 +203,11 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ soNumber: '', customer: '', status: '' })
   const [dropSel, setDropSel] = useState({})
+  const [itemErrors, setItemErrors] = useState([])
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
 
   const { register, handleSubmit, reset, watch, control, setValue, formState: { errors } } = useForm({
-    defaultValues: { customer: '', items: [{ product: '', description: '', qty: 1, unitPrice: 0, taxRate: 0 }], deliveryDate: '', notes: '' }
+    defaultValues: { customer: '', items: [{ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 }], deliveryDate: '', notes: '' }
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watch('items')
@@ -218,6 +219,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
     if (p) {
       setValue(`items.${idx}.description`, p.name)
       setValue(`items.${idx}.unitPrice`, p.price ?? 0)
+      setValue(`items.${idx}.unit`, p.unit || '')
     }
   }
 
@@ -247,6 +249,9 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   })
 
   const onSubmit = async (data) => {
+    const errs = data.items.map((it) => !it.product ? 'Please select a product from the catalog' : '')
+    setItemErrors(errs)
+    if (errs.some(Boolean)) return
     const items = data.items.map((it, i) => {
       const { product, ...rest } = it
       return { ...(product ? { product } : {}), ...rest, qty: parseFloat(it.qty), unitPrice: parseFloat(it.unitPrice), taxRate: parseFloat(it.taxRate) || 0, amount: calcAmount(i) }
@@ -386,7 +391,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-zinc-700">Items</label>
-              <button type="button" onClick={() => append({ product: '', description: '', qty: 1, unitPrice: 0, taxRate: 0 })}
+              <button type="button" onClick={() => append({ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 })}
                 className="text-xs font-medium text-zinc-600 flex items-center gap-1 hover:text-zinc-900">
                 <Plus size={13} /> Add Item
               </button>
@@ -401,9 +406,11 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
                   <ProductPicker
                     products={products}
                     value={watchItems?.[idx]?.product || ''}
-                    onChange={(id) => handleProductSelect(idx, id)}
+                    onChange={(id) => { handleProductSelect(idx, id); setItemErrors((e) => { const n = [...e]; n[idx] = ''; return n }) }}
                     sym={sym}
+                    error={itemErrors[idx]}
                   />
+                  <input type="hidden" {...register(`items.${idx}.unit`)} />
                   <Input label="Description" {...register(`items.${idx}.description`)} placeholder="Item description" />
                   <div className="grid grid-cols-3 gap-2">
                     <Input label="Qty" type="number" min="0" step="0.01" {...register(`items.${idx}.qty`)} />
