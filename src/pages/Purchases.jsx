@@ -478,22 +478,39 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
   const [receivedDate, setReceivedDate] = useState('')
   const [notes, setNotes] = useState('')
   const [formError, setFormError] = useState('')
+  const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ grnNumber: '', po: '', vendor: '', status: '' })
   const [dropSel, setDropSel] = useState({})
+  const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
 
   // When PO changes, pre-populate items from the PO
   const handlePOChange = (poId) => {
     setSelectedPO(poId)
     const po = purchaseOrders.find((p) => p._id === poId)
     if (po?.items) {
-      setGrnItems(po.items.map((it) => ({
-        product: it.product?._id || it.product || '',
-        description: it.description || it.product?.name || '',
-        qtyOrdered: it.qty || 0,
-        qtyReceived: it.qty || 0,
-        unit: it.unit || it.product?.unit || '',
-        unitPrice: it.unitPrice || 0,
-      })))
+      // Sum qty already received across all prior GRNs for this PO
+      const priorGRNs = grns.filter((g) => (g.purchaseOrder?._id || g.purchaseOrder) === poId)
+      const alreadyReceived = {}
+      for (const g of priorGRNs) {
+        for (const it of g.items) {
+          const key = it.product?._id || it.product || it.description
+          alreadyReceived[key] = (alreadyReceived[key] || 0) + (it.qtyReceived || 0)
+        }
+      }
+
+      setGrnItems(po.items.map((it) => {
+        const productKey = it.product?._id || it.product || ''
+        const received = alreadyReceived[productKey] || 0
+        const remaining = Math.max(0, (it.qty || 0) - received)
+        return {
+          product: productKey,
+          description: it.description || it.product?.name || '',
+          qtyOrdered: it.qty || 0,
+          qtyReceived: remaining,
+          unit: it.unit || it.product?.unit || '',
+          unitPrice: it.unitPrice || 0,
+        }
+      }).filter((it) => it.qtyReceived > 0)) // hide fully received lines
     } else {
       setGrnItems([])
     }
@@ -602,18 +619,50 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
             dropSel={dropSel}
             onDropChange={setDrop}
             emptyMessage="No GRNs match the filter"
+            leadingCol={true}
             renderRow={(g) => (
-              <tr key={g._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-                <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{g.grnNumber}</td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{g.purchaseOrder?.poNumber || '—'}</td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{g.purchaseOrder?.vendor?.name || '—'}</td>
-                <td className="px-4 py-3 border-r border-zinc-100"><Badge variant={GRN_STATUS_VARIANT[g.status] || 'default'}>{g.status}</Badge></td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{g.items?.length || 0}</td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : '—'}</td>
-                <td className="px-4 py-3">
-                  <button onClick={() => onDelete(g._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
-                </td>
-              </tr>
+              <React.Fragment key={g._id}>
+                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggleExpand(g._id)}>
+                  <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+                    <ChevronDown size={14} className={`transition-transform ${expanded[g._id] ? '' : '-rotate-90'}`} />
+                  </td>
+                  <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{g.grnNumber}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{g.purchaseOrder?.poNumber || '—'}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{g.purchaseOrder?.vendor?.name || '—'}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100"><Badge variant={GRN_STATUS_VARIANT[g.status] || 'default'}>{g.status}</Badge></td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{g.items?.length || 0}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : '—'}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(g._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                  </td>
+                </tr>
+                {expanded[g._id] && (
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    <td /><td colSpan={7} className="px-4 py-3">
+                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                        <thead>
+                          <tr className="border-b border-zinc-200">
+                            {['Product / Description', 'Qty Received', 'Qty Ordered', 'Unit Price', 'Unit'].map((h, i, arr) => (
+                              <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(g.items || []).map((item, idx, arr) => (
+                            <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                              <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || item.description || '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.qtyReceived ?? '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.qtyOrdered ?? '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.unitPrice != null ? `${sym}${item.unitPrice.toFixed(2)}` : '—'}</td>
+                              <td className="px-3 py-2 text-zinc-600">{item.unit || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             )}
           />
         </>

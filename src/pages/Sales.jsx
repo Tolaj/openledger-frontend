@@ -476,21 +476,38 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
   const [deliveredDate, setDeliveredDate] = useState('')
   const [notes, setNotes] = useState('')
   const [formError, setFormError] = useState('')
+  const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ deliveryNumber: '', so: '', customer: '', status: '' })
   const [dropSel, setDropSel] = useState({})
+  const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
 
   const handleSOChange = (soId) => {
     setSelectedSO(soId)
     const so = salesOrders.find((s) => s._id === soId)
     if (so?.items) {
-      setDelItems(so.items.map((it) => ({
-        product: it.product?._id || it.product || '',
-        description: it.description || it.product?.name || '',
-        qtyOrdered: it.qty || 0,
-        qtyDelivered: it.qty || 0,
-        unit: it.unit || it.product?.unit || '',
-        unitPrice: it.unitPrice || 0,
-      })))
+      // Sum qty already delivered across all prior deliveries for this SO
+      const priorDeliveries = deliveries.filter((d) => (d.salesOrder?._id || d.salesOrder) === soId)
+      const alreadyDelivered = {}
+      for (const d of priorDeliveries) {
+        for (const it of d.items) {
+          const key = it.product?._id || it.product || it.description
+          alreadyDelivered[key] = (alreadyDelivered[key] || 0) + (it.qtyDelivered || 0)
+        }
+      }
+
+      setDelItems(so.items.map((it) => {
+        const productKey = it.product?._id || it.product || ''
+        const delivered = alreadyDelivered[productKey] || 0
+        const remaining = Math.max(0, (it.qty || 0) - delivered)
+        return {
+          product: productKey,
+          description: it.description || it.product?.name || '',
+          qtyOrdered: it.qty || 0,
+          qtyDelivered: remaining,
+          unit: it.unit || it.product?.unit || '',
+          unitPrice: it.unitPrice || 0,
+        }
+      }).filter((it) => it.qtyDelivered > 0)) // hide fully delivered lines
     } else {
       setDelItems([])
     }
@@ -599,18 +616,49 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
             dropSel={dropSel}
             onDropChange={setDrop}
             emptyMessage="No deliveries match the filter"
+            leadingCol={true}
             renderRow={(d) => (
-              <tr key={d._id} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors">
-                <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{d.deliveryNumber}</td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{d.salesOrder?.soNumber || '—'}</td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{d.salesOrder?.customer?.name || '—'}</td>
-                <td className="px-4 py-3 border-r border-zinc-100"><Badge variant={DEL_STATUS_VARIANT[d.status] || 'default'}>{d.status}</Badge></td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{d.items?.length || 0}</td>
-                <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{d.deliveredDate ? new Date(d.deliveredDate).toLocaleDateString() : '—'}</td>
-                <td className="px-4 py-3">
-                  <button onClick={() => onDelete(d._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
-                </td>
-              </tr>
+              <React.Fragment key={d._id}>
+                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors cursor-pointer" onClick={() => toggleExpand(d._id)}>
+                  <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+                    <ChevronDown size={14} className={`transition-transform ${expanded[d._id] ? '' : '-rotate-90'}`} />
+                  </td>
+                  <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{d.deliveryNumber}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{d.salesOrder?.soNumber || '—'}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{d.salesOrder?.customer?.name || '—'}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100"><Badge variant={DEL_STATUS_VARIANT[d.status] || 'default'}>{d.status}</Badge></td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{d.items?.length || 0}</td>
+                  <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{d.deliveredDate ? new Date(d.deliveredDate).toLocaleDateString() : '—'}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(d._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                  </td>
+                </tr>
+                {expanded[d._id] && (
+                  <tr className="border-b border-zinc-100 bg-zinc-50">
+                    <td /><td colSpan={7} className="px-4 py-3">
+                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                        <thead>
+                          <tr className="border-b border-zinc-200">
+                            {['Product / Description', 'Qty Delivered', 'Qty Ordered', 'Unit'].map((h, i, arr) => (
+                              <th key={h} className={`px-3 py-2 text-left text-xs font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-200' : ''}`}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(d.items || []).map((item, idx, arr) => (
+                            <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                              <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{item.product?.name || item.description || '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.qtyDelivered ?? '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{item.qtyOrdered ?? '—'}</td>
+                              <td className="px-3 py-2 text-zinc-600">{item.unit || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             )}
           />
         </>
