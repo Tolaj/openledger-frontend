@@ -199,6 +199,19 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
   const paidBy = watch('paidBy')
   const hasItems = watchedItems.length > 0
 
+  // Auto-sum items → amount field whenever any item field changes
+  useEffect(() => {
+    if (!watchedItems.length) return
+    const total = watchedItems.reduce((sum, it) => {
+      const qty = parseFloat(it?.qty) || 0
+      const unitPrice = parseFloat(it?.unitPrice) || 0
+      const taxRate = parseFloat(it?.taxRate) || 0
+      return sum + qty * unitPrice * (1 + taxRate / 100)
+    }, 0)
+    setValue('amount', parseFloat(total.toFixed(2)), { shouldValidate: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedItems)])
+
   // when editing populate form
   useEffect(() => {
     if (!open) return
