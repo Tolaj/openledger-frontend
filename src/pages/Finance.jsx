@@ -249,6 +249,10 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
   }
 
   const onSubmit = (data) => {
+    if (data.type === 'expense' && !data.category && !hasItems) {
+      setValue('category', '', { shouldValidate: true })
+      return
+    }
     const payload = {
       ...data,
       amount: parseFloat(data.amount),
@@ -311,17 +315,22 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         {/* Category — hidden when items are added */}
         {!hasItems && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-zinc-700">Category</label>
+            <label className="text-sm font-medium text-zinc-700">
+              Category {watch('type') === 'expense' && <span className="text-red-500">*</span>}
+            </label>
             <select
               value={watchedCategory || ''}
-              onChange={(e) => setValue('category', e.target.value)}
-              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
+              onChange={(e) => setValue('category', e.target.value, { shouldValidate: true })}
+              className={`h-11 px-3 rounded-xl border bg-white text-sm outline-none focus:border-zinc-900 ${watch('type') === 'expense' && !watchedCategory ? 'border-red-300' : 'border-zinc-300'}`}
             >
-              <option value="">No category</option>
+              <option value="">— Select category —</option>
               {categories.map((c) => (
                 <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
               ))}
             </select>
+            {watch('type') === 'expense' && !watchedCategory && (
+              <p className="text-xs text-zinc-400">Category is required for expenses so budgets can track spending correctly.</p>
+            )}
           </div>
         )}
 
@@ -789,12 +798,15 @@ function BudgetForm({ open, onClose, editing, groupId }) {
         {/* Categories */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700">Categories</label>
+            <label className="text-sm font-medium text-zinc-700">Category Budgets</label>
             <button type="button" onClick={() => append({ categoryRef: '', name: '', allocatedAmount: '' })}
               className="text-xs text-zinc-500 underline flex items-center gap-1">
               <Plus size={12} /> Add
             </button>
           </div>
+          <p className="text-xs text-zinc-400 -mt-1">
+            These must match the categories you pick when adding expense transactions.
+          </p>
           {fields.map((field, idx) => (
             <div key={field.id} className="flex gap-2 items-center">
               <select
@@ -813,7 +825,7 @@ function BudgetForm({ open, onClose, editing, groupId }) {
               </select>
               <input
                 {...register(`categories.${idx}.allocatedAmount`)}
-                type="number" step="0.01" placeholder="Budget"
+                type="number" step="0.01" placeholder="Amount"
                 className="w-28 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right bg-white"
               />
               <button type="button" onClick={() => remove(idx)} className="p-1 text-zinc-400 active:text-red-500 flex-shrink-0">
@@ -822,8 +834,24 @@ function BudgetForm({ open, onClose, editing, groupId }) {
             </div>
           ))}
           {fields.length === 0 && (
-            <p className="text-xs text-zinc-400 text-center py-2">No categories — spending tracked at budget level only</p>
+            <p className="text-xs text-zinc-400 text-center py-2">No categories — all spending tracked at budget level only</p>
           )}
+          {/* Allocation vs total warning */}
+          {fields.length > 0 && (() => {
+            const allocated = watchedCategories.reduce((s, c) => s + (parseFloat(c.allocatedAmount) || 0), 0)
+            const total = parseFloat(watch('totalAmount')) || 0
+            const diff = total - allocated
+            if (allocated === 0) return null
+            return (
+              <p className={`text-xs ${Math.abs(diff) < 0.01 ? 'text-emerald-600' : diff < 0 ? 'text-red-500' : 'text-amber-600'}`}>
+                {Math.abs(diff) < 0.01
+                  ? '✓ Categories fully cover the budget total'
+                  : diff < 0
+                  ? `Over-allocated by ${Math.abs(diff).toFixed(2)} — categories exceed the total budget`
+                  : `${diff.toFixed(2)} unallocated — expenses in other categories count against the total`}
+              </p>
+            )
+          })()}
         </div>
       </form>
     </BottomSheet>
@@ -1406,8 +1434,9 @@ function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, on
                         <tbody>
                           {b.categories.map((cat, i, arr) => {
                             const catPct = cat.allocatedAmount > 0 ? Math.min((cat.spentAmount / cat.allocatedAmount) * 100, 100) : 0
+                            const showBorder = i < arr.length - 1 || b.uncategorisedSpent > 0
                             return (
-                              <tr key={i} className={i < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                              <tr key={i} className={showBorder ? 'border-b border-zinc-100' : ''}>
                                 <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800 truncate max-w-0">{cat.name}</td>
                                 <td className="px-3 py-2 border-r border-zinc-100">
                                   <div className="w-full bg-zinc-200 rounded-full h-1.5 overflow-hidden">
@@ -1420,6 +1449,19 @@ function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, on
                               </tr>
                             )
                           })}
+                          {b.uncategorisedSpent > 0 && (
+                            <tr>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-400 italic">Uncategorised</td>
+                              <td className="px-3 py-2 border-r border-zinc-100">
+                                <div className="w-full bg-zinc-200 rounded-full h-1.5 overflow-hidden">
+                                  <div className="h-full rounded-full bg-zinc-400"
+                                    style={{ width: `${Math.min((b.uncategorisedSpent / b.totalAmount) * 100, 100)}%` }} />
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-400 whitespace-nowrap">{fmt(b.uncategorisedSpent, symbol)} / —</td>
+                              <td className="px-3 py-2 text-zinc-400 whitespace-nowrap text-xs">no category</td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </td>
@@ -1478,6 +1520,15 @@ function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, on
                             <ProgressBar value={cat.spentAmount} max={cat.allocatedAmount} color="bg-blue-500" />
                           </div>
                         ))}
+                        {b.uncategorisedSpent > 0 && (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-zinc-400 italic">Uncategorised</span>
+                              <span className="text-zinc-400">{fmt(b.uncategorisedSpent, symbol)}</span>
+                            </div>
+                            <ProgressBar value={b.uncategorisedSpent} max={b.totalAmount} color="bg-zinc-300" />
+                          </div>
+                        )}
                       </div>
                     )}
                   </>
@@ -1585,25 +1636,47 @@ function BusinessDebtsTab({ symbol }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* AR / AP toggle + totals */}
-      <div className="grid grid-cols-2 gap-3">
-        <button onClick={() => setView('ar')}
-          className={`rounded-2xl border p-4 text-left transition-all ${view === 'ar' ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-200'}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <FileText size={14} className={view === 'ar' ? 'text-emerald-400' : 'text-emerald-600'} />
-            <p className={`text-xs font-semibold ${view === 'ar' ? 'text-zinc-300' : 'text-zinc-500'}`}>Receivable (AR)</p>
+      {/* Summary metrics */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-zinc-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+              <TrendingUp size={15} className="text-emerald-600" />
+            </div>
+            <p className="text-sm font-semibold text-zinc-700">Receivable</p>
           </div>
-          <p className={`text-xl font-bold ${view === 'ar' ? 'text-emerald-400' : 'text-emerald-600'}`}>{fmt(totalAR, symbol)}</p>
-          <p className={`text-xs mt-0.5 ${view === 'ar' ? 'text-zinc-400' : 'text-zinc-400'}`}>{unpaidSI.length} invoice{unpaidSI.length !== 1 ? 's' : ''}</p>
+          <p className="text-2xl font-bold text-emerald-600 tracking-tight">{fmt(totalAR, symbol)}</p>
+          <p className="text-xs text-zinc-400 mt-1">{unpaidSI.length} unpaid invoice{unpaidSI.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="bg-white border border-zinc-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+              <TrendingDown size={15} className="text-red-500" />
+            </div>
+            <p className="text-sm font-semibold text-zinc-700">Payable</p>
+          </div>
+          <p className="text-2xl font-bold text-red-500 tracking-tight">{fmt(totalAP, symbol)}</p>
+          <p className="text-xs text-zinc-400 mt-1">{unpaidPI.length} unpaid invoice{unpaidPI.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="bg-zinc-900 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+              <Landmark size={15} className="text-zinc-300" />
+            </div>
+            <p className="text-sm font-semibold text-zinc-400">Net Position</p>
+          </div>
+          <p className={`text-2xl font-bold tracking-tight ${totalAR - totalAP >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(Math.abs(totalAR - totalAP), symbol)}</p>
+          <p className="text-xs text-zinc-500 mt-1">{totalAR - totalAP >= 0 ? 'Net receivable' : 'Net payable'}</p>
+        </div>
+      </div>
+
+      {/* View switcher */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => setView('ar')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all outline-none border ${view === 'ar' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'}`}>
+          Receivable
         </button>
-        <button onClick={() => setView('ap')}
-          className={`rounded-2xl border p-4 text-left transition-all ${view === 'ap' ? 'bg-zinc-900 border-zinc-900 text-white' : 'bg-white border-zinc-200'}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <ReceiptText size={14} className={view === 'ap' ? 'text-red-400' : 'text-red-500'} />
-            <p className={`text-xs font-semibold ${view === 'ap' ? 'text-zinc-300' : 'text-zinc-500'}`}>Payable (AP)</p>
-          </div>
-          <p className={`text-xl font-bold ${view === 'ap' ? 'text-red-400' : 'text-red-500'}`}>{fmt(totalAP, symbol)}</p>
-          <p className={`text-xs mt-0.5 ${view === 'ap' ? 'text-zinc-400' : 'text-zinc-400'}`}>{unpaidPI.length} invoice{unpaidPI.length !== 1 ? 's' : ''}</p>
+        <button onClick={() => setView('ap')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all outline-none border ${view === 'ap' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'}`}>
+          Payable
         </button>
       </div>
 
