@@ -13,6 +13,7 @@ import PageActions from '../components/layout/PageActions'
 import DataTable, { DataTableMobileFilters, DataTableFilterIcon } from '../components/ui/DataTable'
 import BottomSheet from '../components/ui/BottomSheet'
 import Button from '../components/ui/Button'
+import Tabs from '../components/ui/Tabs'
 import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
 import EmptyState from '../components/ui/EmptyState'
@@ -1716,46 +1717,19 @@ export default function Finance() {
       />
 
       <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        {/* Mobile sticky pill tab bar */}
-        <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(0, 3).map((t) => (
-              <button key={t.key} onClick={() => handleTabChange(t.key)}
-                className={['flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200'].join(' ')}>
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(3).map((t) => (
-              <button key={t.key} onClick={() => handleTabChange(t.key)}
-                className={['flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200'].join(' ')}>
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
+        <div
+          className="sticky z-20 bg-zinc-50 -mx-4 px-4 md:static md:bg-transparent md:mx-0 md:px-0 flex items-center justify-between gap-4 flex-shrink-0 py-3 md:py-0 md:mb-4"
+          style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}
+        >
+          <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
+          <PageActions add={
+            tab === 'transactions' ? <Button size="sm" onClick={() => setShowAddTxn(true)}><Plus size={15} /> Add</Button>
+            : tab === 'budgets' ? <Button size="sm" onClick={() => setShowAddBudget(true)}><Plus size={15} /> New Budget</Button>
+            : null
+          } />
         </div>
 
-        {/* Desktop underline tab bar */}
-        <div className="hidden md:flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
-          <div className="flex gap-x-6">
-            {TABS.map((t) => (
-              <button key={t.key} onClick={() => handleTabChange(t.key)}
-                className={['pb-3 text-sm font-medium transition-colors whitespace-nowrap',
-                  tab === t.key ? 'text-zinc-900 border-b-2 border-zinc-900 -mb-px' : 'text-zinc-400 hover:text-zinc-600'].join(' ')}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="pb-3 flex gap-2">
-            {tab === 'transactions' && <Button size="sm" onClick={() => setShowAddTxn(true)}><Plus size={15} /> Add</Button>}
-            {tab === 'budgets' && <Button size="sm" onClick={() => setShowAddBudget(true)}><Plus size={15} /> New Budget</Button>}
-          </div>
-        </div>
-
-        <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
+        <div className="md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col">
           {tab === 'overview' && (
             <OverviewTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} budgets={budgets} recentTxns={allTxns}

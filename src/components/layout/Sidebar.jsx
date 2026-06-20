@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   Home, Tag, CreditCard, Settings,
-  ShoppingCart, TrendingUp, BarChart3,
+  ShoppingCart, TrendingUp, BarChart3, Layers,
 } from 'lucide-react'
 import useAuthStore from '../../store/authStore'
 import useGroupStore from '../../store/groupStore'
@@ -17,9 +17,9 @@ const PERSONAL_NAV = [
 const BUSINESS_NAV = [
   { to: '/',          icon: Home,         label: 'Dashboard', exact: true },
   { to: '/products',  icon: Tag,          label: 'Products'               },
-  { divider: true, label: 'Purchase' },
+  { divider: true, label: 'Orders' },
+  { to: '/general',   icon: Layers,       label: 'General'                },
   { to: '/purchases', icon: ShoppingCart, label: 'Purchases'              },
-  { divider: true, label: 'Sales' },
   { to: '/sales',     icon: TrendingUp,   label: 'Sales'                  },
   { divider: true, label: 'Insights' },
   { to: '/reports',   icon: BarChart3,    label: 'Reports'                },

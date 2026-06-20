@@ -7,6 +7,7 @@ import {
   Filter, ChevronDown, Pencil, LayoutTemplate, Home, Briefcase,
 } from 'lucide-react'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
+import Tabs from '../components/ui/Tabs'
 import { useForm, Controller } from 'react-hook-form'
 import { logout } from '../api/auth'
 import { convertCurrency as convertCurrencyApi } from '../api/products'
@@ -1065,65 +1066,15 @@ export default function Settings() {
         }
       />
       <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        {/* Mobile sticky pill tab bar */}
-        <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(0, 3).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => handleTabChange(t.key)}
-                className={[
-                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
-                ].join(' ')}
-              >
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(3).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => handleTabChange(t.key)}
-                className={[
-                  'flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200',
-                ].join(' ')}
-              >
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
-        </div>
-        {/* Desktop underline tab bar */}
-        <div className="hidden md:flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
-          <div className="flex flex-wrap gap-x-6">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => handleTabChange(t.key)}
-                className={[
-                  'pb-3 text-sm font-medium transition-colors whitespace-nowrap',
-                  tab === t.key
-                    ? 'text-zinc-900 border-b-2 border-zinc-900 -mb-px'
-                    : 'text-zinc-400 hover:text-zinc-600',
-                ].join(' ')}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="pb-3">
-            <PageActions add={
-              tab === 'friends' && !showAddFriend
-                ? <Button size="sm" onClick={() => setShowAddFriend(true)}><UserPlus size={15} /> Add friend</Button>
-                : tab === 'groups'
-                ? <Button size="sm" onClick={() => openGroupAdd.current?.()}><Plus size={15} /> New group</Button>
-                : null
-            } />
-          </div>
+        <div className="flex items-center justify-between gap-4 flex-shrink-0 py-4 md:py-0 md:mb-4">
+          <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
+          <PageActions add={
+            tab === 'friends' && !showAddFriend
+              ? <Button size="sm" onClick={() => setShowAddFriend(true)}><UserPlus size={15} /> Add friend</Button>
+              : tab === 'groups'
+              ? <Button size="sm" onClick={() => openGroupAdd.current?.()}><Plus size={15} /> New group</Button>
+              : null
+          } />
         </div>
 
         <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
