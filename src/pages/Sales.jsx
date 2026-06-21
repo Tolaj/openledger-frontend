@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Construction, Plus, Pencil, Trash2, Users, TrendingUp, Minus, Truck, RefreshCw, ChevronDown, FileText } from 'lucide-react'
+import { Construction, Plus, Pencil, Trash2, Users, TrendingUp, Minus, Truck, RefreshCw, ChevronDown, FileText, Send, Download, Eye } from 'lucide-react'
 import React from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import TopBar from '../components/layout/TopBar'
@@ -11,7 +11,9 @@ import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from '../hooks/useCustomers'
-import { useSalesOrders, useCreateSalesOrder, useUpdateSalesOrder, useDeleteSalesOrder } from '../hooks/useSalesOrders'
+import { useSalesOrders, useCreateSalesOrder, useUpdateSalesOrder, useDeleteSalesOrder, useSendSalesOrder } from '../hooks/useSalesOrders'
+import { getSalesOrderPDF } from '../api/salesOrders'
+import useGroupStore from '../store/groupStore'
 import { useDeliveries, useCreateDelivery, useDeleteDelivery } from '../hooks/useDeliveries'
 import { useSalesInvoices, useCreateSalesInvoice, useUpdateSalesInvoice, useDeleteSalesInvoice } from '../hooks/useSalesInvoices'
 import { useProducts } from '../hooks/useProducts'
@@ -197,10 +199,16 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   const createSO = useCreateSalesOrder()
   const updateSO = useUpdateSalesOrder()
   const deleteSO = useDeleteSalesOrder()
+  const sendSO = useSendSalesOrder()
   const sym = useCurrencySymbol()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [sendSheet, setSendSheet] = useState(null)
+  const [sendEmail, setSendEmail] = useState('')
+  const [sendError, setSendError] = useState('')
+  const [pdfLoading, setPdfLoading] = useState({})
   const [expanded, setExpanded] = useState({})
   const [filters, setFilters] = useState({ soNumber: '', customer: '', status: '' })
   const [dropSel, setDropSel] = useState({})
@@ -264,6 +272,27 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   const onDelete = async (id) => { if (confirm('Delete this sales order?')) await deleteSO.mutateAsync(id) }
   const onStatusChange = async (s) => { await updateSO.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }
 
+  const handlePDFAction = async (id, soNumber, disposition) => {
+    setPdfLoading((p) => ({ ...p, [id]: true }))
+    try {
+      const res = await getSalesOrderPDF(id, activeGroupId, disposition)
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      if (disposition === 'inline') {
+        window.open(url, '_blank')
+      } else {
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${soNumber}.pdf`
+        a.click()
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch (e) {
+      alert('Failed to generate PDF')
+    } finally {
+      setPdfLoading((p) => ({ ...p, [id]: false }))
+    }
+  }
+
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><span className="h-6 w-6 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" /></div>
 
   return (
@@ -290,7 +319,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</span>
-                    <button onClick={() => setStatusSheet(o)} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors" title="Update status"><RefreshCw size={14} /></button>
+                    <button onClick={() => o.status !== 'delivered' && setStatusSheet(o)} disabled={o.status === 'delivered'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Update status"><RefreshCw size={14} /></button>
                     <button onClick={() => onDelete(o._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -334,7 +363,8 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setStatusSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status"><RefreshCw size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.customer?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to customer"><Send size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'delivered') setStatusSheet(o) }} disabled={o.status === 'delivered'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -436,7 +466,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
       {/* Status Sheet — always mounted */}
       <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Status">
         <div className="grid grid-cols-2 gap-2 pb-2">
-          {['draft', 'confirmed', 'partial', 'delivered', 'cancelled'].map((s) => (
+          {['draft', 'sent', 'confirmed', 'delivered', 'cancelled'].map((s) => (
             <button key={s} onClick={() => onStatusChange(s)}
               className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
                 statusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50',
@@ -444,6 +474,65 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
               {s}
             </button>
           ))}
+        </div>
+      </BottomSheet>
+
+      {/* Send SO Sheet */}
+      <BottomSheet
+        open={!!sendSheet}
+        onClose={() => setSendSheet(null)}
+        title={`Send ${sendSheet?.soNumber || 'SO'} to Customer`}
+        footer={
+          <Button
+            fullWidth
+            loading={sendSO.isPending}
+            onClick={async () => {
+              setSendError('')
+              try {
+                await sendSO.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail })
+                setSendSheet(null)
+              } catch (e) {
+                setSendError(e?.response?.data?.error || e?.response?.data?.message || 'Failed to send')
+              }
+            }}
+          >
+            <Send size={15} /> Send SO
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <div className="bg-zinc-50 rounded-xl border border-zinc-200 p-4 space-y-1">
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">SO Number</span><span className="font-mono font-semibold text-zinc-900">{sendSheet?.soNumber}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Customer</span><span className="font-semibold text-zinc-900">{sendSheet?.customer?.name || '—'}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Grand Total</span><span className="font-semibold text-zinc-900">{sym}{(sendSheet?.grandTotal || 0).toFixed(2)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Items</span><span className="text-zinc-700">{sendSheet?.items?.length || 0} line items</span></div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Recipient Email *</label>
+            <input
+              type="email"
+              value={sendEmail}
+              onChange={(e) => setSendEmail(e.target.value)}
+              placeholder="customer@example.com"
+              className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+            />
+            {!sendSheet?.customer?.email && (
+              <p className="text-xs text-amber-600">This customer has no email on file. Enter one above to send.</p>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.soNumber, 'inline')} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+              <Eye size={14} /> Preview PDF
+            </button>
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.soNumber, 'attachment')} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
+              <Download size={14} /> Download PDF
+            </button>
+          </div>
+
+          <p className="text-xs text-zinc-400">A PDF of the sales order will be attached and the SO status will be updated to <strong>Sent</strong>.</p>
+          {sendError && <p className="text-sm text-red-500">{sendError}</p>}
         </div>
       </BottomSheet>
     </div>
@@ -564,7 +653,7 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
   const onDelete = async (id) => { if (confirm('Delete this delivery? Note: stock will not be reversed automatically.')) await deleteDelivery.mutateAsync(id) }
 
   // Eligible SOs: not yet fully delivered
-  const eligibleSOs = salesOrders.filter((s) => ['draft', 'confirmed', 'partial'].includes(s.status))
+  const eligibleSOs = salesOrders.filter((s) => ['draft', 'sent', 'confirmed', 'partial'].includes(s.status))
 
   if (isLoading) return <div className="flex-1 flex items-center justify-center"><span className="h-6 w-6 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" /></div>
 

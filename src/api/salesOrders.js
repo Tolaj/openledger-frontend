@@ -4,4 +4,7 @@ export const getSalesOrders   = (groupId) => api.get('/sales-orders', { params: 
 export const getSalesOrder    = (id, groupId) => api.get(`/sales-orders/${id}`, { params: { groupId } })
 export const createSalesOrder = (data, groupId) => api.post('/sales-orders', data, { params: { groupId } })
 export const updateSalesOrder = (id, data, groupId) => api.put(`/sales-orders/${id}`, data, { params: { groupId } })
-export const deleteSalesOrder = (id, groupId) => api.delete(`/sales-orders/${id}`, { params: { groupId } })
+export const deleteSalesOrder  = (id, groupId) => api.delete(`/sales-orders/${id}`, { params: { groupId } })
+export const sendSalesOrder    = (id, groupId, data) => api.post(`/sales-orders/${id}/send`, data, { params: { groupId } })
+export const getSalesOrderPDF  = (id, groupId, disposition = 'inline') =>
+  api.get(`/sales-orders/${id}/pdf`, { params: { groupId, disposition }, responseType: 'blob' })

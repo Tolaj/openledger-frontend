@@ -37,3 +37,12 @@ export function useDeleteSalesOrder() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] }),
   })
 }
+
+export function useSendSalesOrder() {
+  const qc = useQueryClient()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, recipientEmail }) => api.sendSalesOrder(id, activeGroupId, { recipientEmail }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] }),
+  })
+}

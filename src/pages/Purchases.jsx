@@ -321,7 +321,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <span className="text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</span>
-                <button onClick={() => setStatusSheet(o)} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors" title="Update status"><RefreshCw size={14} /></button>
+                <button onClick={() => o.status !== 'received' && setStatusSheet(o)} disabled={o.status === 'received'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Update status"><RefreshCw size={14} /></button>
                 <button onClick={() => onDelete(o._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
               </div>
             </div>
@@ -365,11 +365,8 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
-                  <button onClick={(e) => { e.stopPropagation(); handlePDFAction(o._id, o.poNumber, 'inline') }} disabled={pdfLoading[o._id]} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-50" title="Preview PDF">
-                    {pdfLoading[o._id] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />}
-                  </button>
                   <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Send size={14} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); setStatusSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status"><RefreshCw size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'received') setStatusSheet(o) }} disabled={o.status === 'received'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
                   <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                 </div>
               </td>
@@ -471,7 +468,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
       {/* Status Sheet */}
       <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Status">
         <div className="grid grid-cols-2 gap-2 pb-2">
-          {['draft', 'sent', 'partial', 'received', 'cancelled'].map((s) => (
+          {['draft', 'sent', 'received', 'cancelled'].map((s) => (
             <button key={s} onClick={() => onStatusChange(s)}
               className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
                 statusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50',
