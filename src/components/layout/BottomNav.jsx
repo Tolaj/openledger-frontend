@@ -4,14 +4,14 @@ import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
 
 const PERSONAL_TABS = [
-  { to: '/',         icon: Home,        label: 'Home',      exact: true },
+  { to: '/dashboard', icon: Home,        label: 'Home',      exact: true },
   { to: '/products', icon: Tag,         label: 'Products'               },
   { to: '/finance',  icon: CreditCard,  label: 'Finance'                },
   { to: '/settings', icon: Settings,    label: 'Settings'               },
 ]
 
 const BUSINESS_TABS = [
-  { to: '/',          icon: Home,         label: 'Home',      exact: true },
+  { to: '/dashboard', icon: Home,         label: 'Home',      exact: true },
   { to: '/products',  icon: Tag,          label: 'Products'               },
   { to: '/purchases', icon: ShoppingCart, label: 'Purchases'              },
   { to: '/sales',     icon: TrendingUp,   label: 'Sales'                  },

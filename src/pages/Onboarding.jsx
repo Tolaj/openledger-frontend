@@ -57,14 +57,14 @@ export default function Onboarding() {
       if (selectedTemplate) {
         applyTemplateMutation({ templateId: selectedTemplate, groupId: group._id })
       } else {
-        navigate('/', { replace: true })
+        navigate('/dashboard', { replace: true })
       }
     },
   })
 
   const { mutate: applyTemplateMutation, isPending: applyingTemplate } = useMutation({
     mutationFn: applyTemplate,
-    onSuccess: () => navigate('/', { replace: true }),
+    onSuccess: () => navigate('/dashboard', { replace: true }),
   })
 
   const isLoading = settingUp || applyingTemplate

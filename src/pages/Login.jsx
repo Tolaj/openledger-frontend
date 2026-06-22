@@ -20,7 +20,7 @@ export default function Login() {
       clearSession()
       clearGroup()
       setSession(res.data.user, res.data.token)
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     },
   })
 

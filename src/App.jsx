@@ -10,6 +10,7 @@ import useCartStore from './store/cartStore'
 import AppShell from './components/layout/AppShell'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Onboarding from './pages/Onboarding'
@@ -21,6 +22,12 @@ import Purchases from './pages/Purchases'
 import Sales from './pages/Sales'
 import General from './pages/General'
 import Stock from './pages/Stock'
+
+function LandingOrDashboard() {
+  const { user, isLoading } = useAuthStore()
+  if (isLoading) return null
+  return user ? <Navigate to="/dashboard" replace /> : <Landing />
+}
 
 function SessionLoader({ children }) {
   const { setSession, clearSession } = useAuthStore()
@@ -50,6 +57,8 @@ export default function App() {
       <BrowserRouter>
         <SessionLoader>
           <Routes>
+            <Route path="/" element={<LandingOrDashboard />} />
+            <Route path="/landing" element={<Landing />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
 
@@ -69,7 +78,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/products" element={<Products />} />
               <Route path="/finance" element={<Finance />} />
               <Route path="/settings" element={<Settings />} />
