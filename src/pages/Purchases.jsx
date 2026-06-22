@@ -58,6 +58,78 @@ const VENDOR_COLS = [
   { key: 'action',        label: 'action' },
 ]
 
+function VendorMobileCard({ v, onEdit, onDelete }) {
+  const [isOpen, setIsOpen] = useState(false)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <p className="text-sm font-semibold text-zinc-900 truncate">{v.name}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            {v.contactPerson || v.phone || v.email || '—'}
+          </p>
+        </div>
+        <div className="flex gap-0 flex-shrink-0">
+          <button onClick={() => onEdit(v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+            <Pencil size={17} />
+          </button>
+          <button onClick={() => onDelete(v._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+            <Trash2 size={17} />
+          </button>
+          <button onClick={() => setIsOpen((val) => !val)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          {v.contactPerson && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Contact</span>
+              <span className="text-sm text-zinc-900">{v.contactPerson}</span>
+            </div>
+          )}
+          {v.phone && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Phone</span>
+              <span className="text-sm text-zinc-900">{v.phone}</span>
+            </div>
+          )}
+          {v.email && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Email</span>
+              <span className="text-sm text-zinc-900">{v.email}</span>
+            </div>
+          )}
+          {v.gstin && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">GSTIN</span>
+              <span className="text-sm text-zinc-900">{v.gstin}</span>
+            </div>
+          )}
+          {v.address && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Address</span>
+              <span className="text-sm text-zinc-900">{v.address}</span>
+            </div>
+          )}
+          {v.notes && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Notes</span>
+              <span className="text-sm text-zinc-900">{v.notes}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function VendorsTab({ mobileFiltersOpen, onAdd }) {
   const { data: vendors = [], isLoading } = useVendors()
   const createVendor = useCreateVendor()
@@ -111,23 +183,9 @@ function VendorsTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((v) => (
-          <div key={v._id} className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-semibold text-zinc-900 truncate">{v.name}</p>
-              {v.contactPerson && <p className="text-sm text-zinc-500 truncate">{v.contactPerson}</p>}
-              <div className="flex flex-wrap gap-x-3 mt-1">
-                {v.phone && <span className="text-xs text-zinc-400">{v.phone}</span>}
-                {v.email && <span className="text-xs text-zinc-400">{v.email}</span>}
-                {v.gstin && <span className="text-xs text-zinc-400">GST: {v.gstin}</span>}
-              </div>
-            </div>
-            <div className="flex gap-1 flex-shrink-0">
-              <button onClick={() => openEdit(v)} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"><Pencil size={15} /></button>
-              <button onClick={() => onDelete(v._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
-            </div>
+              <VendorMobileCard key={v._id} v={v} onEdit={openEdit} onDelete={onDelete} />
+            ))}
           </div>
-        ))}
-      </div>
 
       {/* Desktop DataTable */}
       <DataTable
@@ -194,6 +252,100 @@ const PO_COLS = [
   { key: 'total',    label: 'Total',   width: 'w-32' },
   { key: 'action',   label: 'action' },
 ]
+
+function POMobileCard({ o, sym, onDelete, onStatusSheet, onSend, updatingId }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [itemsOpen, setItemsOpen] = useState(false)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-zinc-900 font-mono">{o.poNumber}</p>
+            <Badge variant={STATUS_VARIANT[o.status] || 'default'}>{o.status}</Badge>
+          </div>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            {sym}{(o.grandTotal || 0).toFixed(2)}&nbsp;|&nbsp;{o.vendor?.name || '—'}
+          </p>
+        </div>
+        <div className="flex gap-0 flex-shrink-0">
+          <button onClick={() => onSend(o)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500">
+            <Mail size={17} />
+          </button>
+          <button onClick={() => o.status !== 'received' && onStatusSheet(o)} disabled={o.status === 'received' || updatingId === o._id} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed">
+            {updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={17} />}
+          </button>
+          <button onClick={() => onDelete(o._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+            <Trash2 size={17} />
+          </button>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          {o.vendor?.name && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Vendor</span>
+              <span className="text-sm text-zinc-900">{o.vendor.name}</span>
+            </div>
+          )}
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Total</span>
+            <span className="text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</span>
+          </div>
+          {o.expectedDate && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Expected</span>
+              <span className="text-sm text-zinc-900">{new Date(o.expectedDate).toLocaleDateString()}</span>
+            </div>
+          )}
+          {o.notes && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Notes</span>
+              <span className="text-sm text-zinc-900">{o.notes}</span>
+            </div>
+          )}
+          <div className="px-4 py-2.5">
+            <button onClick={() => setItemsOpen((v) => !v)} className="w-full flex items-center justify-between">
+              <span className="text-xs text-zinc-400">items ({o.items?.length ?? 0})</span>
+              <ChevronDown size={14} className={`text-zinc-400 transition-transform ${itemsOpen ? '' : '-rotate-90'}`} />
+            </button>
+            {itemsOpen && (
+              <div className="mt-2 rounded-xl border border-zinc-100 overflow-hidden">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50">
+                      {['Product', 'Qty', 'Price', 'Tax%'].map((h, i, arr) => (
+                        <th key={h} className={`px-2 py-1.5 text-left font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-100' : ''}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(o.items || []).map((it, idx, arr) => (
+                      <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-800 font-medium">{it.product?.name || it.description || '—'}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{it.qty}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{sym}{(it.unitPrice || 0).toFixed(2)}</td>
+                        <td className="px-2 py-1.5 text-zinc-600">{it.taxRate ?? 0}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
   const { data: orders = [], isLoading } = usePurchaseOrders()
@@ -312,35 +464,9 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((o) => (
-          <div key={o._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-sm font-semibold text-zinc-900">{o.poNumber}</span>
-                  <Badge variant={STATUS_VARIANT[o.status] || 'default'}>{o.status}</Badge>
-                </div>
-                <p className="text-sm text-zinc-600 mt-0.5">{o.vendor?.name || '—'}</p>
-                {o.expectedDate && <p className="text-xs text-zinc-400 mt-0.5">Expected: {new Date(o.expectedDate).toLocaleDateString()}</p>}
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <span className="text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</span>
-                <button onClick={() => o.status !== 'received' && setStatusSheet(o)} disabled={o.status === 'received' || updatingId === o._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
-                <button onClick={() => onDelete(o._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
-              </div>
-            </div>
-            {o.items?.length > 0 && (
-              <div className="mt-3 border-t border-zinc-100 pt-3 space-y-1">
-                {o.items.map((it, i) => (
-                  <div key={i} className="flex justify-between text-xs text-zinc-500">
-                    <span className="truncate max-w-[60%]">{it.description || it.product?.name || 'Item'} × {it.qty}</span>
-                    <span>{sym}{(it.amount || 0).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+              <POMobileCard key={o._id} o={o} sym={sym} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={(o) => { setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} updatingId={updatingId} />
+            ))}
           </div>
-        ))}
-      </div>
 
       {/* Desktop DataTable */}
       <DataTable
@@ -581,6 +707,99 @@ const GRN_COLS = [
   { key: 'action',     label: 'action' },
 ]
 
+function GRNMobileCard({ g, sym, onDelete, onStatusSheet, updatingId }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [itemsOpen, setItemsOpen] = useState(false)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-zinc-900 font-mono">{g.grnNumber}</p>
+            <Badge variant={GRN_STATUS_VARIANT[g.status] || 'default'}>{g.status}</Badge>
+          </div>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            {g.purchaseOrder?.poNumber || '—'}&nbsp;·&nbsp;{g.purchaseOrder?.vendor?.name || '—'}
+          </p>
+        </div>
+        <div className="flex gap-0 flex-shrink-0">
+          <button onClick={() => g.status !== 'complete' && onStatusSheet(g)} disabled={g.status === 'complete' || updatingId === g._id} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed">
+            {updatingId === g._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={17} />}
+          </button>
+          <button onClick={() => onDelete(g._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+            <Trash2 size={17} />
+          </button>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          {g.purchaseOrder?.poNumber && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">PO</span>
+              <span className="text-sm text-zinc-900">{g.purchaseOrder.poNumber}</span>
+            </div>
+          )}
+          {g.purchaseOrder?.vendor?.name && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Vendor</span>
+              <span className="text-sm text-zinc-900">{g.purchaseOrder.vendor.name}</span>
+            </div>
+          )}
+          {g.receivedDate && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Received</span>
+              <span className="text-sm text-zinc-900">{new Date(g.receivedDate).toLocaleDateString()}</span>
+            </div>
+          )}
+          {g.notes && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Notes</span>
+              <span className="text-sm text-zinc-900">{g.notes}</span>
+            </div>
+          )}
+          <div className="px-4 py-2.5">
+            <button onClick={() => setItemsOpen((v) => !v)} className="w-full flex items-center justify-between">
+              <span className="text-xs text-zinc-400">items ({g.items?.length ?? 0})</span>
+              <ChevronDown size={14} className={`text-zinc-400 transition-transform ${itemsOpen ? '' : '-rotate-90'}`} />
+            </button>
+            {itemsOpen && (
+              <div className="mt-2 rounded-xl border border-zinc-100 overflow-hidden">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50">
+                      {['Product', 'Received', 'Ordered', 'Unit'].map((h, i, arr) => (
+                        <th key={h} className={`px-2 py-1.5 text-left font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-100' : ''}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(g.items || []).map((it, idx, arr) => (
+                      <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-800 font-medium">{it.product?.name || it.description || '—'}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{it.qtyReceived}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{it.qtyOrdered}</td>
+                        <td className="px-2 py-1.5 text-zinc-600">{it.unit || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function GRNTab({ mobileFiltersOpen, onAdd }) {
   const { data: grns = [], isLoading } = useGRNs()
   const { data: purchaseOrders = [] } = usePurchaseOrders()
@@ -702,32 +921,7 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((g) => (
-              <div key={g._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm font-semibold text-zinc-900">{g.grnNumber}</span>
-                      <Badge variant={GRN_STATUS_VARIANT[g.status] || 'default'}>{g.status}</Badge>
-                    </div>
-                    <p className="text-sm text-zinc-600 mt-0.5">PO: {g.purchaseOrder?.poNumber || '—'} · {g.purchaseOrder?.vendor?.name || '—'}</p>
-                    {g.receivedDate && <p className="text-xs text-zinc-400 mt-0.5">{new Date(g.receivedDate).toLocaleDateString()}</p>}
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => g.status !== 'complete' && setGrnStatusSheet(g)} disabled={g.status === 'complete' || grnUpdatingId === g._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">{grnUpdatingId === g._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
-                    <button onClick={() => onDelete(g._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
-                  </div>
-                </div>
-                {g.items?.length > 0 && (
-                  <div className="mt-3 border-t border-zinc-100 pt-3 space-y-1">
-                    {g.items.map((it, i) => (
-                      <div key={i} className="flex justify-between text-xs text-zinc-500">
-                        <span className="truncate max-w-[60%]">{it.description || it.product?.name || 'Item'}</span>
-                        <span>{it.qtyReceived} / {it.qtyOrdered} {it.unit}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <GRNMobileCard key={g._id} g={g} sym={sym} onDelete={onDelete} onStatusSheet={setGrnStatusSheet} updatingId={grnUpdatingId} />
             ))}
           </div>
 
@@ -887,6 +1081,108 @@ const PINV_COLS = [
   { key: 'action',        label: 'action' },
 ]
 
+function PInvoiceMobileCard({ inv, sym, getRef, onDelete, onStatusSheet, onSend, updatingId }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [itemsOpen, setItemsOpen] = useState(false)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 9h3.75m-4.5 2.625h4.5M12 18.75 9.75 16.5h.375a2.625 2.625 0 0 0 0-5.25H9.75m.75-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-zinc-900 font-mono">{inv.invoiceNumber}</p>
+            <Badge variant={PINV_STATUS_VARIANT[inv.status] || 'default'}>{inv.status}</Badge>
+          </div>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            {sym}{(inv.grandTotal || 0).toFixed(2)}&nbsp;|&nbsp;{inv.vendor?.name || '—'}
+          </p>
+        </div>
+        <div className="flex gap-0 flex-shrink-0">
+          <button onClick={() => onSend(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500">
+            <Mail size={17} />
+          </button>
+          <button onClick={() => inv.status !== 'paid' && onStatusSheet(inv)} disabled={inv.status === 'paid' || updatingId === inv._id} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed">
+            {updatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={17} />}
+          </button>
+          <button onClick={() => onDelete(inv._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+            <Trash2 size={17} />
+          </button>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          {inv.vendor?.name && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Vendor</span>
+              <span className="text-sm text-zinc-900">{inv.vendor.name}</span>
+            </div>
+          )}
+          {(inv.purchaseOrder || inv.grn) && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Ref</span>
+              <span className="text-sm text-zinc-900">{getRef(inv)}</span>
+            </div>
+          )}
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Subtotal</span>
+            <span className="text-sm text-zinc-900">{sym}{(inv.subtotal || 0).toFixed(2)}</span>
+          </div>
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Tax</span>
+            <span className="text-sm text-zinc-900">{sym}{(inv.taxAmount || 0).toFixed(2)}</span>
+          </div>
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Total</span>
+            <span className="text-sm font-semibold text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</span>
+          </div>
+          {inv.dueDate && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Due</span>
+              <span className="text-sm text-zinc-900">{new Date(inv.dueDate).toLocaleDateString()}</span>
+            </div>
+          )}
+          <div className="px-4 py-2.5">
+            <button onClick={() => setItemsOpen((v) => !v)} className="w-full flex items-center justify-between">
+              <span className="text-xs text-zinc-400">items ({inv.items?.length ?? 0})</span>
+              <ChevronDown size={14} className={`text-zinc-400 transition-transform ${itemsOpen ? '' : '-rotate-90'}`} />
+            </button>
+            {itemsOpen && (
+              <div className="mt-2 rounded-xl border border-zinc-100 overflow-hidden">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50">
+                      {['Product', 'Qty', 'Price', 'Tax%'].map((h, i, arr) => (
+                        <th key={h} className={`px-2 py-1.5 text-left font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-100' : ''}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(inv.items || []).map((it, idx, arr) => (
+                      <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-800 font-medium">{it.product?.name || it.description || '—'}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{it.qty}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{sym}{(it.unitPrice || 0).toFixed(2)}</td>
+                        <td className="px-2 py-1.5 text-zinc-600">{it.taxRate ?? 0}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
   const { data: invoices = [], isLoading } = usePurchaseInvoices()
   const { data: purchaseOrders = [] } = usePurchaseOrders()
@@ -1035,37 +1331,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((inv) => (
-              <div key={inv._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm font-semibold text-zinc-900">{inv.invoiceNumber}</span>
-                      <Badge variant={PINV_STATUS_VARIANT[inv.status] || 'default'}>{inv.status}</Badge>
-                    </div>
-                    <p className="text-sm text-zinc-600 mt-0.5">{inv.vendor?.name || '—'}</p>
-                    {(inv.purchaseOrder || inv.grn) && (
-                      <p className="text-xs text-zinc-400 mt-0.5">{getInvoiceRef(inv)}</p>
-                    )}
-                    {inv.dueDate && <p className="text-xs text-zinc-400">Due: {new Date(inv.dueDate).toLocaleDateString()}</p>}
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className="text-sm font-semibold text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</span>
-                    <button onClick={() => { setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-blue-500 transition-colors" title="Send invoice"><Mail size={14} /></button>
-                    <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
-                    <button onClick={() => onDelete(inv._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
-                  </div>
-                </div>
-                {inv.items?.length > 0 && (
-                  <div className="mt-3 border-t border-zinc-100 pt-3 space-y-1">
-                    {inv.items.map((it, i) => (
-                      <div key={i} className="flex justify-between text-xs text-zinc-500">
-                        <span className="truncate max-w-[60%]">{it.description || it.product?.name || 'Item'} × {it.qty}</span>
-                        <span>{sym}{(it.amount || 0).toFixed(2)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <PInvoiceMobileCard key={inv._id} inv={inv} sym={sym} getRef={getInvoiceRef} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={(inv) => { setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} updatingId={invUpdatingId} />
             ))}
           </div>
 
