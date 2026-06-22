@@ -40,16 +40,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        runtimeCaching: [
-          {
-            urlPattern: /^https?:\/\/.*\/api\/.*/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 10,
-            },
-          },
-        ],
+        navigateFallback: 'index.html',
+        runtimeCaching: [],
       },
     }),
   ],
