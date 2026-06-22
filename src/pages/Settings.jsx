@@ -725,6 +725,62 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
 }
 
 // ── Groups Tab ────────────────────────────────────────────────────────────────
+function GroupMobileCard({ g, onEdit, onDelete, cantDelete }) {
+  const [isOpen, setIsOpen] = useState(false)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+          {g.type === 'business' ? <Briefcase size={18} className="text-white" /> : <Home size={18} className="text-white" />}
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-zinc-900 truncate">{g.displayName || g.name}</p>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${g.type === 'business' ? 'bg-blue-50 text-blue-600' : 'bg-zinc-100 text-zinc-500'}`}>
+              {g.type === 'business' ? 'Business' : 'Personal'}
+            </span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-0.5">{g.members?.length || 0} members</p>
+        </div>
+        <div className="flex gap-0 flex-shrink-0">
+          <button onClick={() => onEdit(g)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+            <Pencil size={17} />
+          </button>
+          <button onClick={() => onDelete(g)} disabled={cantDelete}
+            className={`px-1 py-2 rounded-xl ${cantDelete ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 active:bg-zinc-100 hover:text-red-500'}`}>
+            <Trash2 size={17} />
+          </button>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Type</span>
+            <span className="text-sm text-zinc-900 capitalize">{g.type || 'personal'}</span>
+          </div>
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Members</span>
+            <span className="text-sm text-zinc-900">{g.members?.length || 0}</span>
+          </div>
+          {g.members?.length > 0 && (
+            <div className="flex items-start px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0 mt-0.5">People</span>
+              <div className="flex flex-col gap-0.5">
+                {g.members.map((m) => (
+                  <span key={m._id || m} className="text-sm text-zinc-900">{m.name || m.email || String(m)}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { data: me } = useMe()
   const { data: groups = [], isLoading } = useGroups()
@@ -838,36 +894,18 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
       <div className="flex flex-col gap-3 md:hidden">
         {sharedGroups.length === 0 ? (
           <EmptyState icon={Users} title="No shared groups" description="Create a group to share expenses with friends" />
-        ) : sharedGroups.map((g) => (
-          <div key={g._id} className="bg-white rounded-2xl border border-zinc-200 p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
-              {g.type === 'business' ? <Briefcase size={18} className="text-zinc-600" /> : <Home size={18} className="text-zinc-600" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-zinc-900">{g.displayName || g.name}</p>
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${g.type === 'business' ? 'bg-blue-50 text-blue-600' : 'bg-zinc-100 text-zinc-500'}`}>
-                  {g.type === 'business' ? 'Business' : 'Personal'}
-                </span>
-              </div>
-              <p className="text-xs text-zinc-500">{g.members?.length || 0} members</p>
-            </div>
-            <div className="flex gap-0">
-              <button onClick={() => openEdit(g)} className="p-1 rounded-xl text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={15} /></button>
-              {(() => {
-                const cantDelete = allGroups.length <= 1 || g._id === activeGroupId
-                return (
-                  <button
-                    onClick={() => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) }}
-                    disabled={cantDelete}
-                    className={`p-1 rounded-xl ${cantDelete ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 hover:text-red-500 active:bg-zinc-100'}`}
-                    title={cantDelete ? (allGroups.length <= 1 ? 'Last group' : 'Active group') : 'Delete'}
-                  ><Trash2 size={15} /></button>
-                )
-              })()}
-            </div>
-          </div>
-        ))}
+        ) : sharedGroups.map((g) => {
+          const cantDelete = allGroups.length <= 1 || g._id === activeGroupId
+          return (
+            <GroupMobileCard
+              key={g._id}
+              g={g}
+              onEdit={openEdit}
+              onDelete={(g) => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) }}
+              cantDelete={cantDelete}
+            />
+          )
+        })}
       </div>
 
       <GroupForm
