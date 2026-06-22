@@ -84,7 +84,7 @@ export default function Onboarding() {
   const stepLabel = ['Account type', 'Name your space', 'Starter template']
 
   return (
-    <div className="min-h-screen flex flex-col px-5 py-10 pb-safe max-w-md mx-auto" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom) + 1rem)' }}>
+    <div className="min-h-screen flex flex-col px-5 py-10 max-w-md mx-auto">
       {/* Progress dots */}
       <div className="flex items-center gap-2 mb-8">
         {STEPS.map((_, i) => (
@@ -135,9 +135,11 @@ export default function Onboarding() {
             })}
           </div>
 
-          <Button fullWidth disabled={!accountType} onClick={() => setStep(1)} className="mt-8">
-            Continue
-          </Button>
+          <div className="sticky bottom-0 pt-4 pb-6 bg-white mt-8" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+            <Button fullWidth disabled={!accountType} onClick={() => setStep(1)}>
+              Continue
+            </Button>
+          </div>
         </>
       )}
 
@@ -172,7 +174,7 @@ export default function Onboarding() {
             )}
           </div>
 
-          <div className="flex gap-3 mt-8">
+          <div className="sticky bottom-0 pt-4 bg-white mt-8 flex gap-3" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
             <Button variant="outline" onClick={() => setStep(0)} className="flex-1">Back</Button>
             <Button disabled={!canProceedName} onClick={() => setStep(2)} className="flex-1">Continue</Button>
           </div>
@@ -222,17 +224,10 @@ export default function Onboarding() {
             </div>
           )}
 
-          <div className="flex gap-3 mt-8">
+          <div className="sticky bottom-0 pt-4 bg-white mt-8 flex gap-3" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
             <Button variant="outline" onClick={() => setStep(1)} className="flex-1">Back</Button>
-            <Button variant="outline" onClick={handleFinish} loading={isLoading} className="flex-1">
-              Skip
-            </Button>
-            <Button
-              disabled={!selectedTemplate}
-              loading={isLoading}
-              onClick={handleFinish}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={handleFinish} loading={isLoading} className="flex-1">Skip</Button>
+            <Button disabled={!selectedTemplate} loading={isLoading} onClick={handleFinish} className="flex-1">
               Apply & Finish
             </Button>
           </div>
