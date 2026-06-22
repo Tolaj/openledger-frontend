@@ -84,7 +84,7 @@ export default function Onboarding() {
   const stepLabel = ['Account type', 'Name your space', 'Starter template']
 
   return (
-    <div className="min-h-screen flex flex-col px-5 py-10 max-w-md mx-auto">
+    <div className="min-h-screen flex flex-col px-5 py-10 pb-safe max-w-md mx-auto" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom) + 1rem)' }}>
       {/* Progress dots */}
       <div className="flex items-center gap-2 mb-8">
         {STEPS.map((_, i) => (

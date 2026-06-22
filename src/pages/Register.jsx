@@ -82,7 +82,7 @@ export default function Register() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="min-h-full flex flex-col justify-center px-6 py-10 max-w-xl mx-auto w-full">
+      <div className="min-h-full flex flex-col justify-center px-6 py-10 max-w-xl mx-auto w-full" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom) + 1rem)' }}>
         <div className="mb-8">
           <div className="w-10 h-10 bg-zinc-900 rounded-2xl mb-6" />
           <h1 className="text-2xl font-bold text-zinc-900">Create account</h1>
