@@ -43,3 +43,13 @@ export function useDeleteSalesInvoice() {
     },
   })
 }
+
+
+export function useSendSalesInvoice() {
+  const qc  = useQueryClient()
+  const gid = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, recipientEmail }) => api.sendSalesInvoice(id, gid, { recipientEmail }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-invoices', gid] }),
+  })
+}

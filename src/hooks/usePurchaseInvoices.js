@@ -43,3 +43,13 @@ export function useDeletePurchaseInvoice() {
     },
   })
 }
+
+
+export function useSendPurchaseInvoice() {
+  const qc  = useQueryClient()
+  const gid = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, recipientEmail }) => api.sendPurchaseInvoice(id, gid, { recipientEmail }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['purchase-invoices', gid] }),
+  })
+}

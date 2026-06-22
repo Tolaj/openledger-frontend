@@ -2,6 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/generalOrders'
 import useGroupStore from '../store/groupStore'
 
+export function useSendGeneralOrder() {
+  const qc  = useQueryClient()
+  const gid = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, recipientEmail }) => api.sendGeneralOrder(id, gid, { recipientEmail }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['general-orders', gid] }),
+  })
+}
+
 export function useGeneralOrders() {
   const gid = useGroupStore((s) => s.activeGroupId)
   return useQuery({

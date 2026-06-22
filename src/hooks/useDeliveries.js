@@ -24,6 +24,18 @@ export function useCreateDelivery() {
   })
 }
 
+export function useUpdateDelivery() {
+  const qc = useQueryClient()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, data }) => api.updateDelivery(id, data, activeGroupId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['deliveries', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] })
+    },
+  })
+}
+
 export function useDeleteDelivery() {
   const qc = useQueryClient()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)

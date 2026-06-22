@@ -24,6 +24,18 @@ export function useCreateGRN() {
   })
 }
 
+export function useUpdateGRN() {
+  const qc = useQueryClient()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, data }) => api.updateGRN(id, data, activeGroupId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['grns', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['purchase-orders', activeGroupId] })
+    },
+  })
+}
+
 export function useDeleteGRN() {
   const qc = useQueryClient()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)

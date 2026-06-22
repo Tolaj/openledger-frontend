@@ -14,8 +14,9 @@ import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer }
 import { useSalesOrders, useCreateSalesOrder, useUpdateSalesOrder, useDeleteSalesOrder, useSendSalesOrder } from '../hooks/useSalesOrders'
 import { getSalesOrderPDF } from '../api/salesOrders'
 import useGroupStore from '../store/groupStore'
-import { useDeliveries, useCreateDelivery, useDeleteDelivery } from '../hooks/useDeliveries'
-import { useSalesInvoices, useCreateSalesInvoice, useUpdateSalesInvoice, useDeleteSalesInvoice } from '../hooks/useSalesInvoices'
+import { useDeliveries, useCreateDelivery, useUpdateDelivery, useDeleteDelivery } from '../hooks/useDeliveries'
+import { useSalesInvoices, useCreateSalesInvoice, useUpdateSalesInvoice, useDeleteSalesInvoice, useSendSalesInvoice } from '../hooks/useSalesInvoices'
+import { getSalesInvoicePDF } from '../api/salesInvoices'
 import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import ProductPicker from '../components/features/ProductPicker'
@@ -273,7 +274,8 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   const onStatusChange = async (s) => { await updateSO.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }
 
   const handlePDFAction = async (id, soNumber, disposition) => {
-    setPdfLoading((p) => ({ ...p, [id]: true }))
+    const key = `${id}-${disposition}`
+    setPdfLoading((p) => ({ ...p, [key]: true }))
     try {
       const res = await getSalesOrderPDF(id, activeGroupId, disposition)
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
@@ -289,7 +291,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
     } catch (e) {
       alert('Failed to generate PDF')
     } finally {
-      setPdfLoading((p) => ({ ...p, [id]: false }))
+      setPdfLoading((p) => ({ ...p, [key]: false }))
     }
   }
 
@@ -523,11 +525,11 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
           </div>
 
           <div className="flex gap-2">
-            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.soNumber, 'inline')} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
-              <Eye size={14} /> Preview PDF
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.soNumber, 'inline')} disabled={pdfLoading[`${sendSheet?._id}-inline`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-inline`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Eye size={14} />} Preview PDF
             </button>
-            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.soNumber, 'attachment')} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors">
-              <Download size={14} /> Download PDF
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.soNumber, 'attachment')} disabled={pdfLoading[`${sendSheet?._id}-attachment`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-attachment`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />} Download PDF
             </button>
           </div>
 
@@ -556,6 +558,7 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
   const { data: deliveries = [], isLoading } = useDeliveries()
   const { data: salesOrders = [] } = useSalesOrders()
   const createDelivery = useCreateDelivery()
+  const updateDelivery = useUpdateDelivery()
   const deleteDelivery = useDeleteDelivery()
   const sym = useCurrencySymbol()
 
@@ -566,6 +569,7 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
   const [notes, setNotes] = useState('')
   const [formError, setFormError] = useState('')
   const [expanded, setExpanded] = useState({})
+  const [delStatusSheet, setDelStatusSheet] = useState(null)
   const [filters, setFilters] = useState({ deliveryNumber: '', so: '', customer: '', status: '' })
   const [dropSel, setDropSel] = useState({})
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
@@ -679,7 +683,10 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
                     <p className="text-sm text-zinc-600 mt-0.5">SO: {d.salesOrder?.soNumber || '—'} · {d.salesOrder?.customer?.name || '—'}</p>
                     {d.deliveredDate && <p className="text-xs text-zinc-400 mt-0.5">{new Date(d.deliveredDate).toLocaleDateString()}</p>}
                   </div>
-                  <button onClick={() => onDelete(d._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => d.status !== 'complete' && setDelStatusSheet(d)} disabled={d.status === 'complete'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"><RefreshCw size={14} /></button>
+                    <button onClick={() => onDelete(d._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
+                  </div>
                 </div>
                 {d.items?.length > 0 && (
                   <div className="mt-3 border-t border-zinc-100 pt-3 space-y-1">
@@ -719,7 +726,10 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500 text-center">{d.items?.length || 0}</td>
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{d.deliveredDate ? new Date(d.deliveredDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
-                    <button onClick={(e) => { e.stopPropagation(); onDelete(d._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); d.status !== 'complete' && setDelStatusSheet(d) }} disabled={d.status === 'complete'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed" title="Update status"><RefreshCw size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(d._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                    </div>
                   </td>
                 </tr>
                 {expanded[d._id] && (
@@ -817,6 +827,20 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
           {formError && <p className="text-sm text-red-500">{formError}</p>}
         </div>
       </BottomSheet>
+
+      {/* Delivery Status Sheet */}
+      <BottomSheet open={!!delStatusSheet} onClose={() => setDelStatusSheet(null)} title="Update Delivery Status">
+        <div className="space-y-2 pb-2">
+          {['partial', 'complete'].map((s) => (
+            <button key={s} onClick={async () => { await updateDelivery.mutateAsync({ id: delStatusSheet._id, data: { status: s } }); setDelStatusSheet(null) }}
+              className={['w-full py-3 rounded-xl border text-sm font-semibold capitalize transition-all',
+                delStatusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'].join(' ')}>
+              {s}
+            </button>
+          ))}
+          <p className="text-xs text-zinc-400 text-center pt-1">Marking complete will update all deliveries for this SO to complete.</p>
+        </div>
+      </BottomSheet>
     </div>
   )
 }
@@ -842,10 +866,29 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
   const createInvoice = useCreateSalesInvoice()
   const updateInvoice = useUpdateSalesInvoice()
   const deleteInvoice = useDeleteSalesInvoice()
+  const sendInvoice   = useSendSalesInvoice()
   const sym = useCurrencySymbol()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [sendSheet, setSendSheet]   = useState(null)
+  const [sendEmail, setSendEmail]   = useState('')
+  const [sendError, setSendError]   = useState('')
+  const [pdfLoading, setPdfLoading] = useState({})
+
+  const handlePDFAction = async (id, invoiceNumber, disposition) => {
+    const key = `${id}-${disposition}`
+    setPdfLoading((p) => ({ ...p, [key]: true }))
+    try {
+      const res = await getSalesInvoicePDF(id, activeGroupId, disposition)
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      if (disposition === 'inline') { window.open(url, '_blank') }
+      else { const a = document.createElement('a'); a.href = url; a.download = `${invoiceNumber}.pdf`; a.click() }
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch { alert('Failed to generate PDF') }
+    finally { setPdfLoading((p) => ({ ...p, [key]: false })) }
+  }
   const [expanded, setExpanded] = useState({})
   const [sourceType, setSourceType] = useState('delivery')
   const [selectedSource, setSelectedSource] = useState('')
@@ -963,7 +1006,8 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-sm font-semibold text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</span>
-                    <button onClick={() => setStatusSheet(inv)} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors"><RefreshCw size={14} /></button>
+                    <button onClick={() => { setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-blue-500 transition-colors" title="Send invoice"><Send size={14} /></button>
+                    <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"><RefreshCw size={14} /></button>
                     <button onClick={() => onDelete(inv._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -1010,7 +1054,8 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setStatusSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status"><RefreshCw size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Send size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -1072,35 +1117,66 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
             ))}
           </div>
 
-          {sourceType === 'delivery' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700">Delivery *</label>
-              <select value={selectedSource} onChange={(e) => {
-                setSelectedSource(e.target.value)
-                const del = deliveries.find((d) => d._id === e.target.value)
-                if (del?.salesOrder?.customer) setCustomerId(del.salesOrder.customer._id || del.salesOrder.customer)
-              }}
-                className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
-                <option value="">Select Delivery...</option>
-                {deliveries.map((d) => <option key={d._id} value={d._id}>{d.deliveryNumber} — {d.salesOrder?.customer?.name || '?'}</option>)}
-              </select>
-            </div>
-          )}
+          {sourceType === 'delivery' && (() => {
+            // SOs that have a direct (non-delivery) invoice are fully covered — hide their deliveries
+            const invoicedSoIds = new Set(
+              invoices
+                .filter((inv) => (inv.salesOrder?._id || inv.salesOrder) && !inv.delivery)
+                .map((inv) => inv.salesOrder?._id || inv.salesOrder)
+            )
+            const availableDeliveries = deliveries.filter((d) => {
+              if (invoices.some((inv) => inv.delivery?._id === d._id || inv.delivery === d._id)) return false
+              const soId = d.salesOrder?._id || d.salesOrder
+              if (soId && invoicedSoIds.has(soId)) return false
+              return true
+            })
+            return (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-zinc-700">Delivery *</label>
+                <select value={selectedSource} onChange={(e) => {
+                  setSelectedSource(e.target.value)
+                  const del = deliveries.find((d) => d._id === e.target.value)
+                  if (del?.salesOrder?.customer) setCustomerId(del.salesOrder.customer._id || del.salesOrder.customer)
+                }}
+                  className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
+                  <option value="">Select Delivery...</option>
+                  {availableDeliveries.map((d) => <option key={d._id} value={d._id}>{d.deliveryNumber} — {d.salesOrder?.soNumber || '?'} · {d.salesOrder?.customer?.name || '?'}</option>)}
+                </select>
+                {availableDeliveries.length === 0 && (
+                  <p className="text-xs text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
+                    All deliveries have been invoiced already.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
-          {sourceType === 'so' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700">Sales Order *</label>
-              <select value={selectedSource} onChange={(e) => {
-                setSelectedSource(e.target.value)
-                const so = salesOrders.find((s) => s._id === e.target.value)
-                if (so?.customer) setCustomerId(so.customer._id || so.customer)
-              }}
-                className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
-                <option value="">Select SO...</option>
-                {salesOrders.map((s) => <option key={s._id} value={s._id}>{s.soNumber} — {s.customer?.name || '?'}</option>)}
-              </select>
-            </div>
-          )}
+          {sourceType === 'so' && (() => {
+            // Hide SOs with status partial, and SOs that already have any invoice
+            const availableSos = salesOrders.filter((s) =>
+              s.status !== 'partial' &&
+              !invoices.some((inv) => inv.salesOrder?._id === s._id || inv.salesOrder === s._id)
+            )
+            return (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-zinc-700">Sales Order *</label>
+                <select value={selectedSource} onChange={(e) => {
+                  setSelectedSource(e.target.value)
+                  const so = salesOrders.find((s) => s._id === e.target.value)
+                  if (so?.customer) setCustomerId(so.customer._id || so.customer)
+                }}
+                  className="h-11 w-full rounded-xl border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900">
+                  <option value="">Select SO...</option>
+                  {availableSos.map((s) => <option key={s._id} value={s._id}>{s.soNumber} — {s.customer?.name || '?'}</option>)}
+                </select>
+                {availableSos.length === 0 && (
+                  <p className="text-xs text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
+                    All sales orders have been invoiced already.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           {sourceType === 'manual' && (
             <>
@@ -1185,6 +1261,47 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
               {s}
             </button>
           ))}
+        </div>
+      </BottomSheet>
+
+      {/* Send Invoice Sheet */}
+      <BottomSheet open={!!sendSheet} onClose={() => setSendSheet(null)} title={`Send ${sendSheet?.invoiceNumber || 'Invoice'} to Customer`}>
+        <div className="flex flex-col gap-4 pb-2">
+          <div className="bg-zinc-50 rounded-2xl p-4 flex flex-col gap-2">
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Invoice #</span><span className="font-mono font-semibold text-zinc-900">{sendSheet?.invoiceNumber}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Customer</span><span className="font-semibold text-zinc-900">{sendSheet?.customer?.name || '—'}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Grand Total</span><span className="font-semibold text-zinc-900">{sym}{(sendSheet?.grandTotal || 0).toFixed(2)}</span></div>
+            {sendSheet?.dueDate && <div className="flex justify-between text-sm"><span className="text-zinc-500">Due Date</span><span className="text-zinc-700">{new Date(sendSheet.dueDate).toLocaleDateString()}</span></div>}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Customer Email</label>
+            <input value={sendEmail} onChange={(e) => setSendEmail(e.target.value)} type="email" placeholder="customer@email.com"
+              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+          </div>
+          {!sendSheet?.customer?.email && <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Customer has no saved email. Enter one above to send.</p>}
+          <div className="flex gap-2">
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.invoiceNumber, 'inline')} disabled={pdfLoading[`${sendSheet?._id}-inline`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-inline`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Eye size={14} />} Preview PDF
+            </button>
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.invoiceNumber, 'attachment')} disabled={pdfLoading[`${sendSheet?._id}-attachment`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-attachment`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />} Download PDF
+            </button>
+          </div>
+          <p className="text-xs text-zinc-400">A PDF of the invoice will be attached and the invoice status will be updated to <strong>Sent</strong>.</p>
+          {sendError && <p className="text-sm text-red-500">{sendError}</p>}
+          <button
+            disabled={!sendEmail || sendInvoice.isPending}
+            onClick={async () => {
+              setSendError('')
+              try {
+                await sendInvoice.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail })
+                setSendSheet(null)
+              } catch (e) { setSendError(e?.response?.data?.message || 'Failed to send') }
+            }}
+            className="w-full py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold disabled:opacity-50 hover:bg-zinc-800 transition-colors"
+          >
+            {sendInvoice.isPending ? 'Sending…' : 'Send Invoice'}
+          </button>
         </div>
       </BottomSheet>
     </div>

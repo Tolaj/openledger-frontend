@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import React from 'react'
-import { Plus, Pencil, Trash2, ChevronDown, FileText, RefreshCw, Users, Repeat, Minus } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, FileText, RefreshCw, Users, Repeat, Minus, Send, Download, Eye } from 'lucide-react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import TopBar from '../components/layout/TopBar'
 import PageActions from '../components/layout/PageActions'
@@ -14,8 +14,11 @@ import Spinner from '../components/ui/Spinner'
 import Tabs from '../components/ui/Tabs'
 import ProductPicker from '../components/features/ProductPicker'
 import { useRecipients, useCreateRecipient, useUpdateRecipient, useDeleteRecipient } from '../hooks/useRecipients'
-import { useGeneralOrders, useCreateGeneralOrder, useUpdateGeneralOrder, useDeleteGeneralOrder } from '../hooks/useGeneralOrders'
-import { useGeneralInvoices, useCreateGeneralInvoice, useUpdateGeneralInvoice, useDeleteGeneralInvoice } from '../hooks/useGeneralInvoices'
+import { useGeneralOrders, useCreateGeneralOrder, useUpdateGeneralOrder, useDeleteGeneralOrder, useSendGeneralOrder } from '../hooks/useGeneralOrders'
+import { getGeneralOrderPDF } from '../api/generalOrders'
+import useGroupStore from '../store/groupStore'
+import { useGeneralInvoices, useCreateGeneralInvoice, useUpdateGeneralInvoice, useDeleteGeneralInvoice, useSendGeneralInvoice } from '../hooks/useGeneralInvoices'
+import { getGeneralInvoicePDF } from '../api/generalInvoices'
 import { useRecurring, useCreateRecurring, useUpdateRecurring, useDeleteRecurring } from '../hooks/useRecurring'
 import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
@@ -171,9 +174,15 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
   const createOrder = useCreateGeneralOrder()
   const updateOrder = useUpdateGeneralOrder()
   const deleteOrder = useDeleteGeneralOrder()
+  const sendGO      = useSendGeneralOrder()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
 
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [sendSheet, setSendSheet]   = useState(null)
+  const [sendEmail, setSendEmail]   = useState('')
+  const [sendError, setSendError]   = useState('')
+  const [pdfLoading, setPdfLoading] = useState({})
   const [expanded, setExpanded]     = useState({})
   const [filters, setFilters]       = useState({ goNumber: '', recipient: '', direction: '', status: '' })
   const [dropSel, setDropSel]       = useState({})
@@ -250,6 +259,19 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
 
   const onDelete = (id) => { if (confirm('Delete this order?')) deleteOrder.mutate(id) }
 
+  const handlePDFAction = async (id, goNumber, disposition) => {
+    const key = `${id}-${disposition}`
+    setPdfLoading((p) => ({ ...p, [key]: true }))
+    try {
+      const res = await getGeneralOrderPDF(id, activeGroupId, disposition)
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      if (disposition === 'inline') { window.open(url, '_blank') }
+      else { const a = document.createElement('a'); a.href = url; a.download = `${goNumber}.pdf`; a.click() }
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch { alert('Failed to generate PDF') }
+    finally { setPdfLoading((p) => ({ ...p, [key]: false })) }
+  }
+
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
 
   if (isLoading) return <Spinner className="py-12" />
@@ -289,7 +311,8 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
                 <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <button onClick={(e) => { e.stopPropagation(); setStatusSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status"><RefreshCw size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.recipient?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to recipient"><Send size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); if (!(o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered')) setStatusSheet(o) }} disabled={o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
                     <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                   </div>
                 </td>
@@ -406,8 +429,8 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
       <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Status">
         <div className="grid grid-cols-2 gap-2 pb-2">
           {(statusSheet?.direction === 'payable'
-            ? ['draft', 'sent', 'partial', 'received', 'cancelled']
-            : ['draft', 'confirmed', 'partial', 'delivered', 'cancelled']
+            ? ['draft', 'sent', 'received', 'cancelled']
+            : ['draft', 'confirmed', 'delivered', 'cancelled']
           ).map((s) => (
             <button key={s} onClick={() => onStatusChange(s)}
               className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
@@ -416,6 +439,49 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
               {s}
             </button>
           ))}
+        </div>
+      </BottomSheet>
+
+      {/* Send Sheet */}
+      <BottomSheet open={!!sendSheet} onClose={() => setSendSheet(null)} title={`Send ${sendSheet?.goNumber || 'GO'} to Recipient`}>
+        <div className="flex flex-col gap-4 pb-2">
+          <div className="bg-zinc-50 rounded-2xl p-4 flex flex-col gap-2">
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">GO Number</span><span className="font-mono font-semibold text-zinc-900">{sendSheet?.goNumber}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Recipient</span><span className="font-semibold text-zinc-900">{sendSheet?.recipient?.name || '—'}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Direction</span><span className="font-semibold text-zinc-900 capitalize">{sendSheet?.direction}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Grand Total</span><span className="font-semibold text-zinc-900">{sym}{(sendSheet?.grandTotal || 0).toFixed(2)}</span></div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Recipient Email</label>
+            <input value={sendEmail} onChange={(e) => setSendEmail(e.target.value)} type="email" placeholder="recipient@email.com"
+              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+          </div>
+          {!sendSheet?.recipient?.email && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Recipient has no saved email. Enter one above to send.</p>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.goNumber, 'inline')} disabled={pdfLoading[`${sendSheet?._id}-inline`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-inline`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Eye size={14} />} Preview PDF
+            </button>
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.goNumber, 'attachment')} disabled={pdfLoading[`${sendSheet?._id}-attachment`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-attachment`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />} Download PDF
+            </button>
+          </div>
+          <p className="text-xs text-zinc-400">A PDF of the general order will be attached and the GO status will be updated to <strong>Sent</strong>.</p>
+          {sendError && <p className="text-sm text-red-500">{sendError}</p>}
+          <button
+            disabled={!sendEmail || sendGO.isPending}
+            onClick={async () => {
+              setSendError('')
+              try {
+                await sendGO.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail })
+                setSendSheet(null)
+              } catch (e) { setSendError(e?.response?.data?.message || 'Failed to send') }
+            }}
+            className="w-full py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold disabled:opacity-50 hover:bg-zinc-800 transition-colors"
+          >
+            {sendGO.isPending ? 'Sending…' : `Send GO`}
+          </button>
         </div>
       </BottomSheet>
     </div>
@@ -439,10 +505,29 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
   const createInvoice = useCreateGeneralInvoice()
   const updateInvoice = useUpdateGeneralInvoice()
   const deleteInvoice = useDeleteGeneralInvoice()
+  const sendInvoice   = useSendGeneralInvoice()
+  const activeGroupId = useGroupStore((s) => s.activeGroupId)
 
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [editing, setEditing]       = useState(null)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [sendSheet, setSendSheet]   = useState(null)
+  const [sendEmail, setSendEmail]   = useState('')
+  const [sendError, setSendError]   = useState('')
+  const [pdfLoading, setPdfLoading] = useState({})
+
+  const handlePDFAction = async (id, invoiceNumber, disposition) => {
+    const key = `${id}-${disposition}`
+    setPdfLoading((p) => ({ ...p, [key]: true }))
+    try {
+      const res = await getGeneralInvoicePDF(id, activeGroupId, disposition)
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      if (disposition === 'inline') { window.open(url, '_blank') }
+      else { const a = document.createElement('a'); a.href = url; a.download = `${invoiceNumber}.pdf`; a.click() }
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch { alert('Failed to generate PDF') }
+    finally { setPdfLoading((p) => ({ ...p, [key]: false })) }
+  }
   const [expanded, setExpanded]     = useState({})
   const [filters, setFilters]       = useState({ invoiceNumber: '', recipient: '', direction: '', status: '' })
   const [sourceType, setSourceType] = useState('go') // 'go' | 'manual'
@@ -556,7 +641,8 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
         <td className="px-4 py-3 font-semibold text-zinc-900">{fmt(inv.grandTotal, sym)}</td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setStatusSheet(inv)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Update status">
+            <button onClick={() => { setSendEmail(inv.recipient?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Send size={14} /></button>
+            <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">
               <RefreshCw size={14} />
             </button>
             <button onClick={() => deleteInvoice.mutate(inv._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
@@ -643,16 +729,29 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
           )}
 
           {/* From GO: GO selector (auto-fills recipient + items) */}
-          {sourceType === 'go' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700">General Order <span className="text-red-500">*</span></label>
-              <select value={watchGoId || ''} onChange={(e) => handleGoSelect(e.target.value)}
-                className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
-                <option value="">Select GO…</option>
-                {orders.map((o) => <option key={o._id} value={o._id}>{o.goNumber} — {o.recipient?.name || '?'}</option>)}
-              </select>
-            </div>
-          )}
+          {sourceType === 'go' && (() => {
+            const invoicedGoIds = new Set(
+              invoices
+                .filter((inv) => inv.generalOrder?._id || inv.generalOrder)
+                .map((inv) => inv.generalOrder?._id || inv.generalOrder)
+            )
+            const availableOrders = orders.filter((o) => !invoicedGoIds.has(o._id))
+            return (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-zinc-700">General Order <span className="text-red-500">*</span></label>
+                <select value={watchGoId || ''} onChange={(e) => handleGoSelect(e.target.value)}
+                  className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
+                  <option value="">Select GO…</option>
+                  {availableOrders.map((o) => <option key={o._id} value={o._id}>{o.goNumber} — {o.recipient?.name || '?'}</option>)}
+                </select>
+                {availableOrders.length === 0 && (
+                  <p className="text-xs text-zinc-500 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2">
+                    All general orders have been invoiced already.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Manual: recipient picker */}
           {sourceType === 'manual' && (
@@ -742,6 +841,43 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
           )}
 
           {formError && <p className="text-xs text-red-500 font-medium">{formError}</p>}
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={!!sendSheet} onClose={() => setSendSheet(null)} title={`Send ${sendSheet?.invoiceNumber || 'Invoice'} to Recipient`}>
+        <div className="flex flex-col gap-4 pb-2">
+          <div className="bg-zinc-50 rounded-2xl p-4 flex flex-col gap-2">
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Invoice #</span><span className="font-mono font-semibold text-zinc-900">{sendSheet?.invoiceNumber}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Recipient</span><span className="font-semibold text-zinc-900">{sendSheet?.recipient?.name || '—'}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Direction</span><span className="font-semibold text-zinc-900 capitalize">{sendSheet?.direction}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Grand Total</span><span className="font-semibold text-zinc-900">{sym}{(sendSheet?.grandTotal || 0).toFixed(2)}</span></div>
+            {sendSheet?.dueDate && <div className="flex justify-between text-sm"><span className="text-zinc-500">Due Date</span><span className="text-zinc-700">{new Date(sendSheet.dueDate).toLocaleDateString()}</span></div>}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Recipient Email</label>
+            <input value={sendEmail} onChange={(e) => setSendEmail(e.target.value)} type="email" placeholder="recipient@email.com"
+              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900" />
+          </div>
+          {!sendSheet?.recipient?.email && <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">Recipient has no saved email. Enter one above to send.</p>}
+          <div className="flex gap-2">
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.invoiceNumber, 'inline')} disabled={pdfLoading[`${sendSheet?._id}-inline`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-inline`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Eye size={14} />} Preview PDF
+            </button>
+            <button onClick={() => handlePDFAction(sendSheet._id, sendSheet.invoiceNumber, 'attachment')} disabled={pdfLoading[`${sendSheet?._id}-attachment`]} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-50">
+              {pdfLoading[`${sendSheet?._id}-attachment`] ? <span className="block w-3.5 h-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> : <Download size={14} />} Download PDF
+            </button>
+          </div>
+          <p className="text-xs text-zinc-400">A PDF of the invoice will be attached and the status will be updated to <strong>Sent</strong>.</p>
+          {sendError && <p className="text-sm text-red-500">{sendError}</p>}
+          <button
+            disabled={!sendEmail || sendInvoice.isPending}
+            onClick={async () => {
+              setSendError('')
+              try { await sendInvoice.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail }); setSendSheet(null) }
+              catch (e) { setSendError(e?.response?.data?.message || 'Failed to send') }
+            }}
+            className="w-full py-3 rounded-xl bg-zinc-900 text-white text-sm font-semibold disabled:opacity-50 hover:bg-zinc-800 transition-colors"
+          >{sendInvoice.isPending ? 'Sending…' : 'Send Invoice'}</button>
         </div>
       </BottomSheet>
 

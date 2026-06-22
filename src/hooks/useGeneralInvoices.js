@@ -43,3 +43,12 @@ export function useDeleteGeneralInvoice() {
     },
   })
 }
+
+export function useSendGeneralInvoice() {
+  const qc  = useQueryClient()
+  const gid = useGroupStore((s) => s.activeGroupId)
+  return useMutation({
+    mutationFn: ({ id, recipientEmail }) => api.sendGeneralInvoice(id, gid, { recipientEmail }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['general-invoices', gid] }),
+  })
+}
