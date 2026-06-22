@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import React from 'react'
-import { Plus, Pencil, Trash2, ChevronDown, FileText, RefreshCw, Users, Repeat, Minus, Send, Download, Eye } from 'lucide-react'
+import { Plus, Pencil, Trash2, ChevronDown, FileText, RefreshCw, Users, Repeat, Minus, Mail, Download, Eye } from 'lucide-react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import TopBar from '../components/layout/TopBar'
 import PageActions from '../components/layout/PageActions'
@@ -179,6 +179,7 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
 
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [updatingId, setUpdatingId] = useState(null)
   const [sendSheet, setSendSheet]   = useState(null)
   const [sendEmail, setSendEmail]   = useState('')
   const [sendError, setSendError]   = useState('')
@@ -253,8 +254,9 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
   }
 
   const onStatusChange = async (s) => {
-    await updateOrder.mutateAsync({ id: statusSheet._id, data: { status: s } })
-    setStatusSheet(null)
+    const id = statusSheet._id; setStatusSheet(null); setUpdatingId(id)
+    try { await updateOrder.mutateAsync({ id, data: { status: s } }) }
+    finally { setUpdatingId(null) }
   }
 
   const onDelete = (id) => { if (confirm('Delete this order?')) deleteOrder.mutate(id) }
@@ -311,8 +313,8 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
                 <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.recipient?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to recipient"><Send size={14} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); if (!(o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered')) setStatusSheet(o) }} disabled={o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.recipient?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to recipient"><Mail size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); if (!(o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered')) setStatusSheet(o) }} disabled={(o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered') || updatingId === o._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                     <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                   </div>
                 </td>
@@ -511,6 +513,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [editing, setEditing]       = useState(null)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [invUpdatingId, setInvUpdatingId] = useState(null)
   const [sendSheet, setSendSheet]   = useState(null)
   const [sendEmail, setSendEmail]   = useState('')
   const [sendError, setSendError]   = useState('')
@@ -641,9 +644,9 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
         <td className="px-4 py-3 font-semibold text-zinc-900">{fmt(inv.grandTotal, sym)}</td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => { setSendEmail(inv.recipient?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Send size={14} /></button>
-            <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">
-              <RefreshCw size={14} />
+            <button onClick={() => { setSendEmail(inv.recipient?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
+            <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">
+              {invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}
             </button>
             <button onClick={() => deleteInvoice.mutate(inv._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
               <Trash2 size={14} />
@@ -884,7 +887,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
       <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Invoice Status">
         <div className="grid grid-cols-2 gap-2 pb-2">
           {['draft', 'sent', 'paid', 'overdue', 'cancelled'].map((s) => (
-            <button key={s} onClick={async () => { await updateInvoice.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }}
+            <button key={s} onClick={async () => { const id = statusSheet._id; setStatusSheet(null); setInvUpdatingId(id); try { await updateInvoice.mutateAsync({ id, data: { status: s } }) } finally { setInvUpdatingId(null) } }}
               className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors',
                 statusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50',
               ].join(' ')}>

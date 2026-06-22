@@ -1635,9 +1635,9 @@ function BusinessDebtsTab({ symbol }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
       {/* Summary metrics */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-3 flex-shrink-0">
         <div className="bg-white border border-zinc-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
@@ -1671,7 +1671,7 @@ function BusinessDebtsTab({ symbol }) {
       </div>
 
       {/* View switcher */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-shrink-0">
         <button onClick={() => setView('ar')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all outline-none border ${view === 'ar' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'}`}>
           Receivable
         </button>
@@ -1685,8 +1685,9 @@ function BusinessDebtsTab({ symbol }) {
           title={view === 'ar' ? 'No outstanding receivables' : 'No outstanding payables'}
           description={view === 'ar' ? 'All customer invoices are paid' : 'All vendor invoices are paid'} />
       ) : (
-        <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
-          <table className="w-full text-sm border-collapse">
+        <div className="flex flex-col min-h-0 flex-1 bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+          {/* Sticky header */}
+          <table className="w-full text-sm border-collapse flex-shrink-0">
             <thead>
               <tr className="bg-zinc-50 border-b border-zinc-200">
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Invoice</th>
@@ -1697,26 +1698,34 @@ function BusinessDebtsTab({ symbol }) {
                 <th className="px-4 py-2.5 text-right text-xs font-semibold text-zinc-500">Amount</th>
               </tr>
             </thead>
-            <tbody>
-              {items.map((inv) => (
-                <tr key={inv._id} className="border-b border-zinc-100 hover:bg-zinc-50">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold text-zinc-900">{inv.invoiceNumber}</td>
-                  <td className="px-4 py-3 text-sm text-zinc-700">{(view === 'ar' ? inv.customer?.name : inv.vendor?.name) || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-zinc-500">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>
-                  <td className="px-4 py-3">
-                    {inv.daysOverdue > 0
-                      ? <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${agingColor(inv.daysOverdue)}`}>{inv.daysOverdue}d</span>
-                      : <span className="text-xs text-zinc-400">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${inv.status === 'overdue' ? 'bg-red-50 text-red-600' :
-                        inv.status === 'sent' ? 'bg-amber-50 text-amber-600' : 'bg-zinc-100 text-zinc-500'
-                      }`}>{inv.status}</span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-right text-zinc-900">{fmt(inv.grandTotal, symbol)}</td>
-                </tr>
-              ))}
-            </tbody>
+          </table>
+          {/* Scrollable body */}
+          <div className="overflow-y-auto flex-1">
+            <table className="w-full text-sm border-collapse">
+              <tbody>
+                {items.map((inv) => (
+                  <tr key={inv._id} className="border-b border-zinc-100 hover:bg-zinc-50">
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-zinc-900">{inv.invoiceNumber}</td>
+                    <td className="px-4 py-3 text-sm text-zinc-700">{(view === 'ar' ? inv.customer?.name : inv.vendor?.name) || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>
+                    <td className="px-4 py-3">
+                      {inv.daysOverdue > 0
+                        ? <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${agingColor(inv.daysOverdue)}`}>{inv.daysOverdue}d</span>
+                        : <span className="text-xs text-zinc-400">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${inv.status === 'overdue' ? 'bg-red-50 text-red-600' :
+                          inv.status === 'sent' ? 'bg-amber-50 text-amber-600' : 'bg-zinc-100 text-zinc-500'
+                        }`}>{inv.status}</span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-right text-zinc-900">{fmt(inv.grandTotal, symbol)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Sticky footer */}
+          <table className="w-full text-sm border-collapse flex-shrink-0">
             <tfoot>
               <tr className="bg-zinc-50 border-t border-zinc-200">
                 <td colSpan={5} className="px-4 py-2.5 text-xs font-semibold text-zinc-500">Total Outstanding</td>

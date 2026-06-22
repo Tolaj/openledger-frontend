@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Construction, Plus, Pencil, Trash2, Users, ShoppingCart, Minus, PackageCheck, RefreshCw, ChevronDown, FileText, Send, Eye, Download } from 'lucide-react'
+import { Construction, Plus, Pencil, Trash2, Users, ShoppingCart, Minus, PackageCheck, RefreshCw, ChevronDown, FileText, Mail, Eye, Download } from 'lucide-react'
 import React from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import TopBar from '../components/layout/TopBar'
@@ -208,6 +208,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [updatingId, setUpdatingId] = useState(null)
   const [sendSheet, setSendSheet] = useState(null) // PO object to send
   const [sendEmail, setSendEmail] = useState('')
   const [sendError, setSendError] = useState('')
@@ -273,7 +274,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
   }
 
   const onDelete = async (id) => { if (confirm('Delete this purchase order?')) await deletePO.mutateAsync(id) }
-  const onStatusChange = async (s) => { await updatePO.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }
+  const onStatusChange = async (s) => { const id = statusSheet._id; setStatusSheet(null); setUpdatingId(id); try { await updatePO.mutateAsync({ id, data: { status: s } }) } finally { setUpdatingId(null) } }
 
   const handlePDFAction = async (id, poNumber, disposition) => {
     const key = `${id}-${disposition}`
@@ -323,7 +324,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <span className="text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</span>
-                <button onClick={() => o.status !== 'received' && setStatusSheet(o)} disabled={o.status === 'received'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Update status"><RefreshCw size={14} /></button>
+                <button onClick={() => o.status !== 'received' && setStatusSheet(o)} disabled={o.status === 'received' || updatingId === o._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                 <button onClick={() => onDelete(o._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
               </div>
             </div>
@@ -367,8 +368,8 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
-                  <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Send size={14} /></button>
-                  <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'received') setStatusSheet(o) }} disabled={o.status === 'received'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Mail size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'received') setStatusSheet(o) }} disabled={o.status === 'received' || updatingId === o._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                   <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                 </div>
               </td>
@@ -500,7 +501,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               }
             }}
           >
-            <Send size={15} /> Send PO
+            <Mail size={15} /> Send PO
           </Button>
         }
       >
@@ -596,6 +597,7 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
   const [formError, setFormError] = useState('')
   const [expanded, setExpanded] = useState({})
   const [grnStatusSheet, setGrnStatusSheet] = useState(null)
+  const [grnUpdatingId, setGrnUpdatingId] = useState(null)
   const [filters, setFilters] = useState({ grnNumber: '', po: '', vendor: '', status: '' })
   const [dropSel, setDropSel] = useState({})
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
@@ -711,7 +713,7 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
                     {g.receivedDate && <p className="text-xs text-zinc-400 mt-0.5">{new Date(g.receivedDate).toLocaleDateString()}</p>}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => g.status !== 'complete' && setGrnStatusSheet(g)} disabled={g.status === 'complete'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"><RefreshCw size={14} /></button>
+                    <button onClick={() => g.status !== 'complete' && setGrnStatusSheet(g)} disabled={g.status === 'complete' || grnUpdatingId === g._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">{grnUpdatingId === g._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                     <button onClick={() => onDelete(g._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -754,7 +756,6 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={(e) => { e.stopPropagation(); g.status !== 'complete' && setGrnStatusSheet(g) }} disabled={g.status === 'complete'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed" title="Update status"><RefreshCw size={14} /></button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(g._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -860,7 +861,7 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
       <BottomSheet open={!!grnStatusSheet} onClose={() => setGrnStatusSheet(null)} title="Update GRN Status">
         <div className="space-y-2 pb-2">
           {['partial', 'complete'].map((s) => (
-            <button key={s} onClick={async () => { await updateGRN.mutateAsync({ id: grnStatusSheet._id, data: { status: s } }); setGrnStatusSheet(null) }}
+            <button key={s} onClick={async () => { const id = grnStatusSheet._id; setGrnStatusSheet(null); setGrnUpdatingId(id); try { await updateGRN.mutateAsync({ id, data: { status: s } }) } finally { setGrnUpdatingId(null) } }}
               className={['w-full py-3 rounded-xl border text-sm font-semibold capitalize transition-all',
                 grnStatusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'].join(' ')}>
               {s}
@@ -900,6 +901,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [invUpdatingId, setInvUpdatingId] = useState(null)
   const [sendSheet, setSendSheet]   = useState(null)
   const [sendEmail, setSendEmail]   = useState('')
   const [sendError, setSendError]   = useState('')
@@ -1014,8 +1016,8 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
   }
 
   const onStatusChange = async (s) => {
-    await updateInvoice.mutateAsync({ id: statusSheet._id, data: { status: s } })
-    setStatusSheet(null)
+    const id = statusSheet._id; setStatusSheet(null); setInvUpdatingId(id)
+    try { await updateInvoice.mutateAsync({ id, data: { status: s } }) } finally { setInvUpdatingId(null) }
   }
   const onDelete = async (id) => { if (confirm('Delete this invoice?')) await deleteInvoice.mutateAsync(id) }
 
@@ -1048,8 +1050,8 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-sm font-semibold text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</span>
-                    <button onClick={() => { setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-blue-500 transition-colors" title="Send invoice"><Send size={14} /></button>
-                    <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"><RefreshCw size={14} /></button>
+                    <button onClick={() => { setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-blue-500 transition-colors" title="Send invoice"><Mail size={14} /></button>
+                    <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                     <button onClick={() => onDelete(inv._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -1096,8 +1098,8 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Send size={14} /></button>
-                      <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>

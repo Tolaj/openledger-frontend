@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Construction, Plus, Pencil, Trash2, Users, TrendingUp, Minus, Truck, RefreshCw, ChevronDown, FileText, Send, Download, Eye } from 'lucide-react'
+import { Construction, Plus, Pencil, Trash2, Users, TrendingUp, Minus, Truck, RefreshCw, ChevronDown, FileText, Mail, Download, Eye } from 'lucide-react'
 import React from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import TopBar from '../components/layout/TopBar'
@@ -206,6 +206,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [updatingId, setUpdatingId] = useState(null)
   const [sendSheet, setSendSheet] = useState(null)
   const [sendEmail, setSendEmail] = useState('')
   const [sendError, setSendError] = useState('')
@@ -271,7 +272,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   }
 
   const onDelete = async (id) => { if (confirm('Delete this sales order?')) await deleteSO.mutateAsync(id) }
-  const onStatusChange = async (s) => { await updateSO.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }
+  const onStatusChange = async (s) => { const id = statusSheet._id; setStatusSheet(null); setUpdatingId(id); try { await updateSO.mutateAsync({ id, data: { status: s } }) } finally { setUpdatingId(null) } }
 
   const handlePDFAction = async (id, soNumber, disposition) => {
     const key = `${id}-${disposition}`
@@ -321,7 +322,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</span>
-                    <button onClick={() => o.status !== 'delivered' && setStatusSheet(o)} disabled={o.status === 'delivered'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Update status"><RefreshCw size={14} /></button>
+                    <button onClick={() => o.status !== 'delivered' && setStatusSheet(o)} disabled={o.status === 'delivered' || updatingId === o._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                     <button onClick={() => onDelete(o._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -365,8 +366,8 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.customer?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to customer"><Send size={14} /></button>
-                      <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'delivered') setStatusSheet(o) }} disabled={o.status === 'delivered'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.customer?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to customer"><Mail size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'delivered') setStatusSheet(o) }} disabled={o.status === 'delivered' || updatingId === o._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -498,7 +499,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
               }
             }}
           >
-            <Send size={15} /> Send SO
+            <Mail size={15} /> Send SO
           </Button>
         }
       >
@@ -570,6 +571,7 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
   const [formError, setFormError] = useState('')
   const [expanded, setExpanded] = useState({})
   const [delStatusSheet, setDelStatusSheet] = useState(null)
+  const [delUpdatingId, setDelUpdatingId] = useState(null)
   const [filters, setFilters] = useState({ deliveryNumber: '', so: '', customer: '', status: '' })
   const [dropSel, setDropSel] = useState({})
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
@@ -684,7 +686,7 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
                     {d.deliveredDate && <p className="text-xs text-zinc-400 mt-0.5">{new Date(d.deliveredDate).toLocaleDateString()}</p>}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => d.status !== 'complete' && setDelStatusSheet(d)} disabled={d.status === 'complete'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"><RefreshCw size={14} /></button>
+                    <button onClick={() => d.status !== 'complete' && setDelStatusSheet(d)} disabled={d.status === 'complete' || delUpdatingId === d._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">{delUpdatingId === d._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                     <button onClick={() => onDelete(d._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -727,7 +729,6 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{d.deliveredDate ? new Date(d.deliveredDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={(e) => { e.stopPropagation(); d.status !== 'complete' && setDelStatusSheet(d) }} disabled={d.status === 'complete'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed" title="Update status"><RefreshCw size={14} /></button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(d._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -832,7 +833,7 @@ function DeliveryTab({ mobileFiltersOpen, onAdd }) {
       <BottomSheet open={!!delStatusSheet} onClose={() => setDelStatusSheet(null)} title="Update Delivery Status">
         <div className="space-y-2 pb-2">
           {['partial', 'complete'].map((s) => (
-            <button key={s} onClick={async () => { await updateDelivery.mutateAsync({ id: delStatusSheet._id, data: { status: s } }); setDelStatusSheet(null) }}
+            <button key={s} onClick={async () => { const id = delStatusSheet._id; setDelStatusSheet(null); setDelUpdatingId(id); try { await updateDelivery.mutateAsync({ id, data: { status: s } }) } finally { setDelUpdatingId(null) } }}
               className={['w-full py-3 rounded-xl border text-sm font-semibold capitalize transition-all',
                 delStatusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'].join(' ')}>
               {s}
@@ -872,6 +873,8 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
+  const [updatingId, setUpdatingId] = useState(null)
+  const [invUpdatingId, setInvUpdatingId] = useState(null)
   const [sendSheet, setSendSheet]   = useState(null)
   const [sendEmail, setSendEmail]   = useState('')
   const [sendError, setSendError]   = useState('')
@@ -986,8 +989,8 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
   }
 
   const onStatusChange = async (s) => {
-    await updateInvoice.mutateAsync({ id: statusSheet._id, data: { status: s } })
-    setStatusSheet(null)
+    const id = statusSheet._id; setStatusSheet(null); setInvUpdatingId(id)
+    try { await updateInvoice.mutateAsync({ id, data: { status: s } }) } finally { setInvUpdatingId(null) }
   }
   const onDelete = async (id) => { if (confirm('Delete this invoice?')) await deleteInvoice.mutateAsync(id) }
 
@@ -1022,8 +1025,8 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-sm font-semibold text-zinc-900">{sym}{(inv.grandTotal || 0).toFixed(2)}</span>
-                    <button onClick={() => { setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-blue-500 transition-colors" title="Send invoice"><Send size={14} /></button>
-                    <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid'} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"><RefreshCw size={14} /></button>
+                    <button onClick={() => { setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-blue-500 transition-colors" title="Send invoice"><Mail size={14} /></button>
+                    <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                     <button onClick={() => onDelete(inv._id)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"><Trash2 size={15} /></button>
                   </div>
                 </div>
@@ -1070,8 +1073,8 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Send size={14} /></button>
-                      <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid'} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status"><RefreshCw size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
