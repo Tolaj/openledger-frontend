@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Trash2, ShoppingBasket, Package, TrendingUp, TrendingDown, Plus } from 'lucide-react'
+import { Trash2, ShoppingBasket, Package, TrendingUp, TrendingDown, Plus, ChevronDown } from 'lucide-react'
 import DataTable, { DataTableMobileFilters, DataTableFilterIcon } from '../components/ui/DataTable'
 import BottomSheet from '../components/ui/BottomSheet'
 import TopBar from '../components/layout/TopBar'
@@ -48,6 +48,62 @@ const LEVEL_COLS = [
   { key: 'action',   label: 'action' },
 ]
 
+function LevelMobileCard({ inv, sym, groupMembers, onDelete, onAddToCart }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const { label, variant } = stockStatus(inv.quantityAvailable ?? 0)
+  const stockVal = (inv.quantityAvailable ?? 0) * (inv.price || 0)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+          style={{ backgroundColor: inv.product?.category?.color ? `${inv.product.category.color}22` : '#f4f4f5' }}>
+          {inv.product?.category?.icon || '📦'}
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <p className="text-sm font-semibold text-zinc-900 truncate">{inv.product?.name || '—'}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">{inv.product?.category?.name || 'Uncategorised'}&nbsp;·&nbsp;{sym}{stockVal.toFixed(2)}</p>
+        </div>
+        <div className="flex items-center gap-0 flex-shrink-0">
+          <Badge variant={variant}>{label}</Badge>
+          <button onClick={() => onAddToCart(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 ml-1">
+            <ShoppingBasket size={17} />
+          </button>
+          <button onClick={() => onDelete(inv._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+            <Trash2 size={17} />
+          </button>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Quantity</span>
+            <span className={`text-sm font-bold ${inv.quantityAvailable <= 0 ? 'text-red-500' : inv.quantityAvailable <= LOW_STOCK_THRESHOLD ? 'text-amber-600' : 'text-zinc-900'}`}>
+              {inv.quantityAvailable ?? 0} {inv.product?.unit || 'units'}
+            </span>
+          </div>
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Price</span>
+            <span className="text-sm text-zinc-900">{sym}{(inv.price || 0).toFixed(2)}</span>
+          </div>
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Stock Value</span>
+            <span className="text-sm font-semibold text-zinc-900">{sym}{stockVal.toFixed(2)}</span>
+          </div>
+          {inv.lastUpdated && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Updated</span>
+              <span className="text-sm text-zinc-900">{new Date(inv.lastUpdated).toLocaleDateString()}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LevelsTab({ mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers }) {
   const sym = useCurrencySymbol()
   const { data: inventory = [], isLoading } = useInventory()
@@ -94,46 +150,12 @@ function LevelsTab({ mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers 
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden pb-6">
-        {filtered.map((inv) => {
-          const { label, variant } = stockStatus(inv.quantityAvailable ?? 0)
-          const stockVal = (inv.quantityAvailable ?? 0) * (inv.price || 0)
-          return (
-            <div key={inv._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-semibold text-zinc-900 truncate">{inv.product?.name || '—'}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{inv.product?.category?.name || 'Uncategorised'}</p>
-                </div>
-                <Badge variant={variant}>{label}</Badge>
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-3">
-                  <div className="text-center">
-                    <p className="text-xs text-zinc-400">Qty</p>
-                    <p className={`text-lg font-bold ${inv.quantityAvailable <= 0 ? 'text-red-500' : inv.quantityAvailable <= LOW_STOCK_THRESHOLD ? 'text-amber-600' : 'text-zinc-900'}`}>
-                      {inv.quantityAvailable ?? 0}
-                    </p>
-                    <p className="text-xs text-zinc-400">{inv.product?.unit || 'units'}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-zinc-400">Value</p>
-                    <p className="text-sm font-semibold text-zinc-700">{sym}{stockVal.toFixed(2)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => addItem({ ...inv.product, price: inv.price }, inv.product?.unit, 'equal', groupMembers, groupMembers)}
-                    className="p-2 rounded-xl bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart">
-                    <ShoppingBasket size={15} />
-                  </button>
-                  <button onClick={() => { if (confirm('Delete this stock entry?')) deleteInventory(inv._id) }}
-                    className="p-2 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )
-        })}
+        {filtered.map((inv) => (
+          <LevelMobileCard key={inv._id} inv={inv} sym={sym} groupMembers={groupMembers}
+            onDelete={(id) => { if (confirm('Delete this stock entry?')) deleteInventory(id) }}
+            onAddToCart={(inv) => addItem({ ...inv.product, price: inv.price }, inv.product?.unit, 'equal', groupMembers, groupMembers)}
+          />
+        ))}
       </div>
 
       {/* Desktop table */}
@@ -196,6 +218,55 @@ const MOVEMENT_COLS = [
   { key: 'reason',    label: 'Reason',    filterable: false },
 ]
 
+function MovementMobileCard({ m }) {
+  const [isOpen, setIsOpen] = useState(false)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${m.change > 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+          {m.change > 0 ? <TrendingUp size={18} className="text-emerald-500" /> : <TrendingDown size={18} className="text-red-500" />}
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <p className="text-sm font-semibold text-zinc-900 truncate">{m.product?.name || '—'}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">{fmtDate(m.createdAt)}&nbsp;·&nbsp;
+            <span className={`font-semibold ${m.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.change > 0 ? '+' : ''}{m.change}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Badge variant={SOURCE_VARIANT[m.sourceType] || 'default'}>{SOURCE_LABEL[m.sourceType] || m.sourceType}</Badge>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Change</span>
+            <span className={`text-sm font-bold ${m.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.change > 0 ? '+' : ''}{m.change}</span>
+          </div>
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">After</span>
+            <span className="text-sm font-semibold text-zinc-900">{m.qtyAfter}</span>
+          </div>
+          {m.sourceRef && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Reference</span>
+              <span className="text-sm font-mono text-zinc-900">{m.sourceRef}</span>
+            </div>
+          )}
+          {m.reason && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Reason</span>
+              <span className="text-sm text-zinc-900 capitalize">{m.reason}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MovementsTab({ mobileFiltersOpen, onMobileFiltersOpenChange }) {
   const { data: movements = [], isLoading } = useStockMovements()
   const [filters, setFilters] = useState({ product: '', source: '' })
@@ -231,30 +302,7 @@ function MovementsTab({ mobileFiltersOpen, onMobileFiltersOpenChange }) {
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden pb-6">
-        {filtered.map((m) => (
-          <div key={m._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-semibold text-zinc-900 truncate">{m.product?.name || '—'}</p>
-                <p className="text-xs text-zinc-400 mt-0.5">{fmtDate(m.createdAt)}</p>
-              </div>
-              <Badge variant={SOURCE_VARIANT[m.sourceType] || 'default'}>{SOURCE_LABEL[m.sourceType] || m.sourceType}</Badge>
-            </div>
-            <div className="flex items-center gap-4 mt-3">
-              <div className="flex items-center gap-1.5">
-                {m.change > 0
-                  ? <TrendingUp size={14} className="text-emerald-500" />
-                  : <TrendingDown size={14} className="text-red-500" />}
-                <span className={`text-sm font-bold ${m.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {m.change > 0 ? '+' : ''}{m.change}
-                </span>
-              </div>
-              <span className="text-xs text-zinc-500">After: <strong className="text-zinc-800">{m.qtyAfter}</strong></span>
-              {m.sourceRef && <span className="text-xs text-zinc-400 font-mono">{m.sourceRef}</span>}
-            </div>
-            {m.reason && <p className="text-xs text-zinc-400 mt-1">Reason: {m.reason}</p>}
-          </div>
-        ))}
+        {filtered.map((m) => <MovementMobileCard key={m._id} m={m} />)}
       </div>
 
       {/* Desktop table */}
@@ -294,6 +342,51 @@ const ADJ_COLS = [
   { key: 'reason',  label: 'Reason',  filterable: true  },
   { key: 'notes',   label: 'Notes',   filterable: false },
 ]
+
+function AdjustmentMobileCard({ m }) {
+  const [isOpen, setIsOpen] = useState(false)
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${m.change > 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+          {m.change > 0 ? <TrendingUp size={18} className="text-emerald-500" /> : <TrendingDown size={18} className="text-red-500" />}
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <p className="text-sm font-semibold text-zinc-900 truncate">{m.product?.name || '—'}</p>
+          <p className="text-xs text-zinc-400 mt-0.5">{fmtDate(m.createdAt)}&nbsp;·&nbsp;
+            <span className={`font-semibold ${m.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.change > 0 ? '+' : ''}{m.change}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Badge variant={m.change > 0 ? 'success' : 'danger'}>{m.change > 0 ? 'Add' : 'Remove'}</Badge>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Change</span>
+            <span className={`text-sm font-bold ${m.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>{m.change > 0 ? '+' : ''}{m.change}</span>
+          </div>
+          {m.reason && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Reason</span>
+              <span className="text-sm text-zinc-900 capitalize">{m.reason}</span>
+            </div>
+          )}
+          {m.notes && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Notes</span>
+              <span className="text-sm text-zinc-900">{m.notes}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function AdjustmentsTab({ onAdd }) {
   const { data: movements = [], isLoading } = useStockMovements()
@@ -376,22 +469,7 @@ function AdjustmentsTab({ onAdd }) {
 
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden pb-6">
-        {filtered.map((m) => (
-          <div key={m._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="font-semibold text-zinc-900 truncate">{m.product?.name || '—'}</p>
-                <p className="text-xs text-zinc-400 mt-0.5">{fmtDate(m.createdAt)}</p>
-              </div>
-              <span className={`flex items-center gap-1 text-sm font-bold ${m.change > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {m.change > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-                {m.change > 0 ? '+' : ''}{m.change}
-              </span>
-            </div>
-            {m.reason && <p className="text-xs text-zinc-400 mt-2 capitalize">Reason: {m.reason}</p>}
-            {m.notes  && <p className="text-xs text-zinc-400 mt-0.5">{m.notes}</p>}
-          </div>
-        ))}
+        {filtered.map((m) => <AdjustmentMobileCard key={m._id} m={m} />)}
       </div>
 
       <DataTable columns={ADJ_COLS} data={filtered} filters={filters} onFilterChange={setFilter}
