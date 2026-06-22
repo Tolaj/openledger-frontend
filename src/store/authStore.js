@@ -1,23 +1,23 @@
 import { create } from 'zustand'
 
 const LS_KEY = 'openledger_activeGroup'
+const TOKEN_KEY = 'openledger_token'
 
 const useAuthStore = create((set) => ({
   user: null,
+  token: localStorage.getItem(TOKEN_KEY) || null,
   groupId: null,
   isLoading: true,
 
-  setSession: (user) =>
-    set({ user, groupId: user?.groupId ?? null, isLoading: false }),
+  setSession: (user, token) => {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    set({ user, token: token ?? localStorage.getItem(TOKEN_KEY), groupId: user?.groupId ?? null, isLoading: false })
+  },
 
   clearSession: () => {
-    // Wipe persisted group so the next user always starts with their own data.
-    // Also reset the groupStore's in-memory state via its own LS_KEY removal —
-    // the store reads from localStorage on init, so removing the key ensures
-    // the next store creation starts fresh. For the running store instance,
-    // call clearGroup() explicitly from the logout handler.
     localStorage.removeItem(LS_KEY)
-    set({ user: null, groupId: null, isLoading: false })
+    localStorage.removeItem(TOKEN_KEY)
+    set({ user: null, token: null, groupId: null, isLoading: false })
   },
 }))
 

@@ -19,7 +19,7 @@ export default function Login() {
     onSuccess: (res) => {
       clearSession()
       clearGroup()
-      setSession(res.data.user)
+      setSession(res.data.user, res.data.token)
       navigate('/', { replace: true })
     },
   })

@@ -73,7 +73,7 @@ export default function Register() {
     onSuccess: (res) => {
       clearSession()
       clearGroup()
-      setSession(res.data.user ?? res.data)
+      setSession(res.data.user ?? res.data, res.data.token)
       navigate('/onboarding', { replace: true })
     },
   })
