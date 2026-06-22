@@ -1296,28 +1296,28 @@ function ConfigurationTab() {
 
       {/* Template preview modal */}
       {previewTemplate && createPortal(
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm" onClick={() => setPreviewTemplate(null)}>
-          <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 text-white flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold capitalize">{previewTemplate} template</span>
-              <div className="flex gap-1">
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm">
+          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 text-white flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button onClick={() => setPreviewTemplate(null)} className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-white text-base leading-none">✕</button>
+            <div className="flex-1 overflow-x-auto scrollbar-none">
+              <div className="flex gap-1 pr-1" style={{ width: 'max-content' }}>
                 {['classic','modern','minimal','executive','bold','elegant','retro','compact','stripe','bureau'].map((k) => (
                   <button key={k} onClick={() => setPreviewTemplate(k)}
-                    className={`text-xs px-2.5 py-1 rounded-full capitalize transition-colors ${previewTemplate === k ? 'bg-white text-zinc-900 font-semibold' : 'text-zinc-400 hover:text-white'}`}>
+                    className={`text-xs px-2.5 py-1 rounded-full capitalize transition-colors whitespace-nowrap ${previewTemplate === k ? 'bg-white text-zinc-900 font-semibold' : 'text-zinc-400 hover:text-white'}`}>
                     {k}
                   </button>
                 ))}
               </div>
             </div>
-            <button onClick={() => setPreviewTemplate(null)} className="text-zinc-400 hover:text-white text-xl leading-none">✕</button>
           </div>
-          <div className="flex-1 overflow-auto p-4 flex justify-center" onClick={(e) => e.stopPropagation()}>
+          <div className="flex-1 overflow-hidden p-3 flex justify-center" onClick={() => setPreviewTemplate(null)}>
             <iframe
               key={previewTemplate}
               srcDoc={buildTemplatePreview(previewTemplate, biz, biz.color)}
               className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-zinc-200"
-              style={{ height: '780px' }}
+              style={{ height: '100%' }}
               title="Invoice preview"
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
         </div>,

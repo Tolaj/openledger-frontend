@@ -9,6 +9,7 @@ import useCartStore from '../store/cartStore'
 import PageHeader from '../components/layout/PageHeader'
 import PageActions from '../components/layout/PageActions'
 import useAuthStore from '../store/authStore'
+import { useMe } from '../hooks/useUser'
 import useGroupStore from '../store/groupStore'
 import { useProducts } from '../hooks/useProducts'
 import { useOrders } from '../hooks/useOrders'
@@ -63,14 +64,15 @@ function KpiCard({ label, value, sub, icon: Icon, iconColor, bgColor, to, naviga
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const navigate      = useNavigate()
+  const navigate = useNavigate()
   const { openCart, getItemCount } = useCartStore()
-  const user          = useAuthStore((s) => s.user)
-  const firstName     = user?.name?.split(' ')[0] || 'there'
+  const user = useAuthStore((s) => s.user)
+  const { data: me } = useMe()
+  const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'there'
   const { activeGroupId } = useGroupStore()
-  const symbol        = useCurrencySymbol()
-  const groupType     = useActiveGroupType()   // 'personal' | 'business'
-  const isBusiness    = groupType === 'business'
+  const symbol = useCurrencySymbol()
+  const groupType = useActiveGroupType()   // 'personal' | 'business'
+  const isBusiness = groupType === 'business'
 
   const now = new Date()
 
@@ -79,17 +81,17 @@ export default function Dashboard() {
   const lowStock = inventory.filter((inv) => inv.quantityAvailable <= 2)
 
   // ── Personal-only hooks (gated so they don't fire for business groups) ────
-  const { data: products  = [] } = useProducts()
-  const { data: orders    = [] } = useOrders()
+  const { data: products = [] } = useProducts()
+  const { data: orders = [] } = useOrders()
   const { data: wishlists = [] } = useWishlists()
 
   // Finance queries: pass null groupId for business groups so enabled: !!groupId = false → no fetch
   const financeParams = {
-    groupId:   isBusiness ? null : activeGroupId,
+    groupId: isBusiness ? null : activeGroupId,
     startDate: startOfMonth(now).toISOString(),
-    endDate:   endOfMonth(now).toISOString(),
+    endDate: endOfMonth(now).toISOString(),
   }
-  const { data: summary }            = useFinanceSummary(financeParams)
+  const { data: summary } = useFinanceSummary(financeParams)
   const { data: recentFinance = [] } = useFinance(financeParams)
 
   const recentOrders = [...orders]
@@ -97,21 +99,21 @@ export default function Dashboard() {
     .slice(0, 5)
 
   // ── Business-only hooks ────────────────────────────────────────────────────
-  const { data: purchaseOrders   = [] } = usePurchaseOrders()
-  const { data: salesOrders      = [] } = useSalesOrders()
+  const { data: purchaseOrders = [] } = usePurchaseOrders()
+  const { data: salesOrders = [] } = useSalesOrders()
   const { data: purchaseInvoices = [] } = usePurchaseInvoices()
-  const { data: salesInvoices    = [] } = useSalesInvoices()
+  const { data: salesInvoices = [] } = useSalesInvoices()
 
-  const pendingPOs  = purchaseOrders.filter((p) => ['draft', 'sent', 'partial'].includes(p.status))
-  const pendingSOs  = salesOrders.filter((s) => ['draft', 'confirmed', 'partial'].includes(s.status))
-  const unpaidPInv  = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
-  const unpaidSInv  = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const pendingPOs = purchaseOrders.filter((p) => ['draft', 'sent', 'partial'].includes(p.status))
+  const pendingSOs = salesOrders.filter((s) => ['draft', 'confirmed', 'partial'].includes(s.status))
+  const unpaidPInv = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const unpaidSInv = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
   const overduePInv = purchaseInvoices.filter((i) => i.status === 'overdue')
   const overdueSInv = salesInvoices.filter((i) => i.status === 'overdue')
 
   const totalReceivable = unpaidSInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
-  const totalPayable    = unpaidPInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
-  const stockValue      = inventory.reduce((s, inv) => s + (inv.quantityAvailable || 0) * (inv.price || 0), 0)
+  const totalPayable = unpaidPInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
+  const stockValue = inventory.reduce((s, inv) => s + (inv.quantityAvailable || 0) * (inv.price || 0), 0)
 
   const recentSOs = [...salesOrders]
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
@@ -153,7 +155,7 @@ export default function Dashboard() {
         <div className="md:hidden pt-5 flex items-start justify-between gap-3">
           <div>
             <p className="text-sm text-zinc-500 font-medium">Welcome back,</p>
-            <p className="text-3xl font-bold text-zinc-900 leading-tight mt-0.5">{user?.name || 'User'}</p>
+            <p className="text-3xl font-bold text-zinc-900 leading-tight mt-0.5">{firstName}</p>
             <p className="text-xs text-zinc-400 mt-1">{format(now, 'EEEE, d MMMM')}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 mt-1">
@@ -276,9 +278,8 @@ export default function Dashboard() {
                           <p className="text-sm font-medium text-zinc-900 truncate">{p.name || '—'}</p>
                           <p className="text-xs text-zinc-400">{p.unit || '—'}</p>
                         </div>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                          inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
-                        }`}>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                          }`}>
                           {inv.quantityAvailable} left
                         </span>
                       </div>
@@ -318,11 +319,13 @@ export default function Dashboard() {
             {/* Stats grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: 'Products',  value: products.length,  icon: Package,       color: 'bg-zinc-100', to: '/products' },
-                { label: 'Orders',    value: orders.length,    icon: ShoppingCart,  color: 'bg-zinc-100', to: '/products' },
-                { label: 'Wishlist',  value: wishlists.length, icon: Heart,         color: 'bg-pink-50',  to: '/products' },
-                { label: 'Low Stock', value: lowStock.length,  icon: AlertTriangle,
-                  color: lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100', to: '/products' },
+                { label: 'Products', value: products.length, icon: Package, color: 'bg-zinc-100', to: '/products' },
+                { label: 'Orders', value: orders.length, icon: ShoppingCart, color: 'bg-zinc-100', to: '/products' },
+                { label: 'Wishlist', value: wishlists.length, icon: Heart, color: 'bg-pink-50', to: '/products' },
+                {
+                  label: 'Low Stock', value: lowStock.length, icon: AlertTriangle,
+                  color: lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100', to: '/products'
+                },
               ].map(({ label, value, icon: Icon, color, to }) => (
                 <button key={label} onClick={() => navigate(to)}
                   className="bg-white rounded-2xl p-4 text-left active:scale-[0.97] transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
@@ -377,9 +380,8 @@ export default function Dashboard() {
                               <p className="text-sm font-medium text-zinc-900 truncate">{p.name || '—'}</p>
                               <p className="text-xs text-zinc-400">{p.unit || '—'}</p>
                             </div>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                              inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
-                            }`}>
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                              }`}>
                               {inv.quantityAvailable} left
                             </span>
                           </div>
@@ -398,10 +400,10 @@ export default function Dashboard() {
                   {recentFinance.slice(0, 5).map((t) => (
                     <div key={t._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
                       <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center flex-shrink-0">
-                        {t.type === 'income'     && <TrendingUp    size={14} className="text-emerald-600" />}
-                        {t.type === 'expense'    && <TrendingDown  size={14} className="text-red-500" />}
-                        {t.type === 'loan'       && <ClipboardList size={14} className="text-amber-600" />}
-                        {t.type === 'investment' && <TrendingUp    size={14} className="text-blue-600" />}
+                        {t.type === 'income' && <TrendingUp size={14} className="text-emerald-600" />}
+                        {t.type === 'expense' && <TrendingDown size={14} className="text-red-500" />}
+                        {t.type === 'loan' && <ClipboardList size={14} className="text-amber-600" />}
+                        {t.type === 'investment' && <TrendingUp size={14} className="text-blue-600" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-zinc-900 truncate">{t.description || t.type}</p>
