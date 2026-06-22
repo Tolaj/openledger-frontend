@@ -3,6 +3,7 @@ import {
   Home, Tag, CreditCard, Settings,
   ShoppingCart, TrendingUp, Layers, Boxes,
 } from 'lucide-react'
+import AppLogo from '../ui/AppLogo'
 import useAuthStore from '../../store/authStore'
 import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
@@ -67,7 +68,9 @@ export default function Sidebar() {
     <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col bg-white border-r border-zinc-200 z-40">
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-5 h-16 border-b border-zinc-100">
-        <div className="w-7 h-7 bg-zinc-900 rounded-lg flex-shrink-0" />
+        <div className="w-7 h-7 bg-zinc-900 rounded-lg flex-shrink-0 flex items-center justify-center">
+          <AppLogo size={14} className="text-white" />
+        </div>
         <span className="text-sm font-bold text-zinc-900 tracking-tight">OpenLedger</span>
       </div>
 

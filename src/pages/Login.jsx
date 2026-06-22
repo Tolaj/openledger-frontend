@@ -6,6 +6,7 @@ import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import AppLogo from '../components/ui/AppLogo'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -27,7 +28,9 @@ export default function Login() {
   return (
     <div className="flex-1 flex flex-col justify-center px-6 py-12 max-w-md mx-auto w-full">
       <div className="mb-10">
-        <div className="w-10 h-10 bg-zinc-900 rounded-2xl mb-6" />
+        <div className="w-10 h-10 bg-zinc-900 rounded-2xl mb-6 flex items-center justify-center">
+          <AppLogo size={18} className="text-white" />
+        </div>
         <h1 className="text-2xl font-bold text-zinc-900">Welcome back</h1>
         <p className="text-sm text-zinc-500 mt-1">Sign in to your account</p>
       </div>

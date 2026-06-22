@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Package, TrendingUp, TrendingDown, ShoppingCart, BarChart2, Users,
+  TrendingUp, TrendingDown, ShoppingCart, BarChart2,
   ArrowRight, CheckCircle, Boxes, Receipt, Landmark, ChevronRight,
   Zap, Globe, Lock, Sparkles, Star, Menu, X, MoveRight,
 } from 'lucide-react'
+import AppLogo from '../components/ui/AppLogo'
 
 /* ─── tiny animation hook ──────────────────────────────────────────────────── */
 function useInView(threshold = 0.15) {
@@ -206,7 +207,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center shadow-md">
-              <Package size={15} className="text-white" />
+              <AppLogo size={15} className="text-white" />
             </div>
             <span className="font-extrabold text-zinc-900 tracking-tight text-lg">OpenLedger</span>
           </div>
@@ -556,7 +557,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 bg-zinc-900 rounded-xl flex items-center justify-center">
-              <Package size={13} className="text-white" />
+              <AppLogo size={13} className="text-white" />
             </div>
             <span className="font-extrabold text-zinc-900 tracking-tight">OpenLedger</span>
           </div>
