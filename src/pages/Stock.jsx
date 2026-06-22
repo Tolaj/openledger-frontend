@@ -487,14 +487,14 @@ export default function Stock() {
         title="Stock"
         filterIcon={hasFilters && <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />}
         right={tab === 'adjustments' && (
-          <button onClick={() => onAddRef.current?.()} className="p-2 rounded-xl active:bg-zinc-100">
+          <button onClick={() => onAddRef.current?.()} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
             <Plus size={20} />
           </button>
         )}
       />
 
-      <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        <div className="flex items-center justify-between gap-4 flex-shrink-0 py-4 md:py-0 md:mb-4">
+      <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
+        <div className="flex items-center gap-3 flex-shrink-0 py-2 md:py-0 md:mb-4 md:justify-between">
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
           <PageActions add={addBtn} />
         </div>

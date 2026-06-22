@@ -1785,12 +1785,12 @@ export default function Finance() {
         right={
           <div className="flex items-center">
             {tab === 'transactions' && (
-              <button onClick={() => setShowAddTxn(true)} className="p-2 rounded-xl active:bg-zinc-100">
+              <button onClick={() => setShowAddTxn(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <Plus size={20} className="text-zinc-600" />
               </button>
             )}
             {tab === 'budgets' && (
-              <button onClick={() => setShowAddBudget(true)} className="p-2 rounded-xl active:bg-zinc-100">
+              <button onClick={() => setShowAddBudget(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <Plus size={20} className="text-zinc-600" />
               </button>
             )}
@@ -1798,7 +1798,7 @@ export default function Finance() {
         }
       />
 
-      <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
+      <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         <div
           className="sticky z-20 bg-zinc-50 -mx-4 px-4 md:static md:bg-transparent md:mx-0 md:px-0 flex items-center justify-between gap-4 flex-shrink-0 py-3 md:py-0 md:mb-4"
           style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}

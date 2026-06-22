@@ -49,7 +49,8 @@
   }
 
   .pb-nav {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+    /* floating pill nav: 44px pill + 16px gap + 16px margin + safe area */
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 
   .min-touch {
@@ -64,4 +65,9 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }

@@ -24,7 +24,7 @@ import ProductPicker from '../components/features/ProductPicker'
 import Tabs from '../components/ui/Tabs'
 
 const TABS = [
-  { key: 'po',       label: 'Purchase Orders', mobileLabel: 'PO'      },
+  { key: 'po',       label: 'Purchase Orders', mobileLabel: 'Purchase Order'      },
   { key: 'grn',      label: 'Goods Receipt',   mobileLabel: 'GRN'     },
   { key: 'invoices', label: 'Invoices',         mobileLabel: 'Invoices'},
   { key: 'vendors',  label: 'Vendors',          mobileLabel: 'Vendors' },
@@ -145,8 +145,8 @@ function VendorsTab({ mobileFiltersOpen, onAdd }) {
             <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-600">{v.gstin || '—'}</td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <button onClick={() => openEdit(v)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
-                <button onClick={() => onDelete(v._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                <button onClick={() => openEdit(v)} className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
+                <button onClick={() => onDelete(v._id)} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
               </div>
             </td>
           </tr>
@@ -368,9 +368,9 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
-                  <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Mail size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Mail size={14} /></button>
                   <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'received') setStatusSheet(o) }} disabled={o.status === 'received' || updatingId === o._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
-                  <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                 </div>
               </td>
             </tr>
@@ -756,7 +756,7 @@ function GRNTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{g.receivedDate ? new Date(g.receivedDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <button onClick={(e) => { e.stopPropagation(); onDelete(g._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(g._id) }} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -1098,9 +1098,9 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
                       <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
-                      <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
                   </td>
                 </tr>
@@ -1390,14 +1390,14 @@ export default function Purchases() {
         title="Purchases"
         filterIcon={hasFilters && <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />}
         right={hasAdd && (
-          <button onClick={() => onAddRef.current?.()} className="p-2 rounded-xl active:bg-zinc-100">
+          <button onClick={() => onAddRef.current?.()} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
             <Plus size={20} />
           </button>
         )}
       />
 
-      <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        <div className="flex items-center justify-between gap-4 flex-shrink-0 py-4 md:py-0 md:mb-4">
+      <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
+        <div className="flex items-center gap-3 flex-shrink-0 py-2 md:py-0 md:mb-4 md:justify-between">
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
           <PageActions add={addBtn} />
         </div>

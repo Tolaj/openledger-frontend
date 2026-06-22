@@ -4,7 +4,8 @@ import {
   Heart, ClipboardList, ArrowRight, AlertTriangle,
   Truck, FileText, PackageCheck, ReceiptText,
 } from 'lucide-react'
-import TopBar from '../components/layout/TopBar'
+import GroupSwitcher from '../components/layout/GroupSwitcher'
+import useCartStore from '../store/cartStore'
 import PageHeader from '../components/layout/PageHeader'
 import PageActions from '../components/layout/PageActions'
 import useAuthStore from '../store/authStore'
@@ -35,7 +36,7 @@ function fmtDate(d) {
 function SectionHeader({ title, to, navigate }) {
   return (
     <div className="flex items-center justify-between mb-3">
-      <p className="text-sm font-semibold text-zinc-900">{title}</p>
+      <p className="text-base font-bold text-zinc-900">{title}</p>
       {to && (
         <button onClick={() => navigate(to)} className="flex items-center gap-0.5 text-xs text-zinc-400 active:text-zinc-700">
           See all <ArrowRight size={12} />
@@ -49,7 +50,7 @@ function SectionHeader({ title, to, navigate }) {
 function KpiCard({ label, value, sub, icon: Icon, iconColor, bgColor, to, navigate, danger }) {
   return (
     <button onClick={() => to && navigate(to)}
-      className="bg-white rounded-2xl border border-zinc-200 p-4 text-left active:scale-[0.97] transition-transform w-full">
+      className="bg-white rounded-2xl p-4 text-left active:scale-[0.97] transition-transform w-full shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
       <div className={`w-8 h-8 rounded-xl ${bgColor} flex items-center justify-center mb-3`}>
         <Icon size={16} className={iconColor} />
       </div>
@@ -63,6 +64,7 @@ function KpiCard({ label, value, sub, icon: Icon, iconColor, bgColor, to, naviga
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate      = useNavigate()
+  const { openCart, getItemCount } = useCartStore()
   const user          = useAuthStore((s) => s.user)
   const firstName     = user?.name?.split(' ')[0] || 'there'
   const { activeGroupId } = useGroupStore()
@@ -136,20 +138,34 @@ export default function Dashboard() {
 
   return (
     <>
-      <TopBar title="OpenLedger" />
+      {/* Desktop greeting */}
+      <div className="hidden md:block px-4 py-3 pb-6 md:px-0 md:py-0 md:pb-4">
+        <PageHeader
+          title={`Hey, ${firstName} 👋`}
+          subtitle={`${format(now, 'EEEE, d MMMM')} · Here's your overview`}
+          action={<PageActions />}
+        />
+      </div>
 
-      <div className="px-4 py-5 pb-8 md:px-0 md:py-0 md:pb-6 flex flex-col gap-4 md:gap-6">
+      <div className="px-4 pt-0 pb-6 md:px-0 md:py-0 md:pb-6 flex flex-col gap-5 md:gap-6">
 
-        {/* Greeting */}
-        <div>
-          <PageHeader
-            title={`Hey, ${firstName} 👋`}
-            subtitle={`${format(now, 'EEEE, d MMMM')} · Here's your overview`}
-            action={<PageActions />}
-          />
-          <div className="md:hidden">
-            <p className="text-xl font-bold text-zinc-900">Hey, {firstName} 👋</p>
-            <p className="text-sm text-zinc-500 mt-0.5">{format(now, 'EEEE, d MMMM')} · Here's your overview</p>
+        {/* Mobile greeting — no sticky header, inline at top of scroll */}
+        <div className="md:hidden pt-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm text-zinc-500 font-medium">Welcome back,</p>
+            <p className="text-3xl font-bold text-zinc-900 leading-tight mt-0.5">{user?.name || 'User'}</p>
+            <p className="text-xs text-zinc-400 mt-1">{format(now, 'EEEE, d MMMM')}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+            <GroupSwitcher compact />
+            <button onClick={openCart} className="relative w-9 h-9 flex items-center justify-center rounded-full bg-white shadow-sm active:bg-zinc-50 transition-colors">
+              <ShoppingCart size={17} className="text-zinc-700" />
+              {getItemCount() > 0 && (
+                <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-zinc-900 text-white text-[8px] font-bold flex items-center justify-center">
+                  {getItemCount() > 9 ? '9+' : getItemCount()}
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -158,13 +174,13 @@ export default function Dashboard() {
           <>
             {/* Receivable / Payable hero */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-zinc-900 text-white rounded-2xl p-4">
+              <div className="bg-zinc-900 text-white rounded-3xl p-4">
                 <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1"><TrendingUp size={10} /> Receivable</p>
                 <p className="text-2xl font-bold text-emerald-400">{fmt(totalReceivable, symbol)}</p>
                 <p className="text-xs text-zinc-400 mt-1">{unpaidSInv.length} unpaid invoice{unpaidSInv.length !== 1 ? 's' : ''}</p>
                 {overdueSInv.length > 0 && <p className="text-xs text-red-400 mt-0.5">{overdueSInv.length} overdue</p>}
               </div>
-              <div className="bg-zinc-900 text-white rounded-2xl p-4">
+              <div className="bg-zinc-900 text-white rounded-3xl p-4">
                 <p className="text-[10px] text-zinc-400 mb-1 flex items-center gap-1"><TrendingDown size={10} /> Payable</p>
                 <p className="text-2xl font-bold text-red-400">{fmt(totalPayable, symbol)}</p>
                 <p className="text-xs text-zinc-400 mt-1">{unpaidPInv.length} unpaid invoice{unpaidPInv.length !== 1 ? 's' : ''}</p>
@@ -192,7 +208,7 @@ export default function Dashboard() {
 
             {/* Recent SOs + POs */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+              <div className="bg-white rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
                 <SectionHeader title="Recent Sales Orders" to="/sales" navigate={navigate} />
                 {recentSOs.length === 0
                   ? <p className="text-sm text-zinc-400">No sales orders yet</p>
@@ -217,7 +233,7 @@ export default function Dashboard() {
                   )}
               </div>
 
-              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+              <div className="bg-white rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
                 <SectionHeader title="Recent Purchase Orders" to="/purchases" navigate={navigate} />
                 {recentPOs.length === 0
                   ? <p className="text-sm text-zinc-400">No purchase orders yet</p>
@@ -245,7 +261,7 @@ export default function Dashboard() {
 
             {/* Low stock alert */}
             {lowStock.length > 0 && (
-              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+              <div className="bg-white rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
                 <SectionHeader title="Low Stock Alert" to="/products" navigate={navigate} />
                 <div className="flex flex-col divide-y divide-zinc-100">
                   {lowStock.slice(0, 5).map((inv) => {
@@ -279,21 +295,24 @@ export default function Dashboard() {
 
             {/* Finance hero */}
             {activeGroupId && (
-              <button onClick={() => navigate('/finance')}
-                className="w-full text-left bg-zinc-900 text-white rounded-2xl p-5 active:scale-[0.98] transition-transform">
+              <div className="w-full bg-zinc-900 text-white rounded-3xl p-5">
                 <p className="text-xs font-medium text-zinc-400 mb-1">This month · Net balance</p>
-                <p className="text-3xl font-bold mb-4">{fmt(summary?.net, symbol)}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white/10 rounded-xl p-3">
+                <p className="text-[32px] font-bold leading-tight mb-4">{fmt(summary?.net, symbol)}</p>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="bg-white/10 rounded-2xl p-3">
                     <p className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1"><TrendingUp size={10} /> Income</p>
                     <p className="text-sm font-semibold text-emerald-400">{fmt(summary?.income, symbol)}</p>
                   </div>
-                  <div className="bg-white/10 rounded-xl p-3">
+                  <div className="bg-white/10 rounded-2xl p-3">
                     <p className="text-[10px] text-zinc-400 mb-0.5 flex items-center gap-1"><TrendingDown size={10} /> Expense</p>
                     <p className="text-sm font-semibold text-red-400">{fmt(summary?.expense, symbol)}</p>
                   </div>
                 </div>
-              </button>
+                <button onClick={() => navigate('/finance')}
+                  className="w-full flex items-center justify-center gap-2 bg-white/15 hover:bg-white/20 active:bg-white/25 rounded-2xl py-3 text-sm font-semibold text-white transition-colors">
+                  <ReceiptText size={15} /> View Transactions
+                </button>
+              </div>
             )}
 
             {/* Stats grid */}
@@ -306,7 +325,7 @@ export default function Dashboard() {
                   color: lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100', to: '/products' },
               ].map(({ label, value, icon: Icon, color, to }) => (
                 <button key={label} onClick={() => navigate(to)}
-                  className="bg-white rounded-2xl border border-zinc-200 p-4 text-left active:scale-[0.97] transition-transform">
+                  className="bg-white rounded-2xl p-4 text-left active:scale-[0.97] transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
                   <div className={`w-8 h-8 rounded-xl ${color} flex items-center justify-center mb-3`}>
                     <Icon size={16} className="text-zinc-700" />
                   </div>
@@ -340,7 +359,7 @@ export default function Dashboard() {
                   )}
               </div>
 
-              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+              <div className="bg-white rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
                 <SectionHeader title="Low Stock" to="/products" navigate={navigate} />
                 {lowStock.length === 0
                   ? <p className="text-sm text-zinc-400">All items well stocked</p>
@@ -373,7 +392,7 @@ export default function Dashboard() {
 
             {/* Recent Finance transactions */}
             {recentFinance.length > 0 && (
-              <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+              <div className="bg-white rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
                 <SectionHeader title="Recent Transactions" to="/finance" navigate={navigate} />
                 <div className="flex flex-col divide-y divide-zinc-100">
                   {recentFinance.slice(0, 5).map((t) => (

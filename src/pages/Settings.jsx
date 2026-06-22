@@ -417,7 +417,7 @@ function ProfileTab() {
       </div>
 
       {/* Sign out */}
-      <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+      <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
         <button
           onClick={() => logoutFn()}
           disabled={loggingOut}
@@ -515,7 +515,7 @@ function FriendCard({ r, myId, respond, canReject }) {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
       <div className="flex items-center gap-3 p-4">
         <div className="w-11 h-11 rounded-full bg-zinc-900 flex items-center justify-center flex-shrink-0">
           <Users size={20} className="text-white" />
@@ -1076,7 +1076,7 @@ function ConfigurationTab() {
         {/* Middle column: account type + currency */}
         <div className={`flex flex-col gap-4 ${activeGroup?.type === 'business' ? 'md:w-72' : 'max-w-lg'} w-full`}>
           {/* Account type */}
-          <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+          <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
             <div className="p-4">
               <p className="text-sm font-semibold text-zinc-900 mb-1">Account type</p>
               <p className="text-xs text-zinc-400 mb-3">Set when your first group was created. Each group has its own type.</p>
@@ -1092,7 +1092,7 @@ function ConfigurationTab() {
           </div>
 
           {/* Currency */}
-          <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+          <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
             <div className="p-4">
               <p className="text-sm font-semibold text-zinc-900 mb-1">Currency</p>
               <p className="text-xs text-zinc-400 mb-3">
@@ -1128,7 +1128,7 @@ function ConfigurationTab() {
         {/* Right column: invoice template (business only) */}
         {activeGroup?.type === 'business' && (
           <div className="flex flex-col gap-4 md:w-96 w-full">
-            <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+            <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
               <div className="p-4">
                 <p className="text-sm font-semibold text-zinc-900 mb-1">Invoice template</p>
                 <p className="text-xs text-zinc-400 mb-3">Applies to all PDFs generated for this group.</p>
@@ -1693,12 +1693,12 @@ export default function Settings() {
         right={
           <div className="flex items-center">
             {tab === 'friends' && !showAddFriend && (
-              <button onClick={() => setShowAddFriend(true)} className="p-2 rounded-xl active:bg-zinc-100">
+              <button onClick={() => setShowAddFriend(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <UserPlus size={20} className="text-zinc-600" />
               </button>
             )}
             {tab === 'groups' && (
-              <button onClick={() => openGroupAdd.current?.()} className="p-2 rounded-xl active:bg-zinc-100">
+              <button onClick={() => openGroupAdd.current?.()} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <Plus size={20} className="text-zinc-600" />
               </button>
             )}
@@ -1708,8 +1708,8 @@ export default function Settings() {
       <div className="md:px-0 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Tab bar — fixed below TopBar on mobile, static on desktop */}
         <div className="flex items-center justify-between gap-4 flex-shrink-0
-                        sticky top-14 z-10 bg-zinc-50 px-4 py-4
-                        md:static md:top-auto md:px-0 md:py-0 md:mb-4">
+                        sticky top-14 z-10 bg-[#f5f5f5] px-4 py-4
+                        md:static md:top-auto md:bg-transparent md:px-0 md:py-0 md:mb-4">
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
           <PageActions add={
             tab === 'friends' && !showAddFriend
