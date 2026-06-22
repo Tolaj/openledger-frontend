@@ -863,8 +863,8 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
   )
 }
 
-// ── OrderMobileCard ───────────────────────────────────────────────────────────
-function OrderMobileCard({ o, onDelete, isBusiness }) {
+// ── PersonalOrderMobileCard ───────────────────────────────────────────────────
+function PersonalOrderMobileCard({ o, onDelete, isBusiness }) {
   const sym = useCurrencySymbol()
   const [isOpen, setIsOpen] = useState(false)
   const [itemsOpen, setItemsOpen] = useState(false)
@@ -967,6 +967,99 @@ const SETTLEMENT_VARIANT = {
   uninvoiced: 'default',
 }
 
+// ── OrderMobileCard ───────────────────────────────────────────────────────────
+function OrderMobileCard({ o, sym, isBusiness, onDelete }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [itemsOpen, setItemsOpen] = useState(false)
+  const typeColor = ORDER_TYPE_COLORS[o._type] || 'bg-zinc-100 text-zinc-600'
+  const typeLabel = ORDER_TYPE_LABELS[o._type] || o._type
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="px-3 py-3 flex items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-white">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setIsOpen((v) => !v)}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <p className="text-sm font-semibold text-zinc-900 font-mono">{o._label || '—'}</p>
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${typeColor}`}>{typeLabel}</span>
+          </div>
+          <p className="text-xs text-zinc-400 mt-0.5">
+            {sym}{Number(o._total || 0).toFixed(2)}&nbsp;|&nbsp;{o._party && o._party !== '—' ? o._party : (o._date ? new Date(o._date).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) : '—')}
+          </p>
+        </div>
+        <div className="flex gap-0 flex-shrink-0">
+          <button onClick={() => onDelete(o)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+            <Trash2 size={17} />
+          </button>
+          <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
+            <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+          </button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Status</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {o._status && o._status !== '—' && <Badge variant={ORDER_STATUS_VARIANT[o._status] || 'default'}>{o._status}</Badge>}
+              <Badge variant={SETTLEMENT_VARIANT[o._settlement] || 'default'}>{o._settlement}</Badge>
+            </div>
+          </div>
+          {o._party && o._party !== '—' && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">{isBusiness ? 'Party' : 'Paid By'}</span>
+              <span className="text-sm text-zinc-900">{o._party}</span>
+            </div>
+          )}
+          <div className="flex items-center px-4 py-2.5">
+            <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Total</span>
+            <span className="text-sm font-semibold text-zinc-900">{sym}{Number(o._total || 0).toFixed(2)}</span>
+          </div>
+          {o._date && (
+            <div className="flex items-center px-4 py-2.5">
+              <span className="text-xs text-zinc-400 w-24 flex-shrink-0">Date</span>
+              <span className="text-sm text-zinc-900">{new Date(o._date).toLocaleDateString()}</span>
+            </div>
+          )}
+          <div className="px-4 py-2.5">
+            <button onClick={() => setItemsOpen((v) => !v)} className="w-full flex items-center justify-between">
+              <span className="text-xs text-zinc-400">items ({o.items?.length ?? 0})</span>
+              <ChevronDown size={14} className={`text-zinc-400 transition-transform ${itemsOpen ? '' : '-rotate-90'}`} />
+            </button>
+            {itemsOpen && (
+              <div className="mt-2 rounded-xl border border-zinc-100 overflow-hidden">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50">
+                      {['Product', 'Qty', 'Price', 'Unit', ...(!isBusiness ? ['Split'] : [])].map((h, i, arr) => (
+                        <th key={h} className={`px-2 py-1.5 text-left font-semibold text-zinc-500 ${i < arr.length - 1 ? 'border-r border-zinc-100' : ''}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(o.items || []).map((item, idx, arr) => (
+                      <tr key={idx} className={idx < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-800 font-medium">{item.product?.name || item.description || '—'}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{item.qty ?? item.count ?? '—'}</td>
+                        <td className="px-2 py-1.5 border-r border-zinc-100 text-zinc-600">{sym}{item.unitPrice ?? item.price ?? '—'}</td>
+                        <td className={`px-2 py-1.5 text-zinc-600 ${!isBusiness ? 'border-r border-zinc-100' : ''}`}>{item.unit || '—'}</td>
+                        {!isBusiness && <td className="px-2 py-1.5 text-zinc-600">{(item.splitAmong || []).map((u) => u?.name || u?.email || String(u)).join(', ')}</td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const sym = useCurrencySymbol()
 
@@ -1064,24 +1157,7 @@ function OrdersTab({ mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness })
       {/* Mobile cards */}
       <div className="flex flex-col gap-2 md:hidden">
         {filtered.map((o) => (
-          <div key={o._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-sm font-semibold text-zinc-900">{o._label || '—'}</span>
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${ORDER_TYPE_COLORS[o._type]}`}>{ORDER_TYPE_LABELS[o._type]}</span>
-                  {o._status && o._status !== '—' && <Badge variant={ORDER_STATUS_VARIANT[o._status] || 'default'}>{o._status}</Badge>}
-                  <Badge variant={SETTLEMENT_VARIANT[o._settlement] || 'default'}>{o._settlement}</Badge>
-                </div>
-                {o._party && o._party !== '—' && <p className="text-xs text-zinc-500 mt-0.5">{o._party}</p>}
-                {o._date && <p className="text-xs text-zinc-400 mt-0.5">{new Date(o._date).toLocaleDateString()}</p>}
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <span className="text-sm font-semibold text-zinc-900">{sym}{Number(o._total || 0).toFixed(2)}</span>
-                <button onClick={() => handleDelete(o)} className="p-2 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors ml-1"><Trash2 size={17} /></button>
-              </div>
-            </div>
-          </div>
+          <OrderMobileCard key={o._id} o={o} sym={sym} isBusiness={isBusiness} onDelete={handleDelete} />
         ))}
       </div>
 
