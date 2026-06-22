@@ -25,7 +25,12 @@ export function useUpdateSalesOrder() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updateSalesOrder(id, data, activeGroupId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sales-orders', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['deliveries', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['sales-invoices', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['inventory', activeGroupId] })
+    },
   })
 }
 

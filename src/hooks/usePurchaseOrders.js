@@ -25,7 +25,12 @@ export function useUpdatePurchaseOrder() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updatePurchaseOrder(id, data, activeGroupId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['purchase-orders', activeGroupId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['purchase-orders', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['grns', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['purchase-invoices', activeGroupId] })
+      qc.invalidateQueries({ queryKey: ['inventory', activeGroupId] })
+    },
   })
 }
 

@@ -937,6 +937,22 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
   const getDrop   = (key) => dropSel[key] || []
   const inDrop    = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
 
+  // Build PO/GRN ref string
+  const getInvoiceRef = (inv) => {
+    const poNumber = inv.purchaseOrder?.poNumber
+    // Created via GRN → show single GRN as before
+    if (inv.grn) return [poNumber, inv.grn?.grnNumber].filter(Boolean).join(' / ') || '—'
+    // Created via PO → show all GRNs under that PO
+    if (!poNumber) return '—'
+    const poId = inv.purchaseOrder?._id || inv.purchaseOrder
+    const linkedGrns = grns.filter((g) => (g.purchaseOrder?._id || g.purchaseOrder) === poId)
+    if (linkedGrns.length === 0) return poNumber
+    if (linkedGrns.length === 1) return `${poNumber} / ${linkedGrns[0].grnNumber}`
+    const prefix = linkedGrns[0].grnNumber.replace(/\d+$/, '')
+    const nums = linkedGrns.map((g) => g.grnNumber.replace(/\D/g, ''))
+    return `${poNumber} / ${prefix}${nums.join(', ')}`
+  }
+
   const dropOpts = {
     vendor: [...new Set(invoices.map((i) => i.vendor?.name).filter(Boolean))],
     status: ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
@@ -944,7 +960,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
 
   const filtered = invoices.filter((inv) => {
     const vendorName = inv.vendor?.name || ''
-    const ref = [inv.purchaseOrder?.poNumber, inv.grn?.grnNumber].filter(Boolean).join(' / ')
+    const ref = getInvoiceRef(inv)
     return (
       (inv.invoiceNumber || '').toLowerCase().includes(filters.invoiceNumber.toLowerCase()) &&
       vendorName.toLowerCase().includes(filters.vendor.toLowerCase()) && inDrop('vendor', vendorName) &&
@@ -1026,9 +1042,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
                     </div>
                     <p className="text-sm text-zinc-600 mt-0.5">{inv.vendor?.name || '—'}</p>
                     {(inv.purchaseOrder || inv.grn) && (
-                      <p className="text-xs text-zinc-400 mt-0.5">
-                        {[inv.purchaseOrder?.poNumber, inv.grn?.grnNumber].filter(Boolean).join(' · ')}
-                      </p>
+                      <p className="text-xs text-zinc-400 mt-0.5">{getInvoiceRef(inv)}</p>
                     )}
                     {inv.dueDate && <p className="text-xs text-zinc-400">Due: {new Date(inv.dueDate).toLocaleDateString()}</p>}
                   </div>
@@ -1073,7 +1087,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{inv.invoiceNumber}</td>
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{inv.vendor?.name || '—'}</td>
                   <td className="px-4 py-3 border-r border-zinc-100 text-xs text-zinc-500">
-                    {[inv.purchaseOrder?.poNumber, inv.grn?.grnNumber].filter(Boolean).join(' / ') || '—'}
+                    {getInvoiceRef(inv)}
                   </td>
                   <td className="px-4 py-3 border-r border-zinc-100">
                     <Badge variant={PINV_STATUS_VARIANT[inv.status] || 'default'}>{inv.status}</Badge>

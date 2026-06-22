@@ -909,6 +909,22 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
   const getDrop   = (key) => dropSel[key] || []
   const inDrop    = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
 
+  // Build SO/DEL ref string
+  const getInvoiceRef = (inv) => {
+    const soNumber = inv.salesOrder?.soNumber
+    // Created via Delivery → show single DEL as before
+    if (inv.delivery) return [soNumber, inv.delivery?.deliveryNumber].filter(Boolean).join(' / ') || '—'
+    // Created via SO → show all deliveries under that SO
+    if (!soNumber) return '—'
+    const soId = inv.salesOrder?._id || inv.salesOrder
+    const linkedDels = deliveries.filter((d) => (d.salesOrder?._id || d.salesOrder) === soId)
+    if (linkedDels.length === 0) return soNumber
+    if (linkedDels.length === 1) return `${soNumber} / ${linkedDels[0].deliveryNumber}`
+    const prefix = linkedDels[0].deliveryNumber.replace(/\d+$/, '')
+    const nums = linkedDels.map((d) => d.deliveryNumber.replace(/\D/g, ''))
+    return `${soNumber} / ${prefix}${nums.join(', ')}`
+  }
+
   const dropOpts = {
     customer: [...new Set(invoices.map((i) => i.customer?.name).filter(Boolean))],
     status:   ['draft', 'sent', 'paid', 'overdue', 'cancelled'],
@@ -916,7 +932,7 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
 
   const filtered = invoices.filter((inv) => {
     const customerName = inv.customer?.name || ''
-    const ref = [inv.salesOrder?.soNumber, inv.delivery?.deliveryNumber].filter(Boolean).join(' / ')
+    const ref = getInvoiceRef(inv)
     return (
       (inv.invoiceNumber || '').toLowerCase().includes(filters.invoiceNumber.toLowerCase()) &&
       customerName.toLowerCase().includes(filters.customer.toLowerCase()) && inDrop('customer', customerName) &&
@@ -999,7 +1015,7 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
                     <p className="text-sm text-zinc-600 mt-0.5">{inv.customer?.name || '—'}</p>
                     {(inv.salesOrder || inv.delivery) && (
                       <p className="text-xs text-zinc-400 mt-0.5">
-                        {[inv.salesOrder?.soNumber, inv.delivery?.deliveryNumber].filter(Boolean).join(' · ')}
+                        {getInvoiceRef(inv)}
                       </p>
                     )}
                     {inv.dueDate && <p className="text-xs text-zinc-400">Due: {new Date(inv.dueDate).toLocaleDateString()}</p>}
@@ -1045,7 +1061,7 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 font-mono text-sm font-semibold text-zinc-900">{inv.invoiceNumber}</td>
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-700">{inv.customer?.name || '—'}</td>
                   <td className="px-4 py-3 border-r border-zinc-100 text-xs text-zinc-500">
-                    {[inv.salesOrder?.soNumber, inv.delivery?.deliveryNumber].filter(Boolean).join(' / ') || '—'}
+                    {getInvoiceRef(inv)}
                   </td>
                   <td className="px-4 py-3 border-r border-zinc-100">
                     <Badge variant={SINV_STATUS_VARIANT[inv.status] || 'default'}>{inv.status}</Badge>

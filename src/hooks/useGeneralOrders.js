@@ -34,7 +34,11 @@ export function useUpdateGeneralOrder() {
   const gid = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updateGeneralOrder(id, data, gid),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['general-orders', gid] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['general-orders', gid] })
+      qc.invalidateQueries({ queryKey: ['general-invoices', gid] })
+      qc.invalidateQueries({ queryKey: ['inventory', gid] })
+    },
   })
 }
 
