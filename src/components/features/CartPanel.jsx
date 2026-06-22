@@ -118,10 +118,10 @@ function PersonalCartItem({ item, members, onUpdateQty, onUpdatePrice, onUpdateS
             <span className="text-[11px] text-zinc-400 w-8 flex-shrink-0">Price</span>
             <div className="flex items-center gap-1">
               <button onClick={() => onUpdatePrice(item._cartId, item._price - 0.05)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">−</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">−</button>
               <InlineNumber value={item._price} onCommit={(v) => onUpdatePrice(item._cartId, v)} format={(v) => v.toFixed(2)} />
               <button onClick={() => onUpdatePrice(item._cartId, item._price + 0.05)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">+</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">+</button>
             </div>
             <span className="text-[11px] text-zinc-400 flex-shrink-0">Split</span>
             <SplitDropdown value={item._splitType} splitAmong={item._splitAmong} members={members} onChange={(s) => onUpdateSplit(item._cartId, s)} />
@@ -132,12 +132,12 @@ function PersonalCartItem({ item, members, onUpdateQty, onUpdatePrice, onUpdateS
             <span className="text-[11px] text-zinc-400 w-8 flex-shrink-0">Qty</span>
             <div className="flex items-center gap-1">
               <button onClick={() => onUpdateQty(item._cartId, item.quantity - 1)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">
                 {item.quantity === 1 ? <Trash2 size={8} /> : '−'}
               </button>
               <InlineNumber value={item.quantity} onCommit={(v) => onUpdateQty(item._cartId, Math.round(v))} format={(v) => String(Math.round(v))} />
               <button onClick={() => onUpdateQty(item._cartId, item.quantity + 1)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">+</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">+</button>
             </div>
             <div className="flex-1" />
             <button onClick={() => onRemove(item._cartId)} className="text-[11px] text-red-500 font-medium hover:text-red-600">Remove</button>
@@ -180,18 +180,18 @@ function BusinessCartItem({ item, onUpdateQty, onUpdatePrice, onUpdateTax, onRem
             <span className="text-[11px] text-zinc-400 w-8 flex-shrink-0">Price</span>
             <div className="flex items-center gap-1">
               <button onClick={() => onUpdatePrice(item._cartId, item._price - 0.05)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">−</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">−</button>
               <InlineNumber value={item._price} onCommit={(v) => onUpdatePrice(item._cartId, v)} format={(v) => v.toFixed(2)} />
               <button onClick={() => onUpdatePrice(item._cartId, item._price + 0.05)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">+</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">+</button>
             </div>
             <span className="text-[11px] text-zinc-400 flex-shrink-0">Tax</span>
             <div className="flex items-center gap-1">
               <button onClick={() => onUpdateTax(item._cartId, (item._taxRate ?? 0) - 0.5)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">−</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">−</button>
               <InlineNumber value={item._taxRate ?? 0} onCommit={(v) => onUpdateTax(item._cartId, v)} format={(v) => `${v.toFixed(1)}%`} />
               <button onClick={() => onUpdateTax(item._cartId, (item._taxRate ?? 0) + 0.5)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">+</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">+</button>
             </div>
             {(item._taxRate ?? 0) > 0 && <span className="text-[11px] text-zinc-400">+{sym}{taxAmt.toFixed(2)}</span>}
           </div>
@@ -201,12 +201,12 @@ function BusinessCartItem({ item, onUpdateQty, onUpdatePrice, onUpdateTax, onRem
             <span className="text-[11px] text-zinc-400 w-8 flex-shrink-0">Qty</span>
             <div className="flex items-center gap-1">
               <button onClick={() => onUpdateQty(item._cartId, item.quantity - 1)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">
                 {item.quantity === 1 ? <Trash2 size={8} /> : '−'}
               </button>
               <InlineNumber value={item.quantity} onCommit={(v) => onUpdateQty(item._cartId, Math.round(v))} format={(v) => String(Math.round(v))} />
               <button onClick={() => onUpdateQty(item._cartId, item.quantity + 1)}
-                className="w-5 h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[10px] font-bold leading-none flex-shrink-0">+</button>
+                className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">+</button>
             </div>
             <div className="flex-1" />
             <button onClick={() => onRemove(item._cartId)} className="text-[11px] text-red-500 font-medium hover:text-red-600">Remove</button>
