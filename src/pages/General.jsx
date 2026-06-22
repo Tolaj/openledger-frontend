@@ -597,7 +597,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
       unit:      i.unit || '',
       unitPrice: parseFloat(i.unitPrice) || 0,
       taxRate:   parseFloat(i.taxRate) || 0,
-      amount:    (parseFloat(i.qty) || 0) * (parseFloat(i.unitPrice) || 0) * (1 + (parseFloat(i.taxRate) || 0) / 100),
+      amount:    (parseFloat(i.qty) || 0) * (parseFloat(i.unitPrice) || 0),
     }))
     const subtotal  = mappedItems.reduce((s, i) => s + i.amount, 0)
     const taxAmount = mappedItems.reduce((s, i) => s + i.amount * i.taxRate / 100, 0)

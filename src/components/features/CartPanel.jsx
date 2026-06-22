@@ -377,7 +377,7 @@ export default function CartPanel() {
     createWishlist({
       name: orderName, date: orderDate, paidBy, createdBy: userId,
       groupId: activeGroupId, totalPrice: personalTotal.toFixed(2),
-      items: items.map((i) => ({ product: i._id, unit: i.unit, price: String(i._price), count: String(i.quantity), splitType: i._splitType, splitAmong: i._splitAmong })),
+      items: items.map((i) => ({ product: i._id, unit: i.unit, price: String(i._price), count: String(i.quantity), taxRate: i._taxRate ?? 0, splitType: i._splitType, splitAmong: i._splitAmong })),
     })
     afterSuccess()
   }
@@ -588,19 +588,25 @@ export default function CartPanel() {
               </div>
             )}
             {isBusiness && orderType === 'general' && (
-              <Button fullWidth loading={placingGO} onClick={handleGeneral}>Create General Order</Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button fullWidth loading={placingGO} onClick={handleGeneral}>Create General Order</Button>
+                <Button fullWidth variant="secondary" loading={savingWishlist} onClick={handleWishlist}>Add to Wish List</Button>
+              </div>
             )}
             {isBusiness && orderType === 'po' && (
-              <Button fullWidth loading={placingPO} onClick={handlePO}>Create Purchase Order</Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button fullWidth loading={placingPO} onClick={handlePO}>Create Purchase Order</Button>
+                <Button fullWidth variant="secondary" loading={savingWishlist} onClick={handleWishlist}>Add to Wish List</Button>
+              </div>
             )}
             {isBusiness && orderType === 'so' && (
-              <Button fullWidth loading={placingSO} onClick={handleSO}>Create Sales Order</Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button fullWidth loading={placingSO} onClick={handleSO}>Create Sales Order</Button>
+                <Button fullWidth variant="secondary" loading={savingWishlist} onClick={handleWishlist}>Add to Wish List</Button>
+              </div>
             )}
 
-            <div className="text-center">
-              <span className="text-xs text-zinc-400">or </span>
-              <button onClick={closeCart} className="text-xs font-semibold text-zinc-900 underline underline-offset-2">Continue Shopping →</button>
-            </div>
+
           </div>
         )}
       </div>

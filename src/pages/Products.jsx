@@ -747,7 +747,7 @@ function WishlistTab({ wishlists, groupMembers, groupMemberObjects = [], onDelet
       const splitAmong = (item._splitAmong || item.splitAmong || []).map((u) =>
         typeof u === 'object' ? String(u._id) : String(u)
       )
-      addItem({ ...product, price }, item.unit, item._splitType || item.splitType || 'equal', splitAmong, groupMembers, qty)
+      addItem({ ...product, price, taxRate: item.taxRate ?? item._taxRate ?? 0 }, item.unit, item._splitType || item.splitType || 'equal', splitAmong, groupMembers, qty)
     })
   }
 
