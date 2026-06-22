@@ -193,7 +193,6 @@ function BusinessCartItem({ item, onUpdateQty, onUpdatePrice, onUpdateTax, onRem
               <button onClick={() => onUpdateTax(item._cartId, (item._taxRate ?? 0) + 0.5)}
                 className="w-4 h-4 md:w-5 md:h-5 rounded-md bg-zinc-900 text-white flex items-center justify-center text-[9px] md:text-[10px] font-bold leading-none flex-shrink-0">+</button>
             </div>
-            {(item._taxRate ?? 0) > 0 && <span className="text-[11px] text-zinc-400">+{sym}{taxAmt.toFixed(2)}</span>}
           </div>
 
           {/* Row 2: Qty + Remove */}
