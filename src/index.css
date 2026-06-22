@@ -26,8 +26,17 @@
     height: 100%;
     -webkit-user-select: none;
     user-select: none;
-    /* Prevent iOS rubber-band scroll on the body */
+    /* Prevent iOS rubber-band scroll and swipe-back gesture */
     overflow: hidden;
+    touch-action: pan-y;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* Scrollable containers should not chain overscroll to the page */
+  .overflow-y-auto, .overflow-auto, .overflow-scroll {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Re-enable text selection for inputs */
