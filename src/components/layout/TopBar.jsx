@@ -9,32 +9,39 @@ export default function TopBar({ title, back = false, right, filterIcon }) {
   const totalItems = getItemCount()
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-100 md:hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+    <header
+      className="sticky top-0 z-40 bg-[#f5f5f5]/95 backdrop-blur-md md:hidden"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <div className="flex items-center h-14 px-4 max-w-md mx-auto gap-2">
-        {back && (
+        {back ? (
           <button
             onClick={() => navigate(-1)}
-            className="p-1 -ml-1 rounded-xl text-zinc-900 active:bg-zinc-100 min-touch flex items-center justify-center"
+            className="w-9 h-9 -ml-1 flex items-center justify-center rounded-full bg-white shadow-sm text-zinc-900 active:bg-zinc-50 transition-colors flex-shrink-0"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} />
           </button>
-        )}
-        <h1 className="flex-1 text-base font-semibold text-zinc-900 truncate">
+        ) : null}
+
+        <h1 className={`flex-1 text-[15px] font-bold text-zinc-900 truncate ${back ? 'text-center' : ''}`}>
           {title}
         </h1>
-        <GroupSwitcher compact />
+
+        {!back && <GroupSwitcher compact />}
         {filterIcon && <div>{filterIcon}</div>}
+
         <button
           onClick={openCart}
-          className="relative p-2 rounded-xl text-zinc-600 active:bg-zinc-100"
+          className="relative w-9 h-9 flex items-center justify-center rounded-full bg-white shadow-sm text-zinc-700 active:bg-zinc-50 transition-colors"
         >
-          <ShoppingCart size={20} />
+          <ShoppingCart size={17} />
           {totalItems > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-zinc-900 text-white text-[10px] font-bold leading-none">
+            <span className="absolute top-0.5 right-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-zinc-900 text-white text-[9px] font-bold leading-none">
               {totalItems > 9 ? '9+' : totalItems}
             </span>
           )}
         </button>
+
         {right && <div className="flex items-center gap-1">{right}</div>}
       </div>
     </header>

@@ -1,16 +1,67 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Tag, CreditCard, Settings } from 'lucide-react'
+import {
+  Home, Tag, CreditCard, Settings,
+  ShoppingCart, TrendingUp, Layers, Boxes,
+} from 'lucide-react'
 import useAuthStore from '../../store/authStore'
+import useGroupStore from '../../store/groupStore'
+import { useGroups } from '../../hooks/useGroups'
 
-const nav = [
+const PERSONAL_NAV = [
   { to: '/',         icon: Home,       label: 'Dashboard', exact: true },
-  { to: '/products', icon: Tag,         label: 'Products'              },
-  { to: '/finance',  icon: CreditCard,  label: 'Finance'               },
-  { to: '/settings', icon: Settings,    label: 'Settings'              },
+  { to: '/products', icon: Tag,        label: 'Products'               },
+  { to: '/finance',  icon: CreditCard, label: 'Finance'                },
 ]
+
+const BUSINESS_NAV = [
+  { to: '/',          icon: Home,         label: 'Dashboard', exact: true },
+  { divider: true, label: 'Catalog' },
+  { to: '/products',  icon: Tag,          label: 'Products'               },
+  { to: '/stock',     icon: Boxes,        label: 'Stock'                  },
+  { divider: true, label: 'Orders' },
+  { to: '/general',   icon: Layers,       label: 'General'                },
+  { to: '/purchases', icon: ShoppingCart, label: 'Purchases'              },
+  { to: '/sales',     icon: TrendingUp,   label: 'Sales'                  },
+  { divider: true, label: 'Insights' },
+  { to: '/finance',   icon: CreditCard,   label: 'Finance'                },
+]
+
+function NavItem({ to, icon: Icon, label, exact }) {
+  return (
+    <NavLink
+      to={to}
+      end={exact}
+      className={({ isActive }) =>
+        [
+          'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
+          isActive
+            ? 'bg-zinc-900 text-white'
+            : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900',
+        ].join(' ')
+      }
+    >
+      <Icon size={18} />
+      {label}
+    </NavLink>
+  )
+}
+
+function Divider({ label }) {
+  return (
+    <div className="pt-4 pb-1 px-3">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">{label}</p>
+    </div>
+  )
+}
 
 export default function Sidebar() {
   const user = useAuthStore((s) => s.user)
+  const { activeGroupId } = useGroupStore()
+  const { data: groups = [] } = useGroups()
+
+  const activeGroup = groups.find(g => g._id === activeGroupId)
+  const isBusiness = activeGroup?.type === 'business'
+  const navItems = isBusiness ? BUSINESS_NAV : PERSONAL_NAV
 
   return (
     <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col bg-white border-r border-zinc-200 z-40">
@@ -22,24 +73,16 @@ export default function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
-        {nav.map(({ to, icon: Icon, label, exact }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={exact}
-            className={({ isActive }) =>
-              [
-                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-zinc-900 text-white'
-                  : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900',
-              ].join(' ')
-            }
-          >
-            <Icon size={18} />
-            {label}
-          </NavLink>
-        ))}
+        {navItems.map((item, i) =>
+          item.divider
+            ? <Divider key={i} label={item.label} />
+            : <NavItem key={item.to} {...item} />
+        )}
+
+        {/* Settings pinned at bottom */}
+        <div className="mt-auto pt-3 border-t border-zinc-100">
+          <NavItem to="/settings" icon={Settings} label="Settings" />
+        </div>
       </nav>
 
       {/* User */}

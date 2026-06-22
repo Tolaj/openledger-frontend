@@ -1,58 +1,73 @@
-import { useState, useMemo, useEffect } from 'react'
-import { useForm, useFieldArray, Controller } from 'react-hook-form'
+import { useState, useMemo, useEffect, useRef, Fragment } from 'react'
+import { createPortal } from 'react-dom'
+import { useForm, useFieldArray } from 'react-hook-form'
 import {
   TrendingUp, TrendingDown, Landmark, BarChart3,
   Plus, Pencil, Trash2, CheckCircle2, CircleDollarSign,
-  ChevronDown, ChevronUp, Wallet,
+  ChevronDown, Wallet, FileText, ReceiptText,
+  AlertTriangle, X,
 } from 'lucide-react'
 import TopBar from '../components/layout/TopBar'
 import PageHeader from '../components/layout/PageHeader'
 import PageActions from '../components/layout/PageActions'
-import { DataTableFilterIcon } from '../components/ui/DataTable'
+import DataTable, { DataTableMobileFilters, DataTableFilterIcon } from '../components/ui/DataTable'
 import BottomSheet from '../components/ui/BottomSheet'
 import Button from '../components/ui/Button'
+import Tabs from '../components/ui/Tabs'
 import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
 import EmptyState from '../components/ui/EmptyState'
 import useGroupStore from '../store/groupStore'
-import { useMe, useUpdateUser } from '../hooks/useUser'
+import { useMe } from '../hooks/useUser'
 import {
   useFinance, useFinanceSummary, useCreateFinance, useUpdateFinance, useDeleteFinance, useSettleDebt,
   useBudgets, useCreateBudget, useUpdateBudget, useDeleteBudget,
 } from '../hooks/useFinance'
+import { useSalesInvoices } from '../hooks/useSalesInvoices'
+import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
+import { useOrders } from '../hooks/useOrders'
 import { useGroups } from '../hooks/useGroups'
 import { useCategories } from '../hooks/useCategories'
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths } from 'date-fns'
+import { useProducts } from '../hooks/useProducts'
+import { useCurrencySymbol } from '../hooks/useCurrency'
+import { useIsBusiness } from '../hooks/useActiveGroupType'
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays, parseISO } from 'date-fns'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const TABS = [
-  { key: 'overview',     label: 'Overview',     mobileLabel: 'Overview'  },
-  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns'      },
-  { key: 'budgets',      label: 'Budgets',      mobileLabel: 'Budgets'   },
-  { key: 'debts',        label: 'Debts',        mobileLabel: 'Debts'     },
+const PERSONAL_TABS = [
+  { key: 'overview', label: 'Overview', mobileLabel: 'Overview' },
+  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns' },
+  { key: 'budgets', label: 'Budgets', mobileLabel: 'Budgets' },
+  { key: 'debts', label: 'Debts', mobileLabel: 'Debts' },
+]
+const BUSINESS_TABS = [
+  { key: 'overview', label: 'Overview', mobileLabel: 'Overview' },
+  { key: 'transactions', label: 'Transactions', mobileLabel: 'Txns' },
+  { key: 'budgets', label: 'Budgets', mobileLabel: 'Budgets' },
+  { key: 'debts', label: 'AR / AP', mobileLabel: 'AR/AP' },
 ]
 
 const PERIODS = [
-  { key: 'week',    label: 'This Week'  },
-  { key: 'month',   label: 'This Month' },
-  { key: 'quarter', label: 'Quarter'    },
-  { key: 'year',    label: 'This Year'  },
-  { key: 'custom',  label: 'Custom'     },
+  { key: 'week', label: 'This Week' },
+  { key: 'month', label: 'This Month' },
+  { key: 'quarter', label: 'Quarter' },
+  { key: 'year', label: 'This Year' },
+  { key: 'custom', label: 'Custom' },
 ]
 
 const TYPE_META = {
-  income:     { label: 'Income',     icon: TrendingUp,    color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-100' },
-  expense:    { label: 'Expense',    icon: TrendingDown,  color: 'text-red-500',     bg: 'bg-red-50',      border: 'border-red-100'     },
-  loan:       { label: 'Loan',       icon: Landmark,      color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-100'   },
-  investment: { label: 'Investment', icon: BarChart3,     color: 'text-blue-600',    bg: 'bg-blue-50',     border: 'border-blue-100'    },
+  income: { label: 'Income', icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+  expense: { label: 'Expense', icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-100' },
+  loan: { label: 'Loan', icon: Landmark, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+  investment: { label: 'Investment', icon: BarChart3, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
 }
 
 const CURRENCIES = [
   { code: 'INR', symbol: '₹', label: '₹ INR — Indian Rupee' },
-  { code: 'USD', symbol: '$', label: '$ USD — US Dollar'     },
-  { code: 'EUR', symbol: '€', label: '€ EUR — Euro'          },
+  { code: 'USD', symbol: '$', label: '$ USD — US Dollar' },
+  { code: 'EUR', symbol: '€', label: '€ EUR — Euro' },
   { code: 'GBP', symbol: '£', label: '£ GBP — British Pound' },
-  { code: 'JPY', symbol: '¥', label: '¥ JPY — Japanese Yen'  },
+  { code: 'JPY', symbol: '¥', label: '¥ JPY — Japanese Yen' },
   { code: 'AUD', symbol: 'A$', label: 'A$ AUD — Australian Dollar' },
 ]
 
@@ -60,12 +75,12 @@ const CURRENCIES = [
 function getPeriodDates(period, custom) {
   const now = new Date()
   switch (period) {
-    case 'week':    return { startDate: startOfWeek(now).toISOString(),    endDate: endOfWeek(now).toISOString()    }
-    case 'month':   return { startDate: startOfMonth(now).toISOString(),   endDate: endOfMonth(now).toISOString()   }
+    case 'week': return { startDate: startOfWeek(now).toISOString(), endDate: endOfWeek(now).toISOString() }
+    case 'month': return { startDate: startOfMonth(now).toISOString(), endDate: endOfMonth(now).toISOString() }
     case 'quarter': return { startDate: startOfQuarter(now).toISOString(), endDate: endOfQuarter(now).toISOString() }
-    case 'year':    return { startDate: startOfYear(now).toISOString(),    endDate: endOfYear(now).toISOString()    }
-    case 'custom':  return { startDate: custom.start, endDate: custom.end  }
-    default:        return {}
+    case 'year': return { startDate: startOfYear(now).toISOString(), endDate: endOfYear(now).toISOString() }
+    case 'custom': return { startDate: custom.start, endDate: custom.end }
+    default: return {}
   }
 }
 
@@ -169,19 +184,38 @@ function FinanceMobileFilters({ open, period, setPeriod, custom, setCustom, type
 }
 
 // ── Transaction Form ──────────────────────────────────────────────────────────
-function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], categories = [], symbol }) {
+function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], categories = [], symbol, isBusiness = false }) {
   const { mutate: create, isPending: creating } = useCreateFinance()
   const { mutate: update, isPending: updating } = useUpdateFinance()
+  const { data: products = [] } = useProducts()
   const { register, handleSubmit, watch, setValue, control, reset, formState: { errors } } = useForm({
-    defaultValues: { type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [] },
+    defaultValues: { type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] },
   })
+  const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({ control, name: 'items' })
 
   const splitAmong = watch('splitAmong') || []
+  const watchedItems = watch('items') || []
+  const watchedCategory = watch('category')
   const amount = parseFloat(watch('amount')) || 0
   const paidBy = watch('paidBy')
+  const hasItems = watchedItems.length > 0
+
+  // Auto-sum items → amount field whenever any item field changes
+  useEffect(() => {
+    if (!watchedItems.length) return
+    const total = watchedItems.reduce((sum, it) => {
+      const qty = parseFloat(it?.qty) || 0
+      const unitPrice = parseFloat(it?.unitPrice) || 0
+      const taxRate = parseFloat(it?.taxRate) || 0
+      return sum + qty * unitPrice * (1 + taxRate / 100)
+    }, 0)
+    setValue('amount', parseFloat(total.toFixed(2)), { shouldValidate: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedItems)])
 
   // when editing populate form
-  useState(() => {
+  useEffect(() => {
+    if (!open) return
     if (editing) {
       reset({
         type: editing.type,
@@ -191,9 +225,10 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         category: editing.category?._id || editing.category || '',
         paidBy: editing.paidBy?._id || editing.paidBy || '',
         splitAmong: (editing.splitAmong || []).map((s) => ({ user: s.user?._id || s.user, amount: s.amount })),
+        items: (editing.items || []).map((it) => ({ product: '', name: it.name || '', qty: it.qty || 1, unitPrice: it.amount && it.qty ? (it.amount / it.qty).toFixed(2) : it.amount || '', taxRate: 0, amount: it.amount || 0, category: it.category?._id || it.category || '' })),
       })
     } else {
-      reset({ type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [] })
+      reset({ type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] })
     }
   }, [editing, open])
 
@@ -214,12 +249,27 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
   }
 
   const onSubmit = (data) => {
+    if (data.type === 'expense' && !data.category && !hasItems) {
+      setValue('category', '', { shouldValidate: true })
+      return
+    }
     const payload = {
       ...data,
       amount: parseFloat(data.amount),
       group: groupId,
       date: new Date(data.date).toISOString(),
       splitAmong: data.splitAmong.map((s) => ({ user: s.user, amount: parseFloat(s.amount) })),
+      items: (data.items || []).filter((it) => it.name).map((it) => {
+        const qty = parseFloat(it.qty) || 1
+        const unitPrice = parseFloat(it.unitPrice) || 0
+        const taxRate = parseFloat(it.taxRate) || 0
+        return {
+          name: it.name,
+          qty,
+          amount: qty * unitPrice * (1 + taxRate / 100),
+          category: it.category || undefined,
+        }
+      }),
     }
     if (editing) {
       update({ id: editing._id, data: payload }, { onSuccess: onClose })
@@ -262,19 +312,30 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         <Input label="Description" placeholder="What was this for?" {...register('description')} />
         <Input label="Date" type="date" {...register('date')} />
 
-        {/* Category */}
-        {categories.length > 0 && (
+        {/* Category — hidden when items are added */}
+        {!hasItems && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-zinc-700">Category</label>
-            <select {...register('category')} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
-              <option value="">No category</option>
-              {categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}
+            <label className="text-sm font-medium text-zinc-700">
+              Category {watch('type') === 'expense' && <span className="text-red-500">*</span>}
+            </label>
+            <select
+              value={watchedCategory || ''}
+              onChange={(e) => setValue('category', e.target.value, { shouldValidate: true })}
+              className={`h-11 px-3 rounded-xl border bg-white text-sm outline-none focus:border-zinc-900 ${watch('type') === 'expense' && !watchedCategory ? 'border-red-300' : 'border-zinc-300'}`}
+            >
+              <option value="">— Select category —</option>
+              {categories.map((c) => (
+                <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
+              ))}
             </select>
+            {watch('type') === 'expense' && !watchedCategory && (
+              <p className="text-xs text-zinc-400">Category is required for expenses so budgets can track spending correctly.</p>
+            )}
           </div>
         )}
 
-        {/* Paid By */}
-        {groupMembers.length > 0 && (
+        {/* Paid By — personal groups only */}
+        {!isBusiness && groupMembers.length > 0 && (
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Paid by</label>
             <select {...register('paidBy')} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
@@ -284,8 +345,8 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
           </div>
         )}
 
-        {/* Split Among */}
-        {groupMembers.length > 0 && (
+        {/* Split Among — personal groups only */}
+        {!isBusiness && groupMembers.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-zinc-700">Split among</label>
@@ -326,8 +387,345 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
             </div>
           </div>
         )}
+
+        {/* Line Items */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-700">Items</label>
+            <button type="button" onClick={() => appendItem({ product: '', name: '', qty: 1, unitPrice: '', taxRate: 0, amount: 0, category: '' })}
+              className="text-xs text-zinc-500 underline flex items-center gap-1">
+              <Plus size={12} /> Add Item
+            </button>
+          </div>
+          {itemFields.length === 0 && (
+            <p className="text-xs text-zinc-400">Optional — add items to track per-category spending</p>
+          )}
+          {itemFields.map((field, idx) => {
+            const qty = parseFloat(watchedItems[idx]?.qty) || 0
+            const unitPrice = parseFloat(watchedItems[idx]?.unitPrice) || 0
+            const taxRate = parseFloat(watchedItems[idx]?.taxRate) || 0
+            const lineAmt = qty * unitPrice * (1 + taxRate / 100)
+            return (
+              <div key={field.id} className="flex flex-col gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                {/* From catalog / custom name */}
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <ProductCombobox
+                      products={products}
+                      value={watchedItems[idx]?.product || ''}
+                      customName={watchedItems[idx]?.name || ''}
+                      onSelect={(p) => {
+                        if (p) {
+                          setValue(`items.${idx}.product`, p._id)
+                          setValue(`items.${idx}.name`, p.name)
+                          setValue(`items.${idx}.unitPrice`, p.price ?? '')
+                          setValue(`items.${idx}.category`, p.category?._id || p.category || '')
+                        } else {
+                          setValue(`items.${idx}.product`, '')
+                        }
+                      }}
+                      onCustomName={(val) => {
+                        setValue(`items.${idx}.name`, val)
+                        setValue(`items.${idx}.product`, '')
+                      }}
+                    />
+                  </div>
+                  <button type="button" onClick={() => removeItem(idx)} className="p-1 mb-1 text-zinc-400 hover:text-red-500 flex-shrink-0">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <input type="hidden" {...register(`items.${idx}.name`)} />
+                {/* Category */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-zinc-500">Category</label>
+                  <select
+                    value={watchedItems[idx]?.category || ''}
+                    onChange={(e) => setValue(`items.${idx}.category`, e.target.value)}
+                    className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white"
+                  >
+                    <option value="">No category</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* Qty / Unit Price / Tax */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500">Qty</label>
+                    <input {...register(`items.${idx}.qty`)} type="number" step="1" min="0" placeholder="1"
+                      className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500">Unit Price</label>
+                    <input {...register(`items.${idx}.unitPrice`)} type="number" step="0.01" min="0" placeholder="0"
+                      className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500">Tax %</label>
+                    <input {...register(`items.${idx}.taxRate`)} type="number" step="0.1" min="0" placeholder="0"
+                      className="h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white" />
+                  </div>
+                </div>
+                {/* Computed amount */}
+                <p className="text-xs text-zinc-400 text-right">
+                  Amount: <span className="font-semibold text-zinc-900">{fmt(lineAmt, symbol)}</span>
+                </p>
+              </div>
+            )
+          })}
+        </div>
       </form>
     </BottomSheet>
+  )
+}
+
+// ── Product Combobox ──────────────────────────────────────────────────────────
+function ProductCombobox({ products = [], value, customName = '', onSelect, onCustomName }) {
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const inputRef = useRef(null)
+  const wrapRef = useRef(null)
+
+  const selected = products.find((p) => p._id === value)
+
+  // The text shown in the input: selected product name, or the custom name being typed
+  const inputValue = selected ? selected.name : customName
+
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => {
+      if (!wrapRef.current?.contains(e.target) && !document.getElementById('prod-combo-portal')?.contains(e.target))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const openDropdown = () => {
+    if (inputRef.current) setRect(inputRef.current.getBoundingClientRect())
+    setOpen(true)
+  }
+
+  const handleInputChange = (e) => {
+    const val = e.target.value
+    // If a product was selected, typing clears the selection and switches to custom text
+    if (selected) onSelect(null)
+    onCustomName?.(val)
+    if (!open) openDropdown()
+  }
+
+  const handleInputFocus = () => {
+    if (!open) openDropdown()
+  }
+
+  const filtered = customName && !selected
+    ? products.filter((p) =>
+        p.name.toLowerCase().includes(customName.toLowerCase()) ||
+        p.category?.name?.toLowerCase().includes(customName.toLowerCase())
+      )
+    : products
+
+  const handleSelect = (p) => {
+    onSelect(p)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={wrapRef} className="flex flex-col gap-1">
+      <label className="text-xs font-medium text-zinc-500">Item</label>
+      <div className="relative">
+        {/* Show category icon badge when a catalog product is selected */}
+        {selected?.category?.icon && (
+          <span
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded flex items-center justify-center text-sm flex-shrink-0 pointer-events-none"
+            style={{ backgroundColor: selected.category?.color ? `${selected.category.color}22` : '#f4f4f5' }}
+          >
+            {selected.category.icon}
+          </span>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={handleInputFocus}
+          placeholder="Type item name or search catalog…"
+          className={[
+            'h-9 w-full px-3 text-sm border rounded-xl outline-none bg-white transition-colors',
+            selected?.category?.icon ? 'pl-9' : '',
+            open ? 'border-zinc-900' : 'border-zinc-200 focus:border-zinc-900',
+          ].join(' ')}
+        />
+        {selected && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { onSelect(null); onCustomName?.('') }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {open && rect && createPortal(
+        <div
+          id="prod-combo-portal"
+          style={{
+            position: 'fixed',
+            left: rect.left,
+            width: rect.width,
+            zIndex: 9999,
+            maxHeight: 280,
+            ...(rect.bottom + 280 > window.innerHeight
+              ? { bottom: window.innerHeight - rect.top + 4 }
+              : { top: rect.bottom + 4 }),
+          }}
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-y-auto flex flex-col"
+        >
+          {filtered.map((p) => (
+            <button
+              key={p._id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleSelect(p)}
+              className={[
+                'w-full px-3 py-2.5 flex items-center gap-3 hover:bg-zinc-50 border-b border-zinc-100 last:border-0 text-left',
+                value === p._id ? 'bg-zinc-50' : '',
+              ].join(' ')}
+            >
+              <span
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-base flex-shrink-0"
+                style={{ backgroundColor: p.category?.color ? `${p.category.color}22` : '#f4f4f5' }}
+              >
+                {p.category?.icon || '📦'}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium text-zinc-900 truncate">{p.name}</span>
+                {p.category?.name && <span className="block text-xs text-zinc-400">{p.category.name}</span>}
+              </span>
+              <span className="flex-shrink-0 text-right">
+                <span className="block text-sm font-semibold text-zinc-900">${Number(p.price || 0).toFixed(2)}</span>
+                {p.unit && <span className="block text-xs text-zinc-400">{p.unit}</span>}
+              </span>
+            </button>
+          ))}
+          {filtered.length === 0 && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setOpen(false)}
+              className="w-full px-3 py-4 text-xs text-zinc-400 text-center hover:bg-zinc-50 transition-colors"
+            >
+              No products match — use "<span className="font-medium text-zinc-600">{customName}</span>" as custom item
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+// ── Category Combobox ─────────────────────────────────────────────────────────
+function CategoryCombobox({ globalCategories = [], value, categoryRef, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [rect, setRect] = useState(null)
+  const [inputText, setInputText] = useState(value || '')
+  const wrapRef = useRef(null)
+  const inputRef = useRef(null)
+
+  // Sync inputText when value changes externally (e.g. form reset or edit populate)
+  useEffect(() => {
+    setInputText(value || '')
+  }, [value])
+
+  // Resolve selected category object (for icon display)
+  const selectedCat = categoryRef ? globalCategories.find((c) => c._id === categoryRef) : null
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => {
+      if (!wrapRef.current?.contains(e.target) && !document.getElementById('cat-combo-portal')?.contains(e.target))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const openDropdown = () => {
+    if (wrapRef.current) setRect(wrapRef.current.getBoundingClientRect())
+    setOpen(true)
+  }
+
+  const suggestions = inputText
+    ? globalCategories.filter((c) => c.name.toLowerCase().includes(inputText.toLowerCase()))
+    : globalCategories
+
+  const handleInput = (e) => {
+    setInputText(e.target.value)
+    onChange({ name: e.target.value, categoryRef: '' })
+    openDropdown()
+  }
+
+  const handleSelect = (cat) => {
+    setInputText(cat.name)
+    onChange({ name: cat.name, categoryRef: cat._id })
+    setOpen(false)
+  }
+
+  return (
+    <div className="flex-1">
+      <div
+        ref={wrapRef}
+        onClick={() => { inputRef.current?.focus(); openDropdown() }}
+        className={[
+          'w-full h-9 flex items-center gap-1.5 px-3 border rounded-xl bg-white cursor-text',
+          categoryRef ? 'border-emerald-400 bg-emerald-50' : 'border-zinc-200',
+          open ? 'border-zinc-900' : '',
+        ].join(' ')}
+      >
+        {selectedCat?.icon && (
+          <span className="text-base leading-none flex-shrink-0">{selectedCat.icon}</span>
+        )}
+        <input
+          ref={inputRef}
+          value={inputText}
+          onChange={handleInput}
+          onFocus={openDropdown}
+          placeholder="Type or pick a category…"
+          className="flex-1 text-sm outline-none bg-transparent min-w-0"
+        />
+      </div>
+      {open && suggestions.length > 0 && rect && createPortal(
+        <div
+          id="cat-combo-portal"
+          style={{ position: 'fixed', bottom: window.innerHeight - rect.top + 4, left: rect.left, width: rect.width, zIndex: 9999 }}
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden"
+        >
+          {suggestions.slice(0, 6).map((cat) => (
+            <button
+              key={cat._id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleSelect(cat)}
+              className="w-full px-3 py-2 text-sm text-left hover:bg-zinc-50 flex items-center justify-between gap-2 border-b border-zinc-100 last:border-0"
+            >
+              <span className="flex items-center gap-2 truncate">
+                {cat.icon && <span className="text-base leading-none flex-shrink-0">{cat.icon}</span>}
+                <span className="truncate">{cat.name}</span>
+              </span>
+              {cat._id === categoryRef && (
+                <span className="text-[10px] text-emerald-600 font-semibold flex-shrink-0">linked</span>
+              )}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
   )
 }
 
@@ -335,12 +733,15 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
 function BudgetForm({ open, onClose, editing, groupId }) {
   const { mutate: create, isPending: creating } = useCreateBudget()
   const { mutate: update, isPending: updating } = useUpdateBudget()
-  const { register, handleSubmit, control, reset, watch, formState: { errors } } = useForm({
+  const { data: globalCategories = [] } = useCategories()
+  const { register, handleSubmit, control, reset, setValue, watch, formState: { errors } } = useForm({
     defaultValues: { name: '', totalAmount: '', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(new Date().setMonth(new Date().getMonth() + 1)), 'yyyy-MM-dd'), notes: '', categories: [] },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'categories' })
+  const watchedCategories = watch('categories')
 
-  useState(() => {
+  useEffect(() => {
+    if (!open) return
     if (editing) {
       reset({
         name: editing.name,
@@ -348,7 +749,11 @@ function BudgetForm({ open, onClose, editing, groupId }) {
         startDate: editing.startDate ? format(new Date(editing.startDate), 'yyyy-MM-dd') : '',
         endDate: editing.endDate ? format(new Date(editing.endDate), 'yyyy-MM-dd') : '',
         notes: editing.notes || '',
-        categories: editing.categories || [],
+        categories: (editing.categories || []).map((c) => ({
+          categoryRef: c.categoryRef?._id || c.categoryRef || '',
+          name: c.name,
+          allocatedAmount: c.allocatedAmount,
+        })),
       })
     } else {
       reset({ name: '', totalAmount: '', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(new Date().setMonth(new Date().getMonth() + 1)), 'yyyy-MM-dd'), notes: '', categories: [] })
@@ -362,7 +767,11 @@ function BudgetForm({ open, onClose, editing, groupId }) {
       group: groupId,
       startDate: new Date(data.startDate).toISOString(),
       endDate: new Date(data.endDate).toISOString(),
-      categories: data.categories.map((c) => ({ ...c, allocatedAmount: parseFloat(c.allocatedAmount) })),
+      categories: data.categories.map((c) => ({
+        categoryRef: c.categoryRef || undefined,
+        name: c.name,
+        allocatedAmount: parseFloat(c.allocatedAmount),
+      })),
     }
     if (editing) {
       update({ id: editing._id, data: payload }, { onSuccess: onClose })
@@ -389,23 +798,60 @@ function BudgetForm({ open, onClose, editing, groupId }) {
         {/* Categories */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700">Categories</label>
-            <button type="button" onClick={() => append({ name: '', allocatedAmount: '' })}
+            <label className="text-sm font-medium text-zinc-700">Category Budgets</label>
+            <button type="button" onClick={() => append({ categoryRef: '', name: '', allocatedAmount: '' })}
               className="text-xs text-zinc-500 underline flex items-center gap-1">
               <Plus size={12} /> Add
             </button>
           </div>
+          <p className="text-xs text-zinc-400 -mt-1">
+            These must match the categories you pick when adding expense transactions.
+          </p>
           {fields.map((field, idx) => (
             <div key={field.id} className="flex gap-2 items-center">
-              <input {...register(`categories.${idx}.name`)} placeholder="Category name"
-                className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900" />
-              <input {...register(`categories.${idx}.allocatedAmount`)} type="number" step="0.01" placeholder="Amount"
-                className="w-24 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right" />
-              <button type="button" onClick={() => remove(idx)} className="p-1 text-zinc-400 active:text-red-500">
+              <select
+                value={watchedCategories[idx]?.categoryRef || ''}
+                onChange={(e) => {
+                  const cat = globalCategories.find((c) => c._id === e.target.value)
+                  setValue(`categories.${idx}.categoryRef`, cat?._id || '')
+                  setValue(`categories.${idx}.name`, cat?.name || '')
+                }}
+                className="flex-1 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 bg-white"
+              >
+                <option value="">Select category…</option>
+                {globalCategories.map((c) => (
+                  <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
+                ))}
+              </select>
+              <input
+                {...register(`categories.${idx}.allocatedAmount`)}
+                type="number" step="0.01" placeholder="Amount"
+                className="w-28 h-9 px-3 text-sm border border-zinc-200 rounded-xl outline-none focus:border-zinc-900 text-right bg-white"
+              />
+              <button type="button" onClick={() => remove(idx)} className="p-1 text-zinc-400 active:text-red-500 flex-shrink-0">
                 <Trash2 size={14} />
               </button>
             </div>
           ))}
+          {fields.length === 0 && (
+            <p className="text-xs text-zinc-400 text-center py-2">No categories — all spending tracked at budget level only</p>
+          )}
+          {/* Allocation vs total warning */}
+          {fields.length > 0 && (() => {
+            const allocated = watchedCategories.reduce((s, c) => s + (parseFloat(c.allocatedAmount) || 0), 0)
+            const total = parseFloat(watch('totalAmount')) || 0
+            const diff = total - allocated
+            if (allocated === 0) return null
+            return (
+              <p className={`text-xs ${Math.abs(diff) < 0.01 ? 'text-emerald-600' : diff < 0 ? 'text-red-500' : 'text-amber-600'}`}>
+                {Math.abs(diff) < 0.01
+                  ? '✓ Categories fully cover the budget total'
+                  : diff < 0
+                  ? `Over-allocated by ${Math.abs(diff).toFixed(2)} — categories exceed the total budget`
+                  : `${diff.toFixed(2)} unallocated — expenses in other categories count against the total`}
+              </p>
+            )
+          })()}
         </div>
       </form>
     </BottomSheet>
@@ -413,14 +859,23 @@ function BudgetForm({ open, onClose, editing, groupId }) {
 }
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, budgets, recentTxns, mobileFiltersOpen }) {
+function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, budgets, recentTxns, mobileFiltersOpen, isBusiness }) {
   const dates = getPeriodDates(period, custom)
   const { data: summary, isLoading } = useFinanceSummary({ groupId, ...dates })
+  const { data: salesInvoices = [] } = useSalesInvoices()
+  const { data: purchaseInvoices = [] } = usePurchaseInvoices()
+
+  const unpaidSInv = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const unpaidPInv = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+  const overdueSInv = salesInvoices.filter((i) => i.status === 'overdue')
+  const overduePInv = purchaseInvoices.filter((i) => i.status === 'overdue')
+  const totalAR = unpaidSInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
+  const totalAP = unpaidPInv.reduce((s, i) => s + (i.grandTotal || 0), 0)
 
   return (
     <div className="flex flex-col gap-4">
       {/* Mobile: filter panel */}
-      <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} setTypeFilter={() => {}} />
+      <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} setTypeFilter={() => { }} />
       {/* Desktop: inline period picker */}
       <div className="hidden md:block">
         <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
@@ -453,6 +908,38 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
           </>
         )}
       </div>
+
+      {/* Business: AR / AP */}
+      {isBusiness && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                <TrendingUp size={14} className="text-emerald-600" />
+              </div>
+              <p className="text-xs font-semibold text-zinc-600">Receivable</p>
+            </div>
+            <p className="text-xl font-bold text-emerald-600">{fmt(totalAR, symbol)}</p>
+            <p className="text-xs text-zinc-400 mt-1">{unpaidSInv.length} unpaid invoice{unpaidSInv.length !== 1 ? 's' : ''}</p>
+            {overdueSInv.length > 0 && (
+              <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1"><AlertTriangle size={10} />{overdueSInv.length} overdue</p>
+            )}
+          </div>
+          <div className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
+                <TrendingDown size={14} className="text-red-500" />
+              </div>
+              <p className="text-xs font-semibold text-zinc-600">Payable</p>
+            </div>
+            <p className="text-xl font-bold text-red-500">{fmt(totalAP, symbol)}</p>
+            <p className="text-xs text-zinc-400 mt-1">{unpaidPInv.length} unpaid invoice{unpaidPInv.length !== 1 ? 's' : ''}</p>
+            {overduePInv.length > 0 && (
+              <p className="text-xs text-red-500 mt-0.5 flex items-center gap-1"><AlertTriangle size={10} />{overduePInv.length} overdue</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Active budgets */}
       {budgets?.length > 0 && (
@@ -502,173 +989,569 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
 }
 
 // ── Transactions Tab ──────────────────────────────────────────────────────────
-function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen }) {
+function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen, isBusiness }) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [filters, setFilters] = useState({})
+  const [dropSel, setDropSel] = useState({})
+  const [expanded, setExpanded] = useState(null)
+  const { mutate: del } = useDeleteFinance()
 
   useEffect(() => {
     if (externalOpen) { setShowForm(true); onExternalClose?.() }
   }, [externalOpen])
-  const [typeFilter, setTypeFilter] = useState('')
-  const { mutate: del } = useDeleteFinance()
 
   const dates = getPeriodDates(period, custom)
-  const { data: txns = [], isLoading } = useFinance({ groupId, ...dates, type: typeFilter || undefined })
+  const { data: txns = [], isLoading } = useFinance({ groupId, ...dates })
+  const { data: salesInvoices = [] } = useSalesInvoices()
+  const { data: purchaseInvoices = [] } = usePurchaseInvoices()
+  const { data: orders = [] } = useOrders()
+
+  // categoryMap: id → { _id, name } for resolving ObjectId refs in order items
+  const categoryMap = useMemo(() => {
+    const map = {}
+    categories.forEach((c) => { map[String(c._id)] = c })
+    return map
+  }, [categories])
+
+  const resolveCategory = (catVal) => {
+    if (!catVal) return null
+    // already populated object
+    if (catVal.name) return catVal
+    // ObjectId string or object — look up in categoryMap
+    return categoryMap[String(catVal)] || null
+  }
+
+  // Reverse-lookup: financeEntryId → items[]
+  // Works for ALL existing data since invoices/orders store financeEntryId
+  const sourceItemsMap = useMemo(() => {
+    const map = {}
+    salesInvoices.forEach((inv) => {
+      if (!inv.financeEntryId) return
+      map[String(inv.financeEntryId)] = (inv.items || []).map((it) => ({
+        name: it.product?.name || it.description || 'Item',
+        qty: it.qty,
+        amount: it.amount || 0,
+        category: resolveCategory(it.product?.category),
+      }))
+    })
+    purchaseInvoices.forEach((inv) => {
+      if (!inv.financeEntryId) return
+      map[String(inv.financeEntryId)] = (inv.items || []).map((it) => ({
+        name: it.product?.name || it.description || 'Item',
+        qty: it.qty,
+        amount: it.amount || 0,
+        category: resolveCategory(it.product?.category),
+      }))
+    })
+    orders.forEach((order) => {
+      if (!order.financeEntryId) return
+      map[String(order.financeEntryId)] = (order.items || []).map((it) => ({
+        name: it.product?.name || 'Item',
+        qty: parseFloat(it.count) || 1,
+        amount: (parseFloat(it.price) || 0) * (parseFloat(it.count) || 1),
+        category: resolveCategory(it.product?.category),
+      }))
+    })
+    return map
+  }, [salesInvoices, purchaseInvoices, orders, categoryMap])
+
+  // Get items for a transaction: prefer Finance-stored items, fall back to source lookup
+  const getItems = (t) => {
+    if (t.items?.length) return t.items
+    return sourceItemsMap[String(t._id)] || []
+  }
+
+  const inDrop = (key, val) => !dropSel[key]?.length || dropSel[key].includes(val)
+  const inText = (key, val) => !filters[key] || String(val || '').toLowerCase().includes(filters[key].toLowerCase())
+
+  const txnCategories = (t) => {
+    const seen = new Set()
+    const cats = []
+    const add = (cat) => {
+      if (!cat?.name) return
+      if (seen.has(cat.name)) return
+      seen.add(cat.name)
+      cats.push(cat)
+    }
+    if (t.category?.name) add(t.category)
+    getItems(t).forEach((it) => { if (it.category?.name) add(it.category) })
+    return cats // array of { _id, name, icon? }
+  }
+
+  const filtered = useMemo(() => txns.filter((t) => {
+    if (!inDrop('type', TYPE_META[t.type]?.label || t.type)) return false
+    if (!inText('description', t.description)) return false
+    // category filter: match if ANY category on the txn matches
+    if (dropSel.category?.length) {
+      const cats = txnCategories(t).map((c) => c.name)
+      if (!dropSel.category.some((sel) => cats.includes(sel))) return false
+    }
+    return true
+  }), [txns, filters, dropSel])
+
+  // Collect all category names for dropdown filter
+  const allCategoryNames = useMemo(() => {
+    const names = new Set()
+    txns.forEach((t) => {
+      txnCategories(t).forEach((c) => names.add(c.name))
+    })
+    return [...names]
+  }, [txns, sourceItemsMap])
+
+  const dropOpts = useMemo(() => ({
+    type: Object.values(TYPE_META).map((m) => m.label),
+    category: allCategoryNames,
+  }), [allCategoryNames])
+
+  const columns = useMemo(() => [
+    { key: 'type', label: 'Type', filterable: true },
+    { key: 'description', label: 'Description', filterable: true, noDropdown: true },
+    { key: 'date', label: 'Date', filterable: false },
+    ...(!isBusiness ? [{ key: 'paidBy', label: 'Paid By', filterable: false }] : []),
+    { key: 'category', label: 'Categories', filterable: true },
+    { key: 'amount', label: 'Amount', filterable: false },
+    { key: 'action', label: 'Action', filterable: false },
+  ], [isBusiness])
+
+  // +1 for leadingCol
+  const txnColSpan = useMemo(() => columns.length, [columns])
 
   return (
-    <div className="flex flex-col gap-3">
-      {/* Mobile: filter panel behind filter icon */}
+    <div className="flex flex-col gap-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
+      {/* Mobile: period + type filter panel */}
       <FinanceMobileFilters open={mobileFiltersOpen} period={period} setPeriod={setPeriod}
-        custom={custom} setCustom={setCustom} typeFilter={typeFilter} setTypeFilter={setTypeFilter} showTypeFilter />
+        custom={custom} setCustom={setCustom} showTypeFilter={false} setTypeFilter={() => { }} />
 
-      {/* Desktop: inline filters */}
-      <div className="hidden md:flex flex-col gap-3">
+      {/* Mobile: DataTable column filters */}
+      <DataTableMobileFilters
+        open={mobileFiltersOpen}
+        columns={columns}
+        filters={filters}
+        onFilterChange={(key, val) => setFilters((f) => ({ ...f, [key]: val }))}
+        dropOpts={dropOpts}
+        dropSel={dropSel}
+        onDropChange={(key, vals) => setDropSel((s) => ({ ...s, [key]: vals }))}
+      />
+
+      {/* Desktop: period picker */}
+      <div className="hidden md:flex flex-col gap-3 flex-shrink-0">
         <PeriodPicker period={period} setPeriod={setPeriod} custom={custom} setCustom={setCustom} />
-        <div className="flex gap-1.5 flex-wrap">
-          <button onClick={() => setTypeFilter('')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${!typeFilter ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200'}`}>
-            All
-          </button>
-          {Object.entries(TYPE_META).map(([key, meta]) => (
-            <button key={key} onClick={() => setTypeFilter(key === typeFilter ? '' : key)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${typeFilter === key ? `${meta.bg} ${meta.color} ${meta.border}` : 'bg-white text-zinc-500 border-zinc-200'}`}>
-              {meta.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
 
-      {!isLoading && txns.length === 0 && (
-        <EmptyState icon={CircleDollarSign} title="No transactions" description="Add your first transaction" />
+      {/* Desktop DataTable */}
+      {!isLoading && (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          filters={filters}
+          onFilterChange={(key, val) => setFilters((f) => ({ ...f, [key]: val }))}
+          dropOpts={dropOpts}
+          dropSel={dropSel}
+          onDropChange={(key, vals) => setDropSel((s) => ({ ...s, [key]: vals }))}
+          leadingCol
+          emptyMessage="No transactions found"
+          renderRow={(t) => {
+            const meta = TYPE_META[t.type] || TYPE_META.expense
+            const Icon = meta.icon
+            const isExpanded = expanded === t._id
+            const items = getItems(t)
+            const hasItems = items.length > 0
+            const cats = txnCategories(t)
+            return (
+              <Fragment key={t._id}>
+                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
+                  {/* expand chevron — leading col */}
+                  <td className="w-8 px-2 py-3 border-r border-zinc-100 text-center">
+                    {hasItems && (
+                      <button onClick={() => setExpanded(isExpanded ? null : t._id)}
+                        className="p-0.5 rounded text-zinc-400 hover:text-zinc-600">
+                        <ChevronDown size={14} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold ${meta.bg} ${meta.color}`}>
+                      <Icon size={11} />{meta.label}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-sm text-zinc-900 truncate border-r border-zinc-100">{t.description || '—'}</td>
+                  <td className="px-3 py-3 text-xs text-zinc-500 whitespace-nowrap border-r border-zinc-100">{formatDate(t.date)}</td>
+                  {!isBusiness && <td className="px-3 py-3 text-xs text-zinc-500 border-r border-zinc-100">{t.paidBy?.name || t.paidBy?.email || '—'}</td>}
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    {cats.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {cats.map((c) => (
+                          <div key={c.name} title={c.name}
+                            className="flex items-center gap-1 px-1.5 py-0.5 bg-zinc-100 rounded-lg text-[10px] font-medium text-zinc-600 flex-shrink-0">
+                            {c.icon && <span className="text-sm leading-none">{c.icon}</span>}
+                            <span>{c.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <span className="text-xs text-zinc-400">—</span>}
+                  </td>
+                  <td className={`px-3 py-3 text-sm font-semibold text-right border-r border-zinc-100 ${meta.color}`}>{fmt(t.amount, symbol)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
+                      <button onClick={() => del(t._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+                {isExpanded && hasItems && (
+                  <tr className="bg-zinc-50 border-b border-zinc-100">
+                    <td /><td colSpan={txnColSpan} className="px-4 py-3">
+                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                        <thead>
+                          <tr className="border-b border-zinc-200">
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Item</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Category</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500 border-r border-zinc-200">Qty</th>
+                            <th className="px-3 py-2 text-left font-semibold text-zinc-500">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {items.map((it, i, arr) => (
+                            <tr key={i} className={i < arr.length - 1 ? 'border-b border-zinc-100' : ''}>
+                              <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800">{it.name || '—'}</td>
+                              <td className="px-3 py-2 border-r border-zinc-100">
+                                {it.category?.name
+                                  ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-zinc-100 text-zinc-600 rounded-md font-medium">
+                                      {it.category.icon && <span className="text-sm leading-none">{it.category.icon}</span>}
+                                      {it.category.name}
+                                    </span>
+                                  )
+                                  : <span className="text-zinc-400">—</span>}
+                              </td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600">{it.qty ?? '—'}</td>
+                              <td className="px-3 py-2 font-semibold text-zinc-900">{fmt(it.amount, symbol)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            )
+          }}
+        />
       )}
 
-      {txns.map((t) => {
-        const meta = TYPE_META[t.type]
-        const Icon = meta.icon
-        return (
-          <div key={t._id} className="bg-white rounded-2xl border border-zinc-100 p-4">
-            <div className="flex items-start gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
-                <Icon size={18} className={meta.color} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-zinc-900 truncate">{t.description || meta.label}</p>
-                    <p className="text-xs text-zinc-400 mt-0.5">{formatDate(t.date)}{t.category?.name ? ` · ${t.category.name}` : ''}</p>
-                    {t.paidBy && <p className="text-[10px] text-zinc-400">Paid by {t.paidBy.name || t.paidBy.email}</p>}
+      {/* Mobile cards */}
+      {!isLoading && (
+        <div className="md:hidden flex flex-col gap-2">
+          {filtered.length === 0 && (
+            <EmptyState icon={CircleDollarSign} title="No transactions" description="Add your first transaction" />
+          )}
+          {filtered.map((t) => {
+            const meta = TYPE_META[t.type] || TYPE_META.expense
+            const Icon = meta.icon
+            const isExpanded = expanded === t._id
+            const items = getItems(t)
+            const hasItems = items.length > 0
+            const cats = txnCategories(t)
+            return (
+              <div key={t._id} className="bg-white rounded-2xl border border-zinc-100 p-4">
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                    <Icon size={18} className={meta.color} />
                   </div>
-                  <p className={`text-sm font-bold flex-shrink-0 ${meta.color}`}>{fmt(t.amount, symbol)}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-zinc-900 truncate">{t.description || meta.label}</p>
+                        <p className="text-xs text-zinc-400 mt-0.5">{formatDate(t.date)}</p>
+                        {!isBusiness && t.paidBy && <p className="text-[10px] text-zinc-400">Paid by {t.paidBy.name || t.paidBy.email}</p>}
+                      </div>
+                      <p className={`text-sm font-bold flex-shrink-0 ${meta.color}`}>{fmt(t.amount, symbol)}</p>
+                    </div>
+                    {cats.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 items-center">
+                        {cats.map((c) => (
+                          <div key={c.name}
+                            className="flex items-center gap-1 px-1.5 py-0.5 bg-zinc-100 rounded-lg text-[10px] font-medium text-zinc-600 flex-shrink-0">
+                            {c.icon && <span className="text-sm leading-none">{c.icon}</span>}
+                            <span>{c.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!isBusiness && t.splitAmong?.length > 0 && (
+                      <p className="text-[10px] text-zinc-400 mt-1">Split: {t.splitAmong.map((s) => s.user?.name || s.user?.email).join(', ')}</p>
+                    )}
+                  </div>
                 </div>
-                {t.splitAmong?.length > 0 && (
-                  <p className="text-[10px] text-zinc-400 mt-1">Split: {t.splitAmong.map((s) => s.user?.name || s.user?.email).join(', ')}</p>
+                {/* Items expand */}
+                {hasItems && (
+                  <>
+                    <button onClick={() => setExpanded(isExpanded ? null : t._id)}
+                      className="mt-2 flex items-center gap-1 text-xs text-zinc-400">
+                      <ChevronDown size={12} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      {items.length} item{items.length !== 1 ? 's' : ''}
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-2 pt-2 border-t border-zinc-100 flex flex-col gap-1.5">
+                        {items.map((it, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-zinc-800 truncate">{it.name || '—'}</span>
+                              {it.category?.name && (
+                                <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 bg-zinc-100 text-zinc-500 rounded-md">
+                                  {it.category.icon && <span className="text-sm leading-none">{it.category.icon}</span>}
+                                  {it.category.name}
+                                </span>
+                              )}
+                            </div>
+                            {it.qty && <span className="text-zinc-400">×{it.qty}</span>}
+                            <span className="font-semibold text-zinc-900">{fmt(it.amount, symbol)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
+                <div className="flex justify-end gap-1 mt-2 pt-2 border-t border-zinc-50">
+                  <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
+                  <button onClick={() => del(t._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
+                </div>
               </div>
-            </div>
-            <div className="flex justify-end gap-0 mt-2 pt-2 border-t border-zinc-50">
-              <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
-              <button onClick={() => del(t._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
-            </div>
-          </div>
-        )
-      })}
+            )
+          })}
+        </div>
+      )}
 
       <TransactionForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }}
-        editing={editing} groupId={groupId} groupMembers={groupMembers} categories={categories} symbol={symbol} />
-
-      <TransactionForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }}
-        editing={editing} groupId={groupId} groupMembers={groupMembers} categories={categories} symbol={symbol} />
+        editing={editing} groupId={groupId} groupMembers={isBusiness ? [] : groupMembers}
+        categories={categories} symbol={symbol} isBusiness={isBusiness} />
     </div>
   )
 }
 
 // ── Budgets Tab ───────────────────────────────────────────────────────────────
+const BUDGET_COLS = [
+  { key: 'name', label: 'Name', filterable: true, noDropdown: true },
+  { key: 'period', label: 'Period', filterable: false, width: 'w-52' },
+  { key: 'spent', label: 'Spent', filterable: false },
+  { key: 'total', label: 'Total', filterable: false },
+  { key: 'progress', label: 'Progress', filterable: false },
+  { key: 'remaining', label: 'Remaining', filterable: false },
+  { key: 'action', label: 'Action', filterable: false },
+]
+
 function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, onExternalClose }) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [expanded, setExpanded] = useState(null)
+  const [filters, setFilters] = useState({})
+  const { mutate: del } = useDeleteBudget()
 
   useEffect(() => {
     if (externalOpen) { setShowForm(true); onExternalClose?.() }
   }, [externalOpen])
-  const [expanded, setExpanded] = useState(null)
-  const { mutate: del } = useDeleteBudget()
+
+  const filtered = useMemo(() => budgets.filter((b) =>
+    !filters.name || b.name.toLowerCase().includes(filters.name.toLowerCase())
+  ), [budgets, filters])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
 
-      {!isLoading && budgets.length === 0 && (
-        <EmptyState icon={Wallet} title="No budgets" description="Create a budget to track your spending" />
+      {/* Desktop DataTable */}
+      {!isLoading && (
+        <DataTable
+          columns={BUDGET_COLS}
+          data={filtered}
+          filters={filters}
+          onFilterChange={(key, val) => setFilters((f) => ({ ...f, [key]: val }))}
+          dropOpts={{}}
+          dropSel={{}}
+          onDropChange={() => { }}
+          leadingCol
+          emptyMessage="No budgets yet — create one to start tracking"
+          renderRow={(b) => {
+            const pct = b.totalAmount > 0 ? Math.min((b.amountSpent / b.totalAmount) * 100, 100) : 0
+            const isExpanded = expanded === b._id
+            const danger = pct >= 90
+            return (
+              <Fragment key={b._id}>
+                <tr className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
+                  {/* expand chevron */}
+                  <td className="w-8 px-3 py-3 border-r border-zinc-100">
+                    {b.categories?.length > 0 ? (
+                      <button onClick={() => setExpanded(isExpanded ? null : b._id)}
+                        className="p-0.5 rounded text-zinc-400 hover:text-zinc-600">
+                        <ChevronDown size={14} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      </button>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{b.name}</p>
+                    {b.notes && <p className="text-[10px] text-zinc-400 italic truncate">{b.notes}</p>}
+                  </td>
+                  <td className="px-3 py-3 text-xs text-zinc-500 whitespace-nowrap border-r border-zinc-100">
+                    {formatDate(b.startDate)} — {formatDate(b.endDate)}
+                  </td>
+                  <td className="px-3 py-3 text-sm font-semibold text-zinc-900 border-r border-zinc-100">{fmt(b.amountSpent, symbol)}</td>
+                  <td className="px-3 py-3 text-sm text-zinc-500 border-r border-zinc-100">{fmt(b.totalAmount, symbol)}</td>
+                  <td className="px-3 py-3 border-r border-zinc-100">
+                    <div className="flex flex-col gap-1">
+                      <div className="w-full bg-zinc-100 rounded-full h-1.5 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${danger ? 'bg-red-500' : 'bg-emerald-500'}`}
+                          style={{ width: `${pct}%` }} />
+                      </div>
+                      <p className="text-[10px] text-zinc-400">{pct.toFixed(0)}% used</p>
+                    </div>
+                  </td>
+                  <td className={`px-3 py-3 text-sm font-semibold border-r border-zinc-100 ${danger ? 'text-red-500' : 'text-emerald-600'}`}>
+                    {fmt(b.amountRemaining, symbol)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                      <button onClick={() => { setEditing(b); setShowForm(true) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
+                      <button onClick={() => del(b._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
+                </tr>
+                {/* expanded categories sub-row */}
+                {isExpanded && b.categories?.length > 0 && (
+                  <tr className="bg-zinc-50 border-b border-zinc-100">
+                    <td /><td colSpan={7} className="px-4 py-3">
+                      <table className="w-full text-xs border-collapse rounded-xl overflow-hidden border border-zinc-200">
+                        <thead>
+                          <tr className="border-b border-zinc-200">
+                            <th className="px-3 py-2 w-40 text-left font-semibold text-zinc-500 border-r border-zinc-200">Category</th>
+                            <th className="px-3 py-2 w-48 text-left font-semibold text-zinc-500 border-r border-zinc-200">Progress</th>
+                            <th className="px-3 py-2 w-40 text-left font-semibold text-zinc-500 border-r border-zinc-200">Spent / Allocated</th>
+                            <th className="px-3 py-2 w-40 text-left font-semibold text-zinc-500">Used</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {b.categories.map((cat, i, arr) => {
+                            const catPct = cat.allocatedAmount > 0 ? Math.min((cat.spentAmount / cat.allocatedAmount) * 100, 100) : 0
+                            const showBorder = i < arr.length - 1 || b.uncategorisedSpent > 0
+                            return (
+                              <tr key={i} className={showBorder ? 'border-b border-zinc-100' : ''}>
+                                <td className="px-3 py-2 border-r border-zinc-100 font-medium text-zinc-800 truncate max-w-0">{cat.name}</td>
+                                <td className="px-3 py-2 border-r border-zinc-100">
+                                  <div className="w-full bg-zinc-200 rounded-full h-1.5 overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all ${catPct >= 90 ? 'bg-red-500' : 'bg-blue-500'}`}
+                                      style={{ width: `${catPct}%` }} />
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2 border-r border-zinc-100 text-zinc-600 whitespace-nowrap">{fmt(cat.spentAmount, symbol)} / {fmt(cat.allocatedAmount, symbol)}</td>
+                                <td className="px-3 py-2 text-zinc-400 whitespace-nowrap">{catPct.toFixed(0)}%</td>
+                              </tr>
+                            )
+                          })}
+                          {b.uncategorisedSpent > 0 && (
+                            <tr>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-400 italic">Uncategorised</td>
+                              <td className="px-3 py-2 border-r border-zinc-100">
+                                <div className="w-full bg-zinc-200 rounded-full h-1.5 overflow-hidden">
+                                  <div className="h-full rounded-full bg-zinc-400"
+                                    style={{ width: `${Math.min((b.uncategorisedSpent / b.totalAmount) * 100, 100)}%` }} />
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 border-r border-zinc-100 text-zinc-400 whitespace-nowrap">{fmt(b.uncategorisedSpent, symbol)} / —</td>
+                              <td className="px-3 py-2 text-zinc-400 whitespace-nowrap text-xs">no category</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            )
+          }}
+        />
       )}
 
-      {budgets.map((b) => {
-        const pct = b.totalAmount > 0 ? Math.min((b.amountSpent / b.totalAmount) * 100, 100) : 0
-        const isExpanded = expanded === b._id
-        return (
-          <div key={b._id} className="bg-white rounded-2xl border border-zinc-100 p-4 flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-zinc-900 truncate">{b.name}</p>
-                <p className="text-[10px] text-zinc-400">{formatDate(b.startDate)} — {formatDate(b.endDate)}</p>
-              </div>
-              <div className="flex items-center gap-0 flex-shrink-0">
-                <button onClick={() => { setEditing(b); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
-                <button onClick={() => del(b._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-500">Spent: <span className="font-semibold text-zinc-900">{fmt(b.amountSpent, symbol)}</span></span>
-                <span className="text-zinc-500">Total: <span className="font-semibold text-zinc-900">{fmt(b.totalAmount, symbol)}</span></span>
-              </div>
-              <ProgressBar value={b.amountSpent} max={b.totalAmount} />
-              <p className="text-[10px] text-zinc-400">{fmt(b.amountRemaining, symbol)} remaining · {pct.toFixed(0)}% used</p>
-            </div>
-
-            {b.categories?.length > 0 && (
-              <>
-                <button onClick={() => setExpanded(isExpanded ? null : b._id)}
-                  className="flex items-center gap-1 text-xs text-zinc-400">
-                  {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                  {b.categories.length} categories
-                </button>
-                {isExpanded && (
-                  <div className="flex flex-col gap-2 pt-1 border-t border-zinc-50">
-                    {b.categories.map((cat, i) => (
-                      <div key={i} className="flex flex-col gap-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-zinc-700 font-medium">{cat.name}</span>
-                          <span className="text-zinc-500">{fmt(cat.spentAmount, symbol)} / {fmt(cat.allocatedAmount, symbol)}</span>
-                        </div>
-                        <ProgressBar value={cat.spentAmount} max={cat.allocatedAmount} color="bg-blue-500" />
-                      </div>
-                    ))}
+      {/* Mobile cards */}
+      {!isLoading && (
+        <div className="md:hidden flex flex-col gap-3">
+          {filtered.length === 0 && (
+            <EmptyState icon={Wallet} title="No budgets" description="Create a budget to track your spending" />
+          )}
+          {filtered.map((b) => {
+            const pct = b.totalAmount > 0 ? Math.min((b.amountSpent / b.totalAmount) * 100, 100) : 0
+            const isExpanded = expanded === b._id
+            return (
+              <div key={b._id} className="bg-white rounded-2xl border border-zinc-100 p-4 flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{b.name}</p>
+                    <p className="text-[10px] text-zinc-400">{formatDate(b.startDate)} — {formatDate(b.endDate)}</p>
                   </div>
+                  <div className="flex items-center gap-0 flex-shrink-0">
+                    <button onClick={() => { setEditing(b); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
+                    <button onClick={() => del(b._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-500">Spent: <span className="font-semibold text-zinc-900">{fmt(b.amountSpent, symbol)}</span></span>
+                    <span className="text-zinc-500">Total: <span className="font-semibold text-zinc-900">{fmt(b.totalAmount, symbol)}</span></span>
+                  </div>
+                  <ProgressBar value={b.amountSpent} max={b.totalAmount} />
+                  <p className="text-[10px] text-zinc-400">{fmt(b.amountRemaining, symbol)} remaining · {pct.toFixed(0)}% used</p>
+                </div>
+                {b.categories?.length > 0 && (
+                  <>
+                    <button onClick={() => setExpanded(isExpanded ? null : b._id)}
+                      className="flex items-center gap-1 text-xs text-zinc-400">
+                      <ChevronDown size={13} className={`transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                      {b.categories.length} categories
+                    </button>
+                    {isExpanded && (
+                      <div className="flex flex-col gap-2 pt-1 border-t border-zinc-50">
+                        {b.categories.map((cat, i) => (
+                          <div key={i} className="flex flex-col gap-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-zinc-700 font-medium">{cat.name}</span>
+                              <span className="text-zinc-500">{fmt(cat.spentAmount, symbol)} / {fmt(cat.allocatedAmount, symbol)}</span>
+                            </div>
+                            <ProgressBar value={cat.spentAmount} max={cat.allocatedAmount} color="bg-blue-500" />
+                          </div>
+                        ))}
+                        {b.uncategorisedSpent > 0 && (
+                          <div className="flex flex-col gap-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-zinc-400 italic">Uncategorised</span>
+                              <span className="text-zinc-400">{fmt(b.uncategorisedSpent, symbol)}</span>
+                            </div>
+                            <ProgressBar value={b.uncategorisedSpent} max={b.totalAmount} color="bg-zinc-300" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-
-            {b.notes && <p className="text-xs text-zinc-400 italic">{b.notes}</p>}
-          </div>
-        )
-      })}
+                {b.notes && <p className="text-xs text-zinc-400 italic">{b.notes}</p>}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <BudgetForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }} editing={editing} groupId={groupId} />
     </div>
   )
 }
 
-// ── Debts Tab ─────────────────────────────────────────────────────────────────
-function DebtsTab({ groupId, symbol, currentUserId }) {
+// ── Debts Tab — Personal ──────────────────────────────────────────────────────
+function PersonalDebtsTab({ groupId, symbol, currentUserId }) {
   const { data: txns = [], isLoading } = useFinance({ groupId })
   const { mutate: settle } = useSettleDebt()
 
-  // Compute net balances from debtTracking
   const netDebts = useMemo(() => {
-    const map = {} // key: `${from}-${to}`, value: { from, to, net, entries: [{financeId, debtIndex}] }
+    const map = {}
     for (const txn of txns) {
       for (let i = 0; i < (txn.debtTracking || []).length; i++) {
         const d = txn.debtTracking[i]
@@ -677,12 +1560,8 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
         const toId = d.to?._id || d.to
         const key = [fromId, toId].sort().join('-')
         if (!map[key]) map[key] = { fromId, toId, fromName: d.from?.name || d.from?.email || fromId, toName: d.to?.name || d.to?.email || toId, amount: 0, entries: [] }
-        // from owes to
-        if (String(fromId) < String(toId)) {
-          map[key].amount += d.amount
-        } else {
-          map[key].amount -= d.amount
-        }
+        if (String(fromId) < String(toId)) map[key].amount += d.amount
+        else map[key].amount -= d.amount
         map[key].entries.push({ financeId: txn._id, debtIndex: i })
       }
     }
@@ -690,7 +1569,6 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
   }, [txns])
 
   if (isLoading) return <div className="flex justify-center py-8"><Spinner /></div>
-
   if (netDebts.length === 0) return (
     <EmptyState icon={CheckCircle2} title="All settled up!" description="No outstanding debts in this group" />
   )
@@ -715,10 +1593,8 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
               </p>
               <p className={`text-sm font-bold ${d.amount > 0 ? 'text-red-500' : 'text-emerald-600'}`}>{fmt(amt, symbol)}</p>
             </div>
-            <button
-              onClick={() => d.entries.forEach((e) => settle({ id: e.financeId, debtIndex: e.debtIndex }))}
-              className="px-3 py-1.5 text-xs font-semibold bg-zinc-900 text-white rounded-xl active:scale-95 transition-transform"
-            >
+            <button onClick={() => d.entries.forEach((e) => settle({ id: e.financeId, debtIndex: e.debtIndex }))}
+              className="px-3 py-1.5 text-xs font-semibold bg-zinc-900 text-white rounded-xl active:scale-95 transition-transform">
               Settle
             </button>
           </div>
@@ -728,29 +1604,172 @@ function DebtsTab({ groupId, symbol, currentUserId }) {
   )
 }
 
+// ── Debts Tab — Business (AR/AP aging) ───────────────────────────────────────
+function BusinessDebtsTab({ symbol }) {
+  const { data: salesInvoices = [], isLoading: loadingSI } = useSalesInvoices()
+  const { data: purchaseInvoices = [], isLoading: loadingPI } = usePurchaseInvoices()
+  const [view, setView] = useState('ar') // 'ar' | 'ap'
+
+  const unpaidSI = salesInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+    .map((i) => ({ ...i, daysOverdue: i.dueDate ? Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))) : 0 }))
+    .sort((a, b) => b.daysOverdue - a.daysOverdue)
+
+  const unpaidPI = purchaseInvoices.filter((i) => ['draft', 'sent', 'overdue'].includes(i.status))
+    .map((i) => ({ ...i, daysOverdue: i.dueDate ? Math.max(0, differenceInDays(new Date(), parseISO(i.dueDate))) : 0 }))
+    .sort((a, b) => b.daysOverdue - a.daysOverdue)
+
+  const totalAR = unpaidSI.reduce((s, i) => s + (i.grandTotal || 0), 0)
+  const totalAP = unpaidPI.reduce((s, i) => s + (i.grandTotal || 0), 0)
+
+  const isLoading = loadingSI || loadingPI
+  if (isLoading) return <div className="flex justify-center py-8"><Spinner /></div>
+
+  const items = view === 'ar' ? unpaidSI : unpaidPI
+  const total = view === 'ar' ? totalAR : totalAP
+
+  const agingColor = (days) => {
+    if (days === 0) return 'bg-zinc-100 text-zinc-500'
+    if (days <= 30) return 'bg-amber-50 text-amber-600'
+    if (days <= 60) return 'bg-orange-50 text-orange-600'
+    return 'bg-red-50 text-red-600'
+  }
+
+  return (
+    <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
+      {/* Summary metrics */}
+      <div className="grid grid-cols-3 gap-3 flex-shrink-0">
+        <div className="bg-white border border-zinc-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+              <TrendingUp size={15} className="text-emerald-600" />
+            </div>
+            <p className="text-sm font-semibold text-zinc-700">Receivable</p>
+          </div>
+          <p className="text-2xl font-bold text-emerald-600 tracking-tight">{fmt(totalAR, symbol)}</p>
+          <p className="text-xs text-zinc-400 mt-1">{unpaidSI.length} unpaid invoice{unpaidSI.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="bg-white border border-zinc-200 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+              <TrendingDown size={15} className="text-red-500" />
+            </div>
+            <p className="text-sm font-semibold text-zinc-700">Payable</p>
+          </div>
+          <p className="text-2xl font-bold text-red-500 tracking-tight">{fmt(totalAP, symbol)}</p>
+          <p className="text-xs text-zinc-400 mt-1">{unpaidPI.length} unpaid invoice{unpaidPI.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="bg-zinc-900 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+              <Landmark size={15} className="text-zinc-300" />
+            </div>
+            <p className="text-sm font-semibold text-zinc-400">Net Position</p>
+          </div>
+          <p className={`text-2xl font-bold tracking-tight ${totalAR - totalAP >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(Math.abs(totalAR - totalAP), symbol)}</p>
+          <p className="text-xs text-zinc-500 mt-1">{totalAR - totalAP >= 0 ? 'Net receivable' : 'Net payable'}</p>
+        </div>
+      </div>
+
+      {/* View switcher */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button onClick={() => setView('ar')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all outline-none border ${view === 'ar' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'}`}>
+          Receivable
+        </button>
+        <button onClick={() => setView('ap')} className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all outline-none border ${view === 'ap' ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-500 border-zinc-200 hover:border-zinc-300 hover:text-zinc-700'}`}>
+          Payable
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <EmptyState icon={CheckCircle2}
+          title={view === 'ar' ? 'No outstanding receivables' : 'No outstanding payables'}
+          description={view === 'ar' ? 'All customer invoices are paid' : 'All vendor invoices are paid'} />
+      ) : (
+        <div className="flex flex-col min-h-0 flex-1 bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+          {/* Sticky header */}
+          <table className="w-full text-sm border-collapse flex-shrink-0">
+            <thead>
+              <tr className="bg-zinc-50 border-b border-zinc-200">
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Invoice</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">{view === 'ar' ? 'Customer' : 'Vendor'}</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Due Date</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Overdue</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold text-zinc-500">Status</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold text-zinc-500">Amount</th>
+              </tr>
+            </thead>
+          </table>
+          {/* Scrollable body */}
+          <div className="overflow-y-auto flex-1">
+            <table className="w-full text-sm border-collapse">
+              <tbody>
+                {items.map((inv) => (
+                  <tr key={inv._id} className="border-b border-zinc-100 hover:bg-zinc-50">
+                    <td className="px-4 py-3 font-mono text-xs font-semibold text-zinc-900">{inv.invoiceNumber}</td>
+                    <td className="px-4 py-3 text-sm text-zinc-700">{(view === 'ar' ? inv.customer?.name : inv.vendor?.name) || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-zinc-500">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>
+                    <td className="px-4 py-3">
+                      {inv.daysOverdue > 0
+                        ? <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${agingColor(inv.daysOverdue)}`}>{inv.daysOverdue}d</span>
+                        : <span className="text-xs text-zinc-400">—</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${inv.status === 'overdue' ? 'bg-red-50 text-red-600' :
+                          inv.status === 'sent' ? 'bg-amber-50 text-amber-600' : 'bg-zinc-100 text-zinc-500'
+                        }`}>{inv.status}</span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-right text-zinc-900">{fmt(inv.grandTotal, symbol)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Sticky footer */}
+          <table className="w-full text-sm border-collapse flex-shrink-0">
+            <tfoot>
+              <tr className="bg-zinc-50 border-t border-zinc-200">
+                <td colSpan={5} className="px-4 py-2.5 text-xs font-semibold text-zinc-500">Total Outstanding</td>
+                <td className="px-4 py-2.5 text-sm font-bold text-right text-zinc-900">{fmt(total, symbol)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Debts Tab — router ────────────────────────────────────────────────────────
+function DebtsTab({ groupId, symbol, currentUserId, isBusiness }) {
+  if (isBusiness) return <BusinessDebtsTab symbol={symbol} />
+  return <PersonalDebtsTab groupId={groupId} symbol={symbol} currentUserId={currentUserId} />
+}
+
 // ── Main Finance Page ─────────────────────────────────────────────────────────
 export default function Finance() {
-  const [tab, setTab]       = useState('overview')
+  const [tab, setTab] = useState('overview')
   const [period, setPeriod] = useState('month')
   const [custom, setCustom] = useState({ start: '', end: '' })
-  const [showAddTxn, setShowAddTxn]       = useState(false)
+  const [showAddTxn, setShowAddTxn] = useState(false)
   const [showAddBudget, setShowAddBudget] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   const handleTabChange = (key) => { setTab(key); setMobileFiltersOpen(false) }
 
   const { activeGroupId } = useGroupStore()
-  const { data: me }      = useMe()
-  const { data: groups }  = useGroups()
+  const { data: me } = useMe()
+  const { data: groups } = useGroups()
+  const isBusiness = useIsBusiness()
+  const TABS = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
   const { data: categories = [] } = useCategories()
 
-  const symbol = CURRENCIES.find((c) => c.code === (me?.currency || 'INR'))?.symbol || '₹'
+  const symbol = useCurrencySymbol()
 
   const activeGroup = groups?.find((g) => g._id === activeGroupId)
   const groupMembers = activeGroup?.members || []
 
   const dates = getPeriodDates(period, custom)
-  const { data: allTxns = [] }  = useFinance({ groupId: activeGroupId, ...dates })
+  const { data: allTxns = [] } = useFinance({ groupId: activeGroupId, ...dates })
   const { data: budgets = [], isLoading: budgetsLoading } = useBudgets({ groupId: activeGroupId })
 
   const filterTabs = ['overview', 'transactions']
@@ -766,12 +1785,12 @@ export default function Finance() {
         right={
           <div className="flex items-center">
             {tab === 'transactions' && (
-              <button onClick={() => setShowAddTxn(true)} className="p-2 rounded-xl active:bg-zinc-100">
+              <button onClick={() => setShowAddTxn(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <Plus size={20} className="text-zinc-600" />
               </button>
             )}
             {tab === 'budgets' && (
-              <button onClick={() => setShowAddBudget(true)} className="p-2 rounded-xl active:bg-zinc-100">
+              <button onClick={() => setShowAddBudget(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <Plus size={20} className="text-zinc-600" />
               </button>
             )}
@@ -779,64 +1798,37 @@ export default function Finance() {
         }
       />
 
-      <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        {/* Mobile sticky pill tab bar */}
-        <div className="md:hidden sticky z-30 bg-zinc-50 -mx-4 px-4 py-4 flex-shrink-0 flex flex-col gap-1" style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(0, 3).map((t) => (
-              <button key={t.key} onClick={() => handleTabChange(t.key)}
-                className={['flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200'].join(' ')}>
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
-          <div className="bg-zinc-100 rounded-xl p-0.5 flex">
-            {TABS.slice(3).map((t) => (
-              <button key={t.key} onClick={() => handleTabChange(t.key)}
-                className={['flex-1 py-1.5 text-xs font-semibold rounded-[10px] transition-all duration-200 whitespace-nowrap',
-                  tab === t.key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-400 active:bg-zinc-200'].join(' ')}>
-                {t.mobileLabel}
-              </button>
-            ))}
-          </div>
+      <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
+        <div
+          className="sticky z-20 bg-zinc-50 -mx-4 px-4 md:static md:bg-transparent md:mx-0 md:px-0 flex items-center justify-between gap-4 flex-shrink-0 py-3 md:py-0 md:mb-4"
+          style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}
+        >
+          <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
+          <PageActions add={
+            tab === 'transactions' ? <Button size="sm" onClick={() => setShowAddTxn(true)}><Plus size={15} /> Add</Button>
+            : tab === 'budgets' ? <Button size="sm" onClick={() => setShowAddBudget(true)}><Plus size={15} /> New Budget</Button>
+            : null
+          } />
         </div>
 
-        {/* Desktop underline tab bar */}
-        <div className="hidden md:flex items-end justify-between border-b border-zinc-200 mb-5 flex-shrink-0">
-          <div className="flex gap-x-6">
-            {TABS.map((t) => (
-              <button key={t.key} onClick={() => handleTabChange(t.key)}
-                className={['pb-3 text-sm font-medium transition-colors whitespace-nowrap',
-                  tab === t.key ? 'text-zinc-900 border-b-2 border-zinc-900 -mb-px' : 'text-zinc-400 hover:text-zinc-600'].join(' ')}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="pb-3 flex gap-2">
-            {tab === 'transactions' && <Button size="sm" onClick={() => setShowAddTxn(true)}><Plus size={15} /> Add</Button>}
-            {tab === 'budgets' && <Button size="sm" onClick={() => setShowAddBudget(true)}><Plus size={15} /> New Budget</Button>}
-          </div>
-        </div>
-
-        <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
+        <div className="md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col">
           {tab === 'overview' && (
             <OverviewTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} budgets={budgets} recentTxns={allTxns}
-              mobileFiltersOpen={mobileFiltersOpen} />
+              mobileFiltersOpen={mobileFiltersOpen} isBusiness={isBusiness} />
           )}
           {tab === 'transactions' && (
             <TransactionsTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} groupMembers={groupMembers} categories={categories}
               externalOpen={showAddTxn} onExternalClose={() => setShowAddTxn(false)}
-              mobileFiltersOpen={mobileFiltersOpen} />
+              mobileFiltersOpen={mobileFiltersOpen} isBusiness={isBusiness} />
           )}
           {tab === 'budgets' && (
             <BudgetsTab groupId={activeGroupId} symbol={symbol} budgets={budgets} isLoading={budgetsLoading}
               externalOpen={showAddBudget} onExternalClose={() => setShowAddBudget(false)} />
           )}
           {tab === 'debts' && (
-            <DebtsTab groupId={activeGroupId} symbol={symbol} currentUserId={me?._id} />
+            <DebtsTab groupId={activeGroupId} symbol={symbol} currentUserId={me?._id} isBusiness={isBusiness} />
           )}
         </div>
       </div>

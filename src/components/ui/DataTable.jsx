@@ -35,9 +35,8 @@ function ColFilterDropdown({ options = [], selected = [], onChange }) {
               onClick={() => toggle(opt)}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50 text-left"
             >
-              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-                selected.includes(opt) ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
-              }`}>
+              <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${selected.includes(opt) ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300'
+                }`}>
                 {selected.includes(opt) && (
                   <svg viewBox="0 0 10 10" className="w-2 h-2 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
                     <path d="M1.5 5l2.5 2.5 4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -66,7 +65,7 @@ function Pagination({ page, total, pageSize, onChange }) {
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1
   const end = Math.min(page * pageSize, total)
   return (
-    <div className="flex items-center justify-between px-2 py-3 flex-shrink-0 border-t border-zinc-100 mt-1">
+    <div className="flex items-center justify-between px-2 py-3 flex-shrink-0">
       <p className="text-xs text-zinc-400">
         {total === 0 ? 'No results' : `${start}–${end} of ${total}`}
       </p>

@@ -17,6 +17,10 @@ import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
 import Finance from './pages/Finance'
 import Settings from './pages/Settings'
+import Purchases from './pages/Purchases'
+import Sales from './pages/Sales'
+import General from './pages/General'
+import Stock from './pages/Stock'
 
 function SessionLoader({ children }) {
   const { setSession, clearSession } = useAuthStore()
@@ -69,6 +73,12 @@ export default function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/finance" element={<Finance />} />
               <Route path="/settings" element={<Settings />} />
+
+              {/* Business ERP routes */}
+              <Route path="/general"   element={<General />} />
+              <Route path="/purchases" element={<Purchases />} />
+              <Route path="/sales"     element={<Sales />} />
+              <Route path="/stock"     element={<Stock />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
