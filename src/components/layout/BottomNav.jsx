@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes } from 'lucide-react'
+import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes, BarChart2 } from 'lucide-react'
 import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
 
@@ -16,6 +16,7 @@ const BUSINESS_TABS = [
   { to: '/purchases', icon: ShoppingCart, label: 'Purchases'              },
   { to: '/sales',     icon: TrendingUp,   label: 'Sales'                  },
   { to: '/stock',     icon: Boxes,        label: 'Stock'                  },
+  { to: '/finance',   icon: BarChart2,    label: 'Finance'                },
   { to: '/settings',  icon: Settings,     label: 'Settings'               },
 ]
 

@@ -1746,7 +1746,7 @@ export default function Settings() {
       <div className="md:px-0 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Tab bar — fixed below TopBar on mobile, static on desktop */}
         <div className="flex items-center justify-between gap-4 flex-shrink-0
-                        sticky top-14 z-10 bg-[#f5f5f5] px-4 py-4
+                        sticky top-14 z-10 bg-transparent px-4 py-4
                         md:static md:top-auto md:bg-transparent md:px-0 md:py-0 md:mb-4">
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
           <PageActions add={

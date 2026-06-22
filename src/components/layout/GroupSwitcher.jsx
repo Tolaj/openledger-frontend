@@ -85,7 +85,7 @@ export default function GroupSwitcher({ compact = false, height = '' }) {
       {open && rect && createPortal(
         <div
           ref={dropRef}
-          style={{ position: 'fixed', top: rect.bottom + 4, left: rect.left, minWidth: Math.max(rect.width, 200), zIndex: 9999 }}
+          style={{ position: 'fixed', top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right), minWidth: Math.max(rect.width, 200), zIndex: 9999 }}
           className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden py-1"
         >
           {allGroups.length === 0 ? (

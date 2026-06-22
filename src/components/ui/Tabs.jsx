@@ -13,7 +13,7 @@ export default function Tabs({ tabs = [], active, onChange, className = '' }) {
               'flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap outline-none focus:outline-none focus-visible:outline-none',
               isActive
                 ? 'bg-zinc-900 text-white shadow-sm'
-                : 'bg-white text-zinc-500 shadow-[0_1px_4px_rgba(0,0,0,0.07)]',
+                : 'bg-white/70 text-zinc-500 shadow-[0_1px_4px_rgba(0,0,0,0.07)] backdrop-blur-sm',
             ].join(' ')}
           >
             {Icon && <Icon size={14} />}
