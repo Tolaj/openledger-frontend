@@ -884,8 +884,50 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
 // ── Configuration Tab ─────────────────────────────────────────────────────────
 function ConfigurationTab() {
   const { data: me, isLoading } = useMe()
+  const { data: groups = [], isLoading: groupsLoading } = useGroups()
+  const { activeGroupId } = useGroupStore()
   const { mutate: updateUser, isPending: saving } = useUpdateUser()
+  const { mutate: updateGroup, isPending: savingBiz } = useUpdateGroup()
   const queryClient = useQueryClient()
+
+  const activeGroup = groups.find((g) => g._id === activeGroupId)
+
+  // Business details form state (synced from activeGroup)
+  const bd = activeGroup?.businessDetails || {}
+  const [biz, setBiz] = useState({})
+  const [bizSaved, setBizSaved] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoError, setLogoError] = useState('')
+
+  // Sync biz state when activeGroup loads/changes
+  useEffect(() => {
+    if (activeGroup) {
+      const d = activeGroup.businessDetails || {}
+      setBiz({
+        legalName:    d.legalName    || '',
+        logo:         d.logo         || '',
+        template:     d.template     || 'classic',
+        color:        d.color        || 'forest',
+        gstin:        d.gstin        || '',
+        pan:          d.pan          || '',
+        email:        d.email        || '',
+        phone:        d.phone        || '',
+        website:      d.website      || '',
+        addressLine1: d.addressLine1 || '',
+        addressLine2: d.addressLine2 || '',
+        city:         d.city         || '',
+        state:        d.state        || '',
+        pincode:      d.pincode      || '',
+        country:      d.country      || 'India',
+      })
+    }
+  }, [activeGroup?._id])
+
+  const handleBizSave = () => {
+    updateGroup({ id: activeGroupId, data: { businessDetails: biz } }, {
+      onSuccess: () => { setBizSaved(true); setTimeout(() => setBizSaved(false), 2000) },
+    })
+  }
 
   // Currency conversion state
   const [pendingCurrency, setPendingCurrency] = useState(null) // { code, label }
@@ -926,51 +968,245 @@ function ConfigurationTab() {
 
   if (isLoading) return <Spinner className="py-12" />
 
+  const [previewTemplate, setPreviewTemplate] = useState(null)
+
   return (
-    <div className="flex flex-col gap-4 max-w-lg">
-      <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
-        {/* Account type — read-only display */}
-        <div className="p-4">
-          <p className="text-sm font-semibold text-zinc-900 mb-1">Account type</p>
-          <p className="text-xs text-zinc-400 mb-3">Set when your first group was created. Each group has its own type.</p>
-          <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200">
-            <span className="text-xl">{me?.accountType === 'business' ? '🏢' : '🏠'}</span>
-            <div>
-              <p className="text-sm font-semibold text-zinc-900 capitalize">{me?.accountType || 'Personal'}</p>
-              {me?.businessName && <p className="text-xs text-zinc-500">{me.businessName}</p>}
+    <div className="flex flex-col gap-4 pb-10">
+      {/* Top row: business form | account+currency | template */}
+      <div className="flex flex-col md:flex-row gap-4 items-start">
+
+        {/* Business Details — left column (only for business groups) */}
+        {activeGroup?.type === 'business' && (
+          <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden md:max-w-md flex-1">
+            <div className="p-3 border-b border-zinc-100">
+              <p className="text-sm font-semibold text-zinc-900">Business Details</p>
+              <p className="text-xs text-zinc-400 mt-0.5">Shown on invoices, purchase orders, and documents.</p>
             </div>
-            <span className="ml-auto text-[10px] text-zinc-400 bg-zinc-200 px-2 py-0.5 rounded-full">Locked</span>
+            <div className="p-3 flex flex-col gap-2">
+              {/* Logo upload */}
+              <div className="flex items-center gap-2">
+                {biz.logo ? (
+                  <img src={biz.logo} alt="logo" className="h-9 w-9 rounded-lg object-contain border border-zinc-200 bg-zinc-50 p-0.5 flex-shrink-0" />
+                ) : (
+                  <div className="h-9 w-9 rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 flex items-center justify-center text-zinc-400 text-[9px] text-center leading-tight flex-shrink-0">Logo</div>
+                )}
+                <label className={`cursor-pointer flex-1 h-8 px-3 rounded-lg border border-zinc-300 bg-white text-xs text-zinc-700 hover:bg-zinc-50 flex items-center justify-center gap-1.5 transition-colors ${logoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setLogoUploading(true)
+                    setLogoError('')
+                    try {
+                      const fd = new FormData()
+                      fd.append('file', file)
+                      fd.append('upload_preset', 'openledger')
+                      const res = await fetch('https://api.cloudinary.com/v1_1/dwicc7oxu/image/upload', { method: 'POST', body: fd })
+                      if (!res.ok) throw new Error('Upload failed')
+                      const data = await res.json()
+                      setBiz((b) => ({ ...b, logo: data.secure_url }))
+                    } catch (err) {
+                      setLogoError('Upload failed. Please try again.')
+                    } finally {
+                      setLogoUploading(false)
+                      e.target.value = ''
+                    }
+                  }} />
+                  {logoUploading ? <><span className="h-3 w-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> Uploading…</> : 'Upload logo'}
+                </label>
+                {biz.logo && (
+                  <button onClick={() => setBiz((b) => ({ ...b, logo: '' }))}
+                    className="h-8 px-2.5 rounded-lg border border-zinc-200 text-xs text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
+                    Remove
+                  </button>
+                )}
+                {logoError && <p className="text-xs text-red-500">{logoError}</p>}
+              </div>
+
+              {/* Fields */}
+              {[
+                { label: 'Legal / Trading Name', key: 'legalName', placeholder: 'e.g. Acme Pvt. Ltd.', full: true },
+              ].map(({ label, key, placeholder }) => (
+                <div key={key} className="flex flex-col gap-1">
+                  <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">{label}</label>
+                  <input value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
+                    placeholder={placeholder} className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                </div>
+              ))}
+
+              <div className="grid grid-cols-2 gap-2">
+                {[['GSTIN', 'gstin', '22AAAAA0000A1Z5'], ['PAN', 'pan', 'AAAAA0000A'], ['Email', 'email', 'billing@company.com'], ['Phone', 'phone', '+91 98765 43210']].map(([label, key, placeholder]) => (
+                  <div key={key} className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">{label}</label>
+                    <input type={key === 'email' ? 'email' : 'text'} value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
+                      placeholder={placeholder} className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">Website</label>
+                <input value={biz.website || ''} onChange={(e) => setBiz((b) => ({ ...b, website: e.target.value }))}
+                  placeholder="https://yourcompany.com" className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">Address</label>
+                <div className="flex flex-col gap-1.5">
+                  <input value={biz.addressLine1 || ''} onChange={(e) => setBiz((b) => ({ ...b, addressLine1: e.target.value }))}
+                    placeholder="Street / Building" className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                  <input value={biz.addressLine2 || ''} onChange={(e) => setBiz((b) => ({ ...b, addressLine2: e.target.value }))}
+                    placeholder="Area / Locality (optional)" className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[['City', 'city'], ['State', 'state'], ['Pincode', 'pincode'], ['Country', 'country']].map(([ph, key]) => (
+                      <input key={key} value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
+                        placeholder={ph} className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <button onClick={handleBizSave} disabled={savingBiz}
+                className="h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {savingBiz ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
+                {bizSaved ? '✓ Saved' : savingBiz ? 'Saving…' : 'Save Business Details'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Middle column: account type + currency */}
+        <div className={`flex flex-col gap-4 ${activeGroup?.type === 'business' ? 'md:w-72' : 'max-w-lg'} w-full`}>
+          {/* Account type */}
+          <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+            <div className="p-4">
+              <p className="text-sm font-semibold text-zinc-900 mb-1">Account type</p>
+              <p className="text-xs text-zinc-400 mb-3">Set when your first group was created. Each group has its own type.</p>
+              <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200">
+                <span className="text-xl">{activeGroup?.type === 'business' ? '🏢' : '🏠'}</span>
+                <div>
+                  <p className="text-sm font-semibold text-zinc-900 capitalize">{activeGroup?.type || 'Personal'}</p>
+                  {activeGroup?.name && <p className="text-xs text-zinc-500">{activeGroup.name}</p>}
+                </div>
+                <span className="ml-auto text-[10px] text-zinc-400 bg-zinc-200 px-2 py-0.5 rounded-full">Locked</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Currency */}
+          <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+            <div className="p-4">
+              <p className="text-sm font-semibold text-zinc-900 mb-1">Currency</p>
+              <p className="text-xs text-zinc-400 mb-3">
+                Changing currency can also convert all your product prices using live exchange rates.
+              </p>
+              <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200 mb-3">
+                <span className="text-2xl font-bold text-zinc-900">{currencySymbol(me?.currency || 'INR')}</span>
+                <div>
+                  <p className="text-sm font-semibold text-zinc-900">{me?.currency || 'INR'}</p>
+                  <p className="text-xs text-zinc-400">{CURRENCY_LIST.find(c => c.code === (me?.currency || 'INR'))?.name || ''}</p>
+                </div>
+              </div>
+              <select
+                key={me?.currency}
+                defaultValue={me?.currency || 'INR'}
+                onChange={(e) => handleCurrencySelect(e.target.value)}
+                className="w-full h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
+              >
+                {[...CURRENCY_LIST].sort((a, b) => {
+                  if (a.code === (me?.currency || 'INR')) return -1
+                  if (b.code === (me?.currency || 'INR')) return 1
+                  return a.code.localeCompare(b.code)
+                }).map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} {c.code} — {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Currency */}
-        <div className="border-t border-zinc-100 p-4">
-          <p className="text-sm font-semibold text-zinc-900 mb-1">Currency</p>
-          <p className="text-xs text-zinc-400 mb-3">
-            Changing currency can also convert all your product prices using live exchange rates.
-          </p>
-          <div className="flex gap-2">
-            <select
-              key={me?.currency}
-              defaultValue={me?.currency || 'INR'}
-              onChange={(e) => handleCurrencySelect(e.target.value)}
-              className="flex-1 h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
-            >
-              {[...CURRENCY_LIST].sort((a, b) => {
-                if (a.code === (me?.currency || 'INR')) return -1
-                if (b.code === (me?.currency || 'INR')) return 1
-                return a.code.localeCompare(b.code)
-              }).map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.symbol} {c.code} — {c.name}
-                </option>
-              ))}
-            </select>
-            <div className="h-11 w-12 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-center text-lg font-semibold text-zinc-700 select-none">
-              {currencySymbol(me?.currency || 'INR')}
+        {/* Right column: invoice template (business only) */}
+        {activeGroup?.type === 'business' && (
+          <div className="flex flex-col gap-4 md:w-96 w-full">
+            <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+              <div className="p-4">
+                <p className="text-sm font-semibold text-zinc-900 mb-1">Invoice template</p>
+                <p className="text-xs text-zinc-400 mb-3">Applies to all PDFs generated for this group.</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { key: 'classic',   label: 'Classic',   desc: 'Traditional letterhead' },
+                    { key: 'modern',    label: 'Modern',    desc: 'Left rail, big number' },
+                    { key: 'minimal',   label: 'Minimal',   desc: 'Clean, no borders' },
+                    { key: 'executive', label: 'Executive', desc: 'Accent header band' },
+                    { key: 'bold',      label: 'Bold',      desc: 'Strong typography' },
+                    { key: 'elegant',   label: 'Elegant',   desc: 'Warm cream paper' },
+                    { key: 'retro',     label: 'Retro',     desc: 'Monospace, dashed' },
+                    { key: 'compact',   label: 'Compact',   desc: 'Dense, data-heavy' },
+                    { key: 'stripe',    label: 'Stripe',    desc: 'Split-panel header' },
+                    { key: 'bureau',    label: 'Bureau',    desc: 'Centered, formal' },
+                  ].map((t) => {
+                    const active = (biz.template || 'classic') === t.key
+                    return (
+                      <div key={t.key} className={`rounded-lg border transition-all ${active ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 hover:border-zinc-300'}`}>
+                        <button
+                          onClick={() => {
+                            setBiz((b) => ({ ...b, template: t.key }))
+                            updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, template: t.key } } })
+                          }}
+                          className="flex items-start gap-2 px-2.5 py-2 w-full text-left"
+                        >
+                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${active ? 'border-zinc-900' : 'border-zinc-300'}`}>
+                            {active && <div className="w-1.5 h-1.5 rounded-full bg-zinc-900" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-zinc-900 leading-tight">{t.label}</p>
+                            <p className="text-[10px] text-zinc-400 leading-tight mt-0.5 truncate">{t.desc}</p>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => setPreviewTemplate(t.key)}
+                          className="w-full text-[10px] text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors pb-1.5 rounded-b-lg"
+                        >
+                          Preview
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Color theme picker */}
+                <div className="mt-3 pt-3 border-t border-zinc-100">
+                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">Color theme</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {[
+                      { key: 'forest', color: '#14532d', label: 'Forest' },
+                      { key: 'rose',   color: '#be123c', label: 'Rose' },
+                      { key: 'indigo', color: '#4338ca', label: 'Indigo' },
+                      { key: 'amber',  color: '#b45309', label: 'Amber' },
+                      { key: 'teal',   color: '#0f766e', label: 'Teal' },
+                      { key: 'purple', color: '#6d28d9', label: 'Purple' },
+                      { key: 'slate',  color: '#1e293b', label: 'Slate' },
+                    ].map((c) => {
+                      const active = (biz.color || 'forest') === c.key
+                      return (
+                        <button
+                          key={c.key}
+                          title={c.label}
+                          onClick={() => {
+                            setBiz((b) => ({ ...b, color: c.key }))
+                            updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, color: c.key } } })
+                          }}
+                          className={`w-6 h-6 rounded-full transition-all ${active ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : 'hover:scale-110'}`}
+                          style={{ backgroundColor: c.color }}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Currency conversion confirmation sheet */}
@@ -1019,8 +1255,412 @@ function ConfigurationTab() {
           </Button>
         </div>
       </BottomSheet>
+
+      {/* Template preview modal */}
+      {previewTemplate && createPortal(
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm" onClick={() => setPreviewTemplate(null)}>
+          <div className="flex items-center justify-between px-4 py-3 bg-zinc-900 text-white flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold capitalize">{previewTemplate} template</span>
+              <div className="flex gap-1">
+                {['classic','modern','minimal','executive','bold','elegant','retro','compact','stripe','bureau'].map((k) => (
+                  <button key={k} onClick={() => setPreviewTemplate(k)}
+                    className={`text-xs px-2.5 py-1 rounded-full capitalize transition-colors ${previewTemplate === k ? 'bg-white text-zinc-900 font-semibold' : 'text-zinc-400 hover:text-white'}`}>
+                    {k}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => setPreviewTemplate(null)} className="text-zinc-400 hover:text-white text-xl leading-none">✕</button>
+          </div>
+          <div className="flex-1 overflow-auto p-4 flex justify-center" onClick={(e) => e.stopPropagation()}>
+            <iframe
+              key={previewTemplate}
+              srcDoc={buildTemplatePreview(previewTemplate, biz, biz.color)}
+              className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-zinc-200"
+              style={{ height: '780px' }}
+              title="Invoice preview"
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   )
+}
+
+const PREVIEW_COLOR_THEMES = {
+  forest: { accent: '#14532d', mid: '#166534', light: '#f0fdf4', border: '#bbf7d0', badge: '#dcfce7', badgeText: '#166534' },
+  rose:   { accent: '#be123c', mid: '#e11d48', light: '#fff1f2', border: '#fecdd3', badge: '#ffe4e6', badgeText: '#be123c' },
+  indigo: { accent: '#4338ca', mid: '#4f46e5', light: '#eef2ff', border: '#c7d2fe', badge: '#e0e7ff', badgeText: '#3730a3' },
+  amber:  { accent: '#b45309', mid: '#d97706', light: '#fffbeb', border: '#fde68a', badge: '#fef3c7', badgeText: '#92400e' },
+  teal:   { accent: '#0f766e', mid: '#0d9488', light: '#f0fdfa', border: '#99f6e4', badge: '#ccfbf1', badgeText: '#0f766e' },
+  purple: { accent: '#6d28d9', mid: '#7c3aed', light: '#f5f3ff', border: '#ddd6fe', badge: '#ede9fe', badgeText: '#5b21b6' },
+  slate:  { accent: '#1e293b', mid: '#334155', light: '#f8fafc', border: '#cbd5e1', badge: '#f1f5f9', badgeText: '#334155' },
+}
+
+function buildTemplatePreview(template, biz = {}, colorKey = 'forest') {
+  const t = template || 'classic'
+  const modern  = t === 'modern'
+  const minimal = t === 'minimal'
+  const col = PREVIEW_COLOR_THEMES[colorKey] || PREVIEW_COLOR_THEMES.forest
+
+  const bizName  = biz.legalName || 'Your Company'
+  const gstin    = biz.gstin  || '22AAAAA0000A1Z5'
+  const email    = biz.email  || 'billing@yourcompany.com'
+  const logoHtml = biz.logo
+    ? `<img src="${biz.logo}" style="max-height:40px;max-width:100px;object-fit:contain;margin-bottom:4px;display:block;"/>`
+    : ''
+
+  const cfg = {
+    modern: {
+      pageStyle:   `padding:40px 40px 40px 36px;border-left:5px solid ${col.mid};`,
+      brandSize:   '18px', brandWeight: '700', brandColor: '#09090b',
+      subColor:    '#a1a1aa',
+      numSize:     '32px', numWeight: '700', numColor: col.mid, numSpacing: '-1.5px',
+      numMarginBottom: '8px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
+      divider:     '<div style="height:1px;background:#f4f4f5;margin-bottom:32px;"></div>',
+      headerMb:    '36px',
+      cardGap:     '32px',
+      card:        `padding-left:14px;border-left:2px solid ${col.border};`,
+      lbl:         col.mid,
+      dateGap:     '32px',
+      dateCard:    `padding-left:14px;border-left:2px solid ${col.border};`,
+      dateLbl:     col.mid,
+      theadBg:     'transparent', theadColor: '#09090b', theadBorder: 'border-bottom:2px solid #09090b;',
+      rowEven:     null, tdColor: '#3f3f46', rowGap: '#f4f4f5',
+      totalsColor: '#71717a',
+      grand:       `font-size:15px;font-weight:700;color:${col.mid};border-top:2px solid #09090b;border-bottom:none;padding-top:10px;`,
+      noteBox:     `border-left:2px solid ${col.border};padding-left:16px;margin-bottom:28px;`,
+      noteLbl:     col.mid, noteText: '#52525b',
+      footer:      'border-top:1px solid #f4f4f5;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a1a1aa',
+    },
+    minimal: {
+      pageStyle:   'padding:48px;',
+      brandSize:   '18px', brandWeight: '600', brandColor: '#09090b',
+      subColor:    '#a1a1aa',
+      numSize:     '24px', numWeight: '300', numColor: '#09090b', numSpacing: '-1px',
+      numMarginBottom: '6px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:100px;font-weight:600;`,
+      divider:     '<div style="height:1px;background:#f4f4f5;margin-bottom:36px;"></div>',
+      headerMb:    '40px',
+      cardGap:     '32px',
+      card:        'padding:0;',
+      lbl:         '#a1a1aa',
+      dateGap:     '32px',
+      dateCard:    'padding:0;',
+      dateLbl:     '#a1a1aa',
+      theadBg:     'transparent', theadColor: '#09090b', theadBorder: 'border-bottom:2px solid #09090b;',
+      rowEven:     null, tdColor: '#3f3f46', rowGap: '#f4f4f5',
+      totalsColor: '#71717a',
+      grand:       `font-size:15px;font-weight:600;color:${col.accent};border-top:1px solid #e4e4e7;border-bottom:none;padding-top:12px;`,
+      noteBox:     'padding:0;margin-bottom:28px;',
+      noteLbl:     '#a1a1aa', noteText: '#52525b',
+      footer:      'border-top:1px solid #f4f4f5;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a1a1aa',
+    },
+    classic: {
+      pageStyle:   'padding:40px;',
+      brandSize:   '22px', brandWeight: '700', brandColor: col.accent,
+      subColor:    '#a1a1aa',
+      numSize:     '20px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
+      numMarginBottom: '4px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
+      divider:     '<div style="margin-bottom:28px;border-top:3px double #d1d5db;padding-top:3px;border-bottom:1px solid #d1d5db;"></div>',
+      headerMb:    '24px',
+      cardGap:     '24px',
+      card:        'background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:16px;',
+      lbl:         '#6b7280',
+      dateGap:     '20px',
+      dateCard:    'background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:12px 16px;',
+      dateLbl:     '#6b7280',
+      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
+      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
+      totalsColor: '#6b7280',
+      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:1px solid #d1d5db;border-bottom:none;padding-top:10px;`,
+      noteBox:     'background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;padding:16px;margin-bottom:32px;',
+      noteLbl:     '#6b7280', noteText: '#4b5563',
+      footer:      'border-top:1px solid #e5e7eb;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a1a1aa',
+    },
+    executive: {
+      pageStyle:   `padding:0;`,
+      headerWrap:  `display:flex;justify-content:space-between;align-items:flex-start;padding:40px;background:${col.accent};`,
+      brandSize:   '22px', brandWeight: '700', brandColor: '#fff',
+      subColor:    'rgba(255,255,255,0.55)',
+      numSize:     '24px', numWeight: '700', numColor: '#fff', numSpacing: 'normal',
+      numMarginBottom: '4px',
+      badge:       'background:rgba(255,255,255,0.18);color:#fff;border-radius:4px;font-weight:700;',
+      bodyStyle:   'padding:32px 40px 40px;',
+      divider:     '',
+      headerMb:    '0',
+      cardGap:     '20px',
+      card:        `background:${col.light};border:1px solid ${col.border};border-radius:8px;padding:16px;`,
+      lbl:         col.mid,
+      dateGap:     '16px',
+      dateCard:    `background:${col.light};border:1px solid ${col.border};border-radius:6px;padding:10px 14px;`,
+      dateLbl:     col.mid,
+      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
+      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
+      totalsColor: '#6b7280',
+      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:2px solid ${col.border};border-bottom:none;padding-top:10px;`,
+      noteBox:     `background:${col.light};border:1px solid ${col.border};border-radius:8px;padding:16px;margin-bottom:32px;`,
+      noteLbl:     col.mid, noteText: '#4b5563',
+      footer:      'border-top:1px solid #e5e7eb;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a1a1aa',
+    },
+    bold: {
+      pageStyle:   'padding:48px;',
+      brandSize:   '28px', brandWeight: '800', brandColor: col.accent,
+      subColor:    '#a1a1aa',
+      numSize:     '28px', numWeight: '800', numColor: col.accent, numSpacing: '-1px',
+      numMarginBottom: '4px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
+      divider:     '',
+      headerMb:    '0',
+      headerExtra: `padding-bottom:20px;border-bottom:5px solid ${col.accent};margin-bottom:32px;align-items:flex-end;`,
+      cardGap:     '20px',
+      card:        `padding:14px 16px;border-left:4px solid ${col.accent};background:${col.light};`,
+      lbl:         col.mid,
+      dateGap:     '20px',
+      dateCard:    `padding:10px 14px;border-left:4px solid ${col.border};`,
+      dateLbl:     '#71717a',
+      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
+      rowEven:     col.light, tdColor: '#374151', rowGap: '#f3f4f6',
+      totalsColor: '#6b7280',
+      grand:       `font-size:15px;font-weight:800;color:${col.accent};border-top:5px solid ${col.accent};border-bottom:none;padding-top:10px;`,
+      noteBox:     `padding:14px 16px;border-left:4px solid ${col.accent};background:${col.light};margin-bottom:32px;`,
+      noteLbl:     col.mid, noteText: '#4b5563',
+      footer:      `border-top:5px solid ${col.accent};padding-top:14px;display:flex;justify-content:space-between;align-items:center;`,
+      footerNote:  '#a1a1aa',
+    },
+    elegant: {
+      pageStyle:   'padding:52px;background:#fdfaf5;',
+      brandSize:   '20px', brandWeight: '600', brandColor: '#1c1917',
+      subColor:    '#78716c',
+      numSize:     '22px', numWeight: '600', numColor: col.accent, numSpacing: '-0.5px',
+      numMarginBottom: '4px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:100px;font-weight:600;`,
+      divider:     '',
+      headerMb:    '0',
+      headerExtra: 'padding-bottom:24px;border-bottom:1px solid #d6cfc4;margin-bottom:28px;',
+      cardGap:     '28px',
+      card:        'background:#fff;border:1px solid #e7e0d5;border-radius:6px;padding:16px 18px;',
+      lbl:         '#78716c',
+      dateGap:     '20px',
+      dateCard:    'background:#fff;border:1px solid #e7e0d5;border-radius:6px;padding:10px 14px;',
+      dateLbl:     '#78716c',
+      theadBg:     '#f5ede0', theadColor: '#44403c', theadBorder: 'border-bottom:1px solid #d6cfc4;',
+      rowEven:     '#faf7f2', tdColor: '#44403c', rowGap: '#ede8e0',
+      totalsColor: '#78716c',
+      grand:       `font-size:15px;font-weight:600;color:${col.accent};border-top:1px solid #d6cfc4;border-bottom:none;padding-top:12px;`,
+      noteBox:     'background:#fff;border:1px solid #e7e0d5;border-radius:6px;padding:16px 18px;margin-bottom:32px;',
+      noteLbl:     '#78716c', noteText: '#57534e',
+      footer:      'border-top:1px solid #d6cfc4;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a8a29e',
+    },
+    retro: {
+      pageStyle:   'padding:40px;background:#fefce8;font-family:"Courier New",Courier,monospace;',
+      brandSize:   '20px', brandWeight: '700', brandColor: '#1c1917',
+      subColor:    '#78716c',
+      numSize:     '20px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
+      numMarginBottom: '4px',
+      badge:       `background:transparent;color:${col.accent};border:2px dashed ${col.accent};border-radius:0;font-weight:700;`,
+      divider:     '',
+      headerMb:    '0',
+      headerExtra: 'padding-bottom:16px;border-bottom:2px dashed #a16207;margin-bottom:24px;',
+      cardGap:     '20px',
+      card:        'background:#fff;border:2px dashed #d6d3d1;padding:14px;',
+      lbl:         '#a16207',
+      dateGap:     '16px',
+      dateCard:    'background:#fff;border:2px dashed #d6d3d1;padding:10px 12px;',
+      dateLbl:     '#a16207',
+      theadBg:     '#1c1917', theadColor: '#fefce8', theadBorder: '',
+      rowEven:     '#fef9c3', tdColor: '#292524', rowGap: '#d6d3d1',
+      totalsColor: '#78716c',
+      grand:       `font-size:14px;font-weight:700;color:${col.accent};border-top:2px dashed #a16207;border-bottom:none;padding-top:10px;`,
+      noteBox:     'background:#fff;border:2px dashed #d6d3d1;padding:14px;margin-bottom:28px;',
+      noteLbl:     '#a16207', noteText: '#44403c',
+      footer:      'border-top:2px dashed #a16207;padding-top:14px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a8a29e',
+    },
+    compact: {
+      pageStyle:   'padding:28px;',
+      brandSize:   '16px', brandWeight: '700', brandColor: col.accent,
+      subColor:    '#9ca3af',
+      numSize:     '16px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
+      numMarginBottom: '2px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:3px;font-size:9px;padding:2px 6px;font-weight:700;`,
+      divider:     '',
+      headerMb:    '0',
+      headerExtra: 'padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:16px;',
+      cardGap:     '12px',
+      card:        'border:1px solid #e5e7eb;border-radius:4px;padding:10px 12px;',
+      lbl:         '#9ca3af',
+      dateGap:     '10px',
+      dateCard:    'border:1px solid #e5e7eb;border-radius:4px;padding:8px 10px;',
+      dateLbl:     '#9ca3af',
+      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
+      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
+      totalsColor: '#6b7280',
+      grand:       `font-size:13px;font-weight:700;color:${col.accent};border-top:1px solid #e5e7eb;border-bottom:none;padding-top:6px;`,
+      noteBox:     'border:1px solid #e5e7eb;border-radius:4px;padding:10px 12px;margin-bottom:16px;',
+      noteLbl:     '#9ca3af', noteText: '#4b5563',
+      footer:      'border-top:1px solid #e5e7eb;padding-top:10px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a1a1aa',
+    },
+    stripe: {
+      pageStyle:   'padding:0;',
+      headerWrap:  'display:flex;align-items:stretch;margin-bottom:0;',
+      brandStyle:  `flex:1;padding:36px 40px;background:${col.accent};color:#fff;font-size:22px;font-weight:700;`,
+      metaStyle:   `padding:36px 40px;background:${col.light};text-align:right;min-width:200px;border-bottom:4px solid ${col.accent};`,
+      brandSize:   '22px', brandWeight: '700', brandColor: '#fff',
+      subColor:    'rgba(255,255,255,0.55)',
+      numSize:     '22px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
+      numMarginBottom: '4px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
+      bodyStyle:   'padding:0 40px 40px;',
+      divider:     '',
+      headerMb:    '0',
+      cardGap:     '24px',
+      card:        `border:1px solid #e5e7eb;border-top:3px solid ${col.accent};border-radius:0 0 8px 8px;padding:16px;`,
+      lbl:         col.mid,
+      dateGap:     '16px',
+      dateCard:    'border:1px solid #e5e7eb;border-radius:6px;padding:10px 14px;',
+      dateLbl:     '#71717a',
+      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
+      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
+      totalsColor: '#6b7280',
+      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:2px solid ${col.accent};border-bottom:none;padding-top:10px;`,
+      noteBox:     `border:1px solid #e5e7eb;border-top:3px solid ${col.accent};padding:14px;margin-bottom:28px;`,
+      noteLbl:     col.mid, noteText: '#4b5563',
+      footer:      'border-top:1px solid #e5e7eb;padding-top:14px;display:flex;justify-content:space-between;align-items:center;',
+      footerNote:  '#a1a1aa',
+    },
+    bureau: {
+      pageStyle:   'padding:40px 48px;',
+      brandSize:   '22px', brandWeight: '700', brandColor: col.accent,
+      subColor:    '#6b7280',
+      numSize:     '18px', numWeight: '700', numColor: '#1c1917', numSpacing: 'normal',
+      numMarginBottom: '4px',
+      badge:       `background:${col.badge};color:${col.badgeText};border-radius:0;font-weight:700;letter-spacing:0.08em;`,
+      divider:     '',
+      headerMb:    '0',
+      headerExtra: `flex-direction:column;align-items:center;text-align:center;border-top:4px double ${col.accent};border-bottom:4px double ${col.accent};padding:20px 0;margin-bottom:28px;`,
+      cardGap:     '28px',
+      card:        'padding:0;',
+      lbl:         col.mid,
+      dateGap:     '0',
+      dateCard:    'flex:1;padding:0 16px 0 0;border-right:1px solid #e5e7eb;margin-right:16px;',
+      dateLbl:     col.mid,
+      theadBg:     'transparent', theadColor: col.accent, theadBorder: `border-top:2px solid ${col.accent};border-bottom:2px solid ${col.accent};`,
+      rowEven:     col.light, tdColor: '#374151', rowGap: '#f3f4f6',
+      totalsColor: '#6b7280',
+      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:2px solid ${col.accent};border-bottom:2px solid ${col.accent};padding-top:8px;padding-bottom:8px;`,
+      noteBox:     'border:1px solid #e5e7eb;padding:14px;margin-bottom:28px;',
+      noteLbl:     col.mid, noteText: '#4b5563',
+      footer:      `border-top:4px double ${col.accent};padding-top:14px;display:flex;justify-content:space-between;align-items:center;`,
+      footerNote:  '#a1a1aa',
+    },
+  }[t] || {}
+
+  const rows = [
+    ['Website Redesign',  '1',        '₹45,000', '18%', '₹45,000'],
+    ['SEO Optimization',  '3 months', '₹12,000', '18%', '₹36,000'],
+    ['Brand Identity Kit','1',        '₹25,000', '18%', '₹25,000'],
+  ].map((r, i) => `
+    <tr style="border-bottom:1px solid ${cfg.rowGap};${cfg.rowEven && i % 2 === 0 ? `background:${cfg.rowEven};` : ''}">
+      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};">${r[0]}</td>
+      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:center;">${r[1]}</td>
+      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:right;font-variant-numeric:tabular-nums;">${r[2]}</td>
+      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:center;">${r[3]}</td>
+      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:right;font-variant-numeric:tabular-nums;">${r[4]}</td>
+    </tr>`).join('')
+
+  const headerHtml = cfg.headerWrap
+    ? `<div style="${cfg.headerWrap}">
+        <div style="${cfg.brandStyle}">${logoHtml}${bizName}<div style="font-size:11px;margin-top:2px;">Sales Invoice</div></div>
+        <div style="${cfg.metaStyle}">
+          <div style="font-size:${cfg.numSize};font-weight:${cfg.numWeight};color:${cfg.numColor};font-variant-numeric:tabular-nums;margin-bottom:${cfg.numMarginBottom || '4px'};">INV-2025-001</div>
+          <div style="font-size:11px;color:#71717a;margin-top:4px;">Issued 22 Jun 2025</div>
+          <span style="display:inline-block;margin-top:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;${cfg.badge}">Paid</span>
+        </div>
+      </div>`
+    : `<div style="display:flex;justify-content:space-between;align-items:flex-start;${cfg.headerExtra || `margin-bottom:${cfg.headerMb};`}">
+        <div>${logoHtml}
+          <div style="font-size:${cfg.brandSize};font-weight:${cfg.brandWeight};color:${cfg.brandColor};letter-spacing:-0.5px;">${bizName}</div>
+          <div style="font-size:11px;color:${cfg.subColor};margin-top:2px;">Sales Invoice</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:${cfg.numSize};font-weight:${cfg.numWeight};color:${cfg.numColor};letter-spacing:${cfg.numSpacing};line-height:1;font-variant-numeric:tabular-nums;margin-bottom:${cfg.numMarginBottom};">INV-2025-001</div>
+          <div style="font-size:11px;color:${cfg.subColor};margin-top:4px;">Issued 22 Jun 2025</div>
+          <span style="display:inline-block;margin-top:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;${cfg.badge}">Paid</span>
+        </div>
+      </div>`
+
+  const bodyContent = `
+  ${cfg.divider || ''}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:${cfg.cardGap};margin-bottom:28px;">
+    <div style="${cfg.card}">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.lbl};margin-bottom:8px;">From</div>
+      <div style="font-size:15px;font-weight:600;color:#09090b;margin-bottom:4px;">${bizName}</div>
+      <div style="font-size:12px;color:#52525b;">GSTIN: ${gstin}</div>
+      <div style="font-size:12px;color:#52525b;">${email}</div>
+    </div>
+    <div style="${cfg.card}">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.lbl};margin-bottom:8px;">Bill To</div>
+      <div style="font-size:15px;font-weight:600;color:#09090b;margin-bottom:4px;">Acme Corp Pvt. Ltd.</div>
+      <div style="font-size:12px;color:#52525b;">accounts@acme.co</div>
+      <div style="font-size:12px;color:#52525b;">+91 98765 43210</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:${cfg.dateGap};margin-bottom:28px;">
+    <div style="${cfg.dateCard}">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.dateLbl};margin-bottom:4px;">Invoice Date</div>
+      <div style="font-size:13px;font-weight:600;color:#09090b;">22 Jun 2025</div>
+    </div>
+    <div style="${cfg.dateCard}">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.dateLbl};margin-bottom:4px;">Due Date</div>
+      <div style="font-size:13px;font-weight:600;color:#09090b;">22 Jul 2025</div>
+    </div>
+  </div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+    <thead><tr style="background:${cfg.theadBg};color:${cfg.theadColor};${cfg.theadBorder}">
+      <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Product / Description</th>
+      <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;">Qty</th>
+      <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;">Unit Price</th>
+      <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;">Tax</th>
+      <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;">Amount</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div style="display:flex;justify-content:flex-end;margin-bottom:32px;">
+    <div style="width:280px;">
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:${cfg.totalsColor};border-bottom:1px solid #f4f4f5;"><span>Subtotal</span><span>₹1,06,000</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:${cfg.totalsColor};border-bottom:1px solid #f4f4f5;"><span>Tax (18%)</span><span>₹19,080</span></div>
+      <div style="display:flex;justify-content:space-between;padding:6px 0;${cfg.grand}"><span>Grand Total</span><span>₹1,25,080</span></div>
+    </div>
+  </div>
+  <div style="${cfg.noteBox}">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.noteLbl};margin-bottom:6px;">Notes</div>
+    <div style="font-size:13px;color:${cfg.noteText};line-height:1.6;">Payment due within 30 days. Bank transfer preferred. Thank you for your business!</div>
+  </div>
+  <div style="${cfg.footer}">
+    <span style="font-size:11px;color:${cfg.footerNote};">Generated by OpenLedger · 22 Jun 2025</span>
+    <span style="font-size:11px;color:${cfg.footerNote};">This is a computer-generated document.</span>
+  </div>`
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;color:#18181b;background:#fff;${t==='retro'?'font-family:"Courier New",Courier,monospace;background:#fefce8;':''}${t==='elegant'?'background:#fdfaf5;':''}}
+</style></head><body>
+<div style="${cfg.pageStyle}">
+  ${headerHtml}
+  ${cfg.bodyStyle ? `<div style="${cfg.bodyStyle}">${bodyContent}</div>` : bodyContent}
+</div>
+</body></html>`
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -1065,8 +1705,11 @@ export default function Settings() {
           </div>
         }
       />
-      <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        <div className="flex items-center justify-between gap-4 flex-shrink-0 py-4 md:py-0 md:mb-4">
+      <div className="md:px-0 md:flex md:flex-col md:flex-1 md:min-h-0">
+        {/* Tab bar — fixed below TopBar on mobile, static on desktop */}
+        <div className="flex items-center justify-between gap-4 flex-shrink-0
+                        sticky top-14 z-10 bg-zinc-50 px-4 py-4
+                        md:static md:top-auto md:px-0 md:py-0 md:mb-4">
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
           <PageActions add={
             tab === 'friends' && !showAddFriend
@@ -1077,7 +1720,8 @@ export default function Settings() {
           } />
         </div>
 
-        <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
+        {/* Content — scrolls internally on desktop, naturally on mobile */}
+        <div className="px-4 pb-5 md:px-0 md:pb-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col">
           {tab === 'profile'   && <ProfileTab />}
           {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
           {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
