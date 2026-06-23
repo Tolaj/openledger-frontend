@@ -24,7 +24,7 @@ export default defineConfig({
       manifest: {
         name: 'OpenLedger',
         short_name: 'OpenLedger',
-        description: 'Household finance & grocery management',
+        description: 'Purchase orders, sales, invoicing, inventory and finance — all in one app.',
         theme_color: '#ffffff',
         background_color: '#ffffff',
         display: 'standalone',

@@ -3,7 +3,6 @@ import BottomNav from './BottomNav'
 import Sidebar from './Sidebar'
 import CartPanel from '../features/CartPanel'
 import WishlistCartPanel from '../features/WishlistCartPanel'
-import InstallPrompt from '../ui/InstallPrompt'
 
 export default function AppShell() {
   return (
@@ -30,7 +29,6 @@ export default function AppShell() {
 
       <CartPanel />
       <WishlistCartPanel />
-      <InstallPrompt />
     </div>
   )
 }

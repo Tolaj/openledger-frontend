@@ -9,6 +9,7 @@ import useCartStore from './store/cartStore'
 
 import AppShell from './components/layout/AppShell'
 import ProtectedRoute from './components/layout/ProtectedRoute'
+import InstallPrompt from './components/ui/InstallPrompt'
 
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -56,6 +57,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SessionLoader>
+          <InstallPrompt />
           <Routes>
             <Route path="/" element={<LandingOrDashboard />} />
             <Route path="/landing" element={<Landing />} />

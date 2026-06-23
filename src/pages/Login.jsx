@@ -28,9 +28,9 @@ export default function Login() {
   return (
     <div className="flex-1 flex flex-col justify-center px-6 py-12 max-w-md mx-auto w-full">
       <div className="mb-10">
-        <div className="w-10 h-10 bg-zinc-900 rounded-2xl mb-6 flex items-center justify-center">
-          <AppLogo size={18} className="text-white" />
-        </div>
+        <Link to="/" className="w-10 h-10 bg-zinc-900 rounded-2xl mb-6 flex items-center justify-center hover:bg-zinc-800 transition-colors">
+          <AppLogo size={18} />
+        </Link>
         <h1 className="text-2xl font-bold text-zinc-900">Welcome back</h1>
         <p className="text-sm text-zinc-500 mt-1">Sign in to your account</p>
       </div>

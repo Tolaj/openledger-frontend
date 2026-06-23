@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 import {
   Home, Tag, CreditCard, Settings,
   ShoppingCart, TrendingUp, Layers, Boxes,
@@ -67,12 +67,12 @@ export default function Sidebar() {
   return (
     <aside className="hidden md:flex fixed inset-y-0 left-0 w-60 flex-col bg-white border-r border-zinc-200 z-40">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 h-16 border-b border-zinc-100">
+      <Link to="/" className="flex items-center gap-2.5 px-5 h-16 border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
         <div className="w-7 h-7 bg-zinc-900 rounded-lg flex-shrink-0 flex items-center justify-center">
-          <AppLogo size={14} className="text-white" />
+          <AppLogo size={14} />
         </div>
         <span className="text-sm font-bold text-zinc-900 tracking-tight">OpenLedger</span>
-      </div>
+      </Link>
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">

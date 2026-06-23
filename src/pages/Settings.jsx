@@ -871,13 +871,15 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
               <div className="flex items-center gap-2">
                 <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
                 {(() => {
-                  const cantDelete = allGroups.length <= 1 || g._id === activeGroupId
+                  const isCreator = g.createdBy === String(myId) || g.createdBy?._id === String(myId) || !g.createdBy
+                  const cantDelete = allGroups.length <= 1 || g._id === activeGroupId || !isCreator
+                  const deleteTitle = !isCreator ? 'Only the group creator can delete this' : allGroups.length <= 1 ? 'Last group cannot be deleted' : g._id === activeGroupId ? 'Switch away from this group first' : 'Delete'
                   return (
                     <button
                       onClick={() => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) }}
                       disabled={cantDelete}
                       className={`p-1.5 rounded-lg ${cantDelete ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 hover:text-red-500 active:bg-zinc-100'}`}
-                      title={cantDelete ? (allGroups.length <= 1 ? 'Last group cannot be deleted' : 'Switch away from this group first') : 'Delete'}
+                      title={deleteTitle}
                     ><Trash2 size={14} /></button>
                   )
                 })()}
@@ -895,7 +897,8 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
         {sharedGroups.length === 0 ? (
           <EmptyState icon={Users} title="No shared groups" description="Create a group to share expenses with friends" />
         ) : sharedGroups.map((g) => {
-          const cantDelete = allGroups.length <= 1 || g._id === activeGroupId
+          const isCreator = g.createdBy === String(myId) || g.createdBy?._id === String(myId) || !g.createdBy
+          const cantDelete = allGroups.length <= 1 || g._id === activeGroupId || !isCreator
           return (
             <GroupMobileCard
               key={g._id}
