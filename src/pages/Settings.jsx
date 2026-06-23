@@ -48,7 +48,7 @@ function friendRow(f, myId) {
 }
 
 // ── MembersDropdown ────────────────────────────────────────────────────────────
-function MembersDropdown({ friends = [], value = [], onChange }) {
+function MembersDropdown({ friends = [], value = [], onChange, isBusiness, ...props }) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef(null)
   const dropRef = useRef(null)
@@ -100,7 +100,7 @@ function MembersDropdown({ friends = [], value = [], onChange }) {
           className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden max-h-52 overflow-y-auto"
         >
           {friends.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-zinc-400">No accepted friends yet</p>
+            <p className="px-4 py-3 text-sm text-zinc-400">{isBusiness ? 'No accepted colleagues yet' : 'No accepted friends yet'}</p>
           ) : (
             friends.map((f) => (
               <button
@@ -255,7 +255,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
         />
 
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-zinc-700">Members</label>
+          <label className="text-sm font-medium text-zinc-700">{groupType === 'business' ? 'Team members' : 'Members'}</label>
           <Controller
             name="members"
             control={control}
@@ -264,10 +264,11 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
                 friends={acceptedFriends}
                 value={field.value}
                 onChange={field.onChange}
+                isBusiness={groupType === 'business'}
               />
             )}
           />
-          <p className="text-xs text-zinc-400">You are always included as a member.</p>
+          <p className="text-xs text-zinc-400">{groupType === 'business' ? 'You are always included as the owner.' : 'You are always included as a member.'}</p>
         </div>
 
         {/* Template picker — only on create */}
@@ -316,7 +317,7 @@ function timeAgo(date) {
 }
 
 // ── Profile Tab ───────────────────────────────────────────────────────────────
-function ProfileTab() {
+function ProfileTab({ isBusiness }) {
   const navigate = useNavigate()
   const { clearSession } = useAuthStore()
   const { clearGroup } = useGroupStore()
@@ -379,11 +380,11 @@ function ProfileTab() {
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex flex-col items-center gap-0.5">
           <p className="text-2xl font-bold text-zinc-900">{friendCount}</p>
-          <p className="text-xs text-zinc-500">Friends</p>
+          <p className="text-xs text-zinc-500">{isBusiness ? 'Colleagues' : 'Friends'}</p>
         </div>
         <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex flex-col items-center gap-0.5">
           <p className="text-2xl font-bold text-zinc-900">{groupCount}</p>
-          <p className="text-xs text-zinc-500">Groups</p>
+          <p className="text-xs text-zinc-500">{isBusiness ? 'Workspaces' : 'Groups'}</p>
         </div>
       </div>
 
@@ -511,7 +512,7 @@ function RejectBtn({ canReject, onClick, size = 13, className = 'p-1.5 rounded-l
 }
 
 // ── Friend card (mobile accordion) ────────────────────────────────────────────
-function FriendCard({ r, myId, respond, canReject }) {
+function FriendCard({ r, myId, respond, canReject, isBusiness }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -533,12 +534,12 @@ function FriendCard({ r, myId, respond, canReject }) {
           ) : r.status === 'ACCEPTED' ? (
             <>
               <RejectBtn canReject={canReject} size={14} className="p-2 rounded-xl" onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
-              <button onClick={() => { if (confirm('Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={16} /></button>
+              <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={16} /></button>
             </>
           ) : (
             <>
               <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-2 rounded-xl bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={14} /></button>
-              <button onClick={() => { if (confirm('Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-2 rounded-xl text-zinc-500 active:bg-zinc-100" title="Delete"><Trash2 size={16} /></button>
+              <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-2 rounded-xl text-zinc-500 active:bg-zinc-100" title="Delete"><Trash2 size={16} /></button>
             </>
           )}
           <button onClick={() => setOpen((o) => !o)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100">
@@ -572,7 +573,7 @@ function FriendCard({ r, myId, respond, canReject }) {
 }
 
 // ── Friends Tab ───────────────────────────────────────────────────────────────
-function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const { data: me, isLoading } = useMe()
   const { data: groups = [] } = useGroups()
   const { mutate: sendReq, isPending: sending } = useSendFriendRequest()
@@ -631,10 +632,10 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
       <DataTableMobileFilters columns={FRIEND_COLS} filters={{ name: nameFilter, email: emailFilter, status: statusFilter }} onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val); else if (key === 'email') setEmailFilter(val); else if (key === 'status') setStatusFilter(val) }} dropOpts={dropOpts} dropSel={dropSel} onDropChange={(key, vals) => setDrop(key, vals)} open={mobileFiltersOpen} />
       {showAddForm && (
         <div className="bg-white rounded-2xl border border-zinc-200 p-4 flex flex-col gap-3">
-          <p className="text-sm font-semibold text-zinc-900">Add a friend</p>
+          <p className="text-sm font-semibold text-zinc-900">{isBusiness ? 'Add a colleague' : 'Add a friend'}</p>
           <form onSubmit={handleSubmit(onSend)} className="flex gap-2">
             <div className="flex-1">
-              <Input placeholder="friend@email.com" type="email" error={errors.email?.message} {...register('email', { required: true })} />
+              <Input placeholder={isBusiness ? 'colleague@email.com' : 'friend@email.com'} type="email" error={errors.email?.message} {...register('email', { required: true })} />
             </div>
             <Button type="submit" size="sm" loading={sending} className="flex-shrink-0"><UserPlus size={15} /></Button>
             <Button type="button" size="sm" variant="outline" onClick={() => { reset(); setShowAddForm(false) }} className="flex-shrink-0"><X size={15} /></Button>
@@ -643,7 +644,7 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
       )}
 
       {rows.length === 0 ? (
-        <EmptyState icon={Users} title="No friends yet" description="Add friends using their email to share groups and split expenses" />
+        <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email to collaborate on workspaces' : 'Add friends using their email to share groups and split expenses'} />
       ) : null}
 
       {rows.length > 0 && <DataTable
@@ -687,12 +688,12 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
                   ) : r.status === 'ACCEPTED' ? (
                     <>
                       <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
-                      <button onClick={() => { if (confirm('Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={14} /></button>
+                      <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={14} /></button>
                     </>
                   ) : (
                     <>
                       <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>
-                      <button onClick={() => { if (confirm('Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                      <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </>
                   )
                 })()}
@@ -700,7 +701,7 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
             </td>
           </tr>
         )}
-        emptyMessage="No friends yet"
+        emptyMessage={isBusiness ? 'No colleagues yet' : 'No friends yet'}
         mobileFiltersOpen={mobileFiltersOpen}
         onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />}
@@ -708,7 +709,7 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {rows.length === 0
-          ? <EmptyState icon={Users} title="No friends yet" description="Send a request using their email" />
+          ? <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email' : 'Send a request using their email'} />
           : rows.map((r) => (
               <FriendCard
                 key={r.id}
@@ -716,6 +717,7 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
                 myId={myId}
                 respond={respond}
                 canReject={!sharesGroup(groups, r.id)}
+                isBusiness={isBusiness}
               />
             ))
         }
@@ -781,7 +783,7 @@ function GroupMobileCard({ g, onEdit, onDelete, cantDelete }) {
   )
 }
 
-function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
   const { data: me } = useMe()
   const { data: groups = [], isLoading } = useGroups()
   const { mutate: deleteGroup } = useDeleteGroup()
@@ -818,7 +820,7 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
       <DataTableMobileFilters columns={[{ key: 'name', label: 'name', filterable: true }]} filters={{ name: nameFilter }} onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }} dropOpts={{ name: groupNameOpts }} dropSel={{ name: groupDropSel }} onDropChange={(key, vals) => { if (key === 'name') setGroupDropSel(vals) }} open={mobileFiltersOpen} />
 
       {sharedGroups.length === 0 ? (
-        <EmptyState icon={Users} title="No groups yet" description="Create a group to share expenses and manage inventory with others" />
+        <EmptyState icon={Users} title={isBusiness ? 'No workspaces yet' : 'No groups yet'} description={isBusiness ? 'Create a workspace to collaborate with your team' : 'Create a group to share expenses and manage inventory with others'} />
       ) : null}
 
       {sharedGroups.length > 0 && <DataTable
@@ -887,7 +889,7 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
             </td>
           </tr>
         )}
-        emptyMessage="No groups yet"
+        emptyMessage={isBusiness ? 'No workspaces yet' : 'No groups yet'}
         mobileFiltersOpen={mobileFiltersOpen}
         onMobileFiltersOpenChange={onMobileFiltersOpenChange}
       />}
@@ -895,7 +897,7 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange })
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {sharedGroups.length === 0 ? (
-          <EmptyState icon={Users} title="No shared groups" description="Create a group to share expenses with friends" />
+          <EmptyState icon={Users} title={isBusiness ? 'No workspaces yet' : 'No shared groups'} description={isBusiness ? 'Create a workspace to collaborate with your team' : 'Create a group to share expenses with friends'} />
         ) : sharedGroups.map((g) => {
           const isCreator = g.createdBy === String(myId) || g.createdBy?._id === String(myId) || !g.createdBy
           const cantDelete = allGroups.length <= 1 || g._id === activeGroupId || !isCreator
@@ -1705,18 +1707,24 @@ function buildTemplatePreview(template, biz = {}, colorKey = 'forest') {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-const TABS = [
-  { key: 'profile',       label: 'My Profile',    mobileLabel: 'Profile' },
-  { key: 'friends',       label: 'Friends',        mobileLabel: 'Friends' },
-  { key: 'groups',        label: 'Groups',         mobileLabel: 'Groups'  },
-  { key: 'configuration', label: 'Configuration',  mobileLabel: 'Config'  },
-]
-
 export default function Settings() {
   const [tab, setTab] = useState('profile')
   const [showAddFriend, setShowAddFriend] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const openGroupAdd = useRef(null)
+
+  // Detect active group type for context-aware copy
+  const { activeGroupId } = useGroupStore()
+  const { data: groups = [] } = useGroups()
+  const activeGroup = groups.find((g) => g._id === activeGroupId)
+  const isBusiness = activeGroup?.type === 'business'
+
+  const TABS = [
+    { key: 'profile',       label: 'My Profile',                        mobileLabel: 'Profile' },
+    { key: 'friends',       label: isBusiness ? 'Team' : 'Friends',     mobileLabel: isBusiness ? 'Team' : 'Friends' },
+    { key: 'groups',        label: isBusiness ? 'Workspaces' : 'Groups', mobileLabel: isBusiness ? 'Spaces' : 'Groups' },
+    { key: 'configuration', label: 'Configuration',                     mobileLabel: 'Config'  },
+  ]
 
   const handleTabChange = (key) => {
     setTab(key)
@@ -1754,18 +1762,18 @@ export default function Settings() {
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
           <PageActions add={
             tab === 'friends' && !showAddFriend
-              ? <Button size="sm" onClick={() => setShowAddFriend(true)}><UserPlus size={15} /> Add friend</Button>
+              ? <Button size="sm" onClick={() => setShowAddFriend(true)}><UserPlus size={15} /> {isBusiness ? 'Add colleague' : 'Add friend'}</Button>
               : tab === 'groups'
-              ? <Button size="sm" onClick={() => openGroupAdd.current?.()}><Plus size={15} /> New group</Button>
+              ? <Button size="sm" onClick={() => openGroupAdd.current?.()}><Plus size={15} /> {isBusiness ? 'New workspace' : 'New group'}</Button>
               : null
           } />
         </div>
 
         {/* Content — scrolls internally on desktop, naturally on mobile */}
         <div className="px-4 pb-5 md:px-0 md:pb-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col">
-          {tab === 'profile'   && <ProfileTab />}
-          {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
-          {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
+          {tab === 'profile'   && <ProfileTab isBusiness={isBusiness} />}
+          {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} />}
+          {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} />}
           {tab === 'configuration' && <ConfigurationTab />}
         </div>
       </div>
