@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/orders'
 import useGroupStore from '../store/groupStore'
+import { toast } from '../store/toastStore'
+
+const errMsg = (err) => err?.response?.data?.error || err?.message || 'Something went wrong'
 
 export function useOrders() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
@@ -17,11 +20,12 @@ export function useCreateOrder() {
   return useMutation({
     mutationFn: api.createOrder,
     onSuccess: () => {
-      // Backend auto-creates the Finance expense entry
       qc.invalidateQueries({ queryKey: ['orders', activeGroupId] })
       qc.invalidateQueries({ queryKey: ['finance'] })
       qc.invalidateQueries({ queryKey: ['finance-summary'] })
+      toast.success('Order created')
     },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -31,11 +35,12 @@ export function useUpdateOrder() {
   return useMutation({
     mutationFn: ({ id, data }) => api.updateOrder(id, data),
     onSuccess: () => {
-      // Backend syncs the Finance entry amount/description
       qc.invalidateQueries({ queryKey: ['orders', activeGroupId] })
       qc.invalidateQueries({ queryKey: ['finance'] })
       qc.invalidateQueries({ queryKey: ['finance-summary'] })
+      toast.success('Order updated')
     },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -45,10 +50,11 @@ export function useDeleteOrder() {
   return useMutation({
     mutationFn: api.deleteOrder,
     onSuccess: () => {
-      // Backend deletes the linked Finance entry
       qc.invalidateQueries({ queryKey: ['orders', activeGroupId] })
       qc.invalidateQueries({ queryKey: ['finance'] })
       qc.invalidateQueries({ queryKey: ['finance-summary'] })
+      toast.success('Order deleted')
     },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }

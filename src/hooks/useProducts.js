@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/products'
 import * as groupApi from '../api/groups'
 import useGroupStore from '../store/groupStore'
+import { toast } from '../store/toastStore'
+
+const errMsg = (err) => err?.response?.data?.error || err?.message || 'Something went wrong'
 
 export function useProducts() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
@@ -28,7 +31,8 @@ export function useCreateProduct() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: api.createProduct,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['products', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products', activeGroupId] }); toast.success('Product created') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -37,7 +41,8 @@ export function useUpdateProduct() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updateProduct(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['products', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products', activeGroupId] }); toast.success('Product updated') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -46,6 +51,7 @@ export function useDeleteProduct() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: api.deleteProduct,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['products', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['products', activeGroupId] }); toast.success('Product deleted') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }

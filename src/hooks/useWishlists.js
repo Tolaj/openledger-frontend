@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/wishlists'
 import useGroupStore from '../store/groupStore'
+import { toast } from '../store/toastStore'
+
+const errMsg = (err) => err?.response?.data?.error || err?.message || 'Something went wrong'
 
 export function useWishlists() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
@@ -16,7 +19,8 @@ export function useCreateWishlist() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: api.createWishlist,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['wishlists', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['wishlists', activeGroupId] }); toast.success('Wishlist created') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -25,7 +29,8 @@ export function useUpdateWishlist() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updateWishlist(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['wishlists', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['wishlists', activeGroupId] }); toast.success('Wishlist updated') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -34,6 +39,7 @@ export function useDeleteWishlist() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: api.deleteWishlist,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['wishlists', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['wishlists', activeGroupId] }); toast.success('Wishlist deleted') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }

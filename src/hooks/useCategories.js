@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/categories'
 import * as groupApi from '../api/groups'
 import useGroupStore from '../store/groupStore'
+import { toast } from '../store/toastStore'
+
+const errMsg = (err) => err?.response?.data?.error || err?.message || 'Something went wrong'
 
 export function useCategories() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
@@ -28,7 +31,8 @@ export function useCreateCategory() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: api.createCategory,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['categories', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories', activeGroupId] }); toast.success('Category created') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -37,7 +41,8 @@ export function useUpdateCategory() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: ({ id, data }) => api.updateCategory(id, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['categories', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories', activeGroupId] }); toast.success('Category updated') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
 
@@ -46,6 +51,7 @@ export function useDeleteCategory() {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   return useMutation({
     mutationFn: api.deleteCategory,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['categories', activeGroupId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['categories', activeGroupId] }); toast.success('Category deleted') },
+    onError: (err) => toast.error(errMsg(err)),
   })
 }
