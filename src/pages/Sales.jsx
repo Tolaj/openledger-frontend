@@ -73,8 +73,8 @@ function CustomerMobileCard({ c, onEdit, onDelete }) {
           <p className="text-xs text-zinc-400 mt-0.5">{c.contactPerson || c.phone || c.email || '—'}</p>
         </div>
         <div className="flex gap-0 flex-shrink-0">
-          <button onClick={() => onEdit(c)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700"><Pencil size={17} /></button>
-          <button onClick={() => onDelete(c._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500"><Trash2 size={17} /></button>
+          {onEdit && <button onClick={() => onEdit(c)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700"><Pencil size={17} /></button>}
+          {onDelete && <button onClick={() => onDelete(c._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500"><Trash2 size={17} /></button>}
           <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
             <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
           </button>
@@ -99,6 +99,9 @@ function CustomersTab({ mobileFiltersOpen, onAdd }) {
   const createCustomer = useCreateCustomer()
   const updateCustomer = useUpdateCustomer()
   const deleteCustomer = useDeleteCustomer()
+  const canAdd    = usePermission('sales_orders', 'customers', 'add')
+  const canEdit   = usePermission('sales_orders', 'customers', 'edit')
+  const canDelete = usePermission('sales_orders', 'customers', 'delete')
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -138,7 +141,7 @@ function CustomersTab({ mobileFiltersOpen, onAdd }) {
     <div className="flex-1 flex flex-col min-h-0">
       {customers.length === 0 ? (
         <EmptyState icon={Users} title="No customers yet" description="Add customers to use in sales orders"
-          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Customer</Button>} />
+          action={canAdd ? <Button size="sm" onClick={openCreate}><Plus size={16} /> Add Customer</Button> : null} />
       ) : (
         <>
           <DataTableMobileFilters columns={CUSTOMER_COLS} filters={filters} onFilterChange={setFilter} open={mobileFiltersOpen} />
@@ -146,7 +149,7 @@ function CustomersTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((c) => (
-              <CustomerMobileCard key={c._id} c={c} onEdit={openEdit} onDelete={onDelete} />
+              <CustomerMobileCard key={c._id} c={c} onEdit={canEdit ? openEdit : null} onDelete={canDelete ? onDelete : null} />
             ))}
           </div>
 
@@ -166,8 +169,8 @@ function CustomersTab({ mobileFiltersOpen, onAdd }) {
                 <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-600">{c.gstin || '—'}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <button onClick={() => openEdit(c)} className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
-                    <button onClick={() => onDelete(c._id)} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                    {canEdit && <button onClick={() => openEdit(c)} className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>}
+                    {canDelete && <button onClick={() => onDelete(c._id)} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>}
                   </div>
                 </td>
               </tr>
@@ -235,7 +238,7 @@ function SOMobileCard({ o, sym, onDelete, onStatusSheet, onSend, updatingId }) {
           <p className="text-xs text-zinc-400 mt-0.5">{sym}{(o.grandTotal || 0).toFixed(2)}&nbsp;|&nbsp;{o.customer?.name || '—'}</p>
         </div>
         <div className="flex gap-0 flex-shrink-0">
-          <button onClick={() => onSend(o)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500"><Mail size={17} /></button>
+          {onSend && <button onClick={() => onSend(o)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500"><Mail size={17} /></button>}
           <button onClick={() => o.status !== 'delivered' && onStatusSheet(o)} disabled={o.status === 'delivered' || updatingId === o._id} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed">
             {updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={17} />}
           </button>
@@ -296,6 +299,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   const sendSO = useSendSalesOrder()
   const sym = useCurrencySymbol()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  const canEmail = usePermission('sales_orders', 'so', 'email')
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -403,7 +407,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((o) => (
-              <SOMobileCard key={o._id} o={o} sym={sym} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={(o) => { setSendEmail(o.customer?.email || ''); setSendError(''); setSendSheet(o) }} updatingId={updatingId} />
+              <SOMobileCard key={o._id} o={o} sym={sym} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={canEmail ? (o) => { setSendEmail(o.customer?.email || ''); setSendError(''); setSendSheet(o) } : null} updatingId={updatingId} />
             ))}
           </div>
 
@@ -433,7 +437,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.customer?.email || ''); setSendError(''); setSendSheet(o) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to customer"><Mail size={14} /></button>
+                      {canEmail && <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.customer?.email || ''); setSendError(''); setSendSheet(o) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to customer"><Mail size={14} /></button>}
                       <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'delivered') setStatusSheet(o) }} disabled={o.status === 'delivered' || updatingId === o._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
@@ -989,7 +993,7 @@ function SInvoiceMobileCard({ inv, sym, getRef, onDelete, onStatusSheet, onSend,
           <p className="text-xs text-zinc-400 mt-0.5">{sym}{(inv.grandTotal || 0).toFixed(2)}&nbsp;|&nbsp;{inv.customer?.name || '—'}</p>
         </div>
         <div className="flex gap-0 flex-shrink-0">
-          <button onClick={() => onSend(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500"><Mail size={17} /></button>
+          {onSend && <button onClick={() => onSend(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500"><Mail size={17} /></button>}
           <button onClick={() => inv.status !== 'paid' && onStatusSheet(inv)} disabled={inv.status === 'paid' || updatingId === inv._id} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed">
             {updatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={17} />}
           </button>
@@ -1053,6 +1057,7 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
   const sendInvoice   = useSendSalesInvoice()
   const sym = useCurrencySymbol()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  const canEmail = usePermission('sales_orders', 'so_inv', 'email')
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -1191,7 +1196,7 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((inv) => (
-              <SInvoiceMobileCard key={inv._id} inv={inv} sym={sym} getRef={getInvoiceRef} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={(inv) => { setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} updatingId={invUpdatingId} />
+              <SInvoiceMobileCard key={inv._id} inv={inv} sym={sym} getRef={getInvoiceRef} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={canEmail ? (inv) => { setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) } : null} updatingId={invUpdatingId} />
             ))}
           </div>
 
@@ -1224,7 +1229,7 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
+                      {canEmail && <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.customer?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>}
                       <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>

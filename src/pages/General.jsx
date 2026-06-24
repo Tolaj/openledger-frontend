@@ -60,6 +60,9 @@ function RecipientsTab({ mobileFiltersOpen, onAdd }) {
   const createRecipient = useCreateRecipient()
   const updateRecipient = useUpdateRecipient()
   const deleteRecipient = useDeleteRecipient()
+  const canAdd    = usePermission('general_orders', 'recipients', 'add')
+  const canEdit   = usePermission('general_orders', 'recipients', 'edit')
+  const canDelete = usePermission('general_orders', 'recipients', 'delete')
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -102,12 +105,12 @@ function RecipientsTab({ mobileFiltersOpen, onAdd }) {
       <td className="px-4 py-3 text-zinc-600 text-sm">{r.phone || '—'}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
-          <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors">
+          {canEdit && <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-900 transition-colors">
             <Pencil size={14} />
-          </button>
-          <button onClick={() => deleteRecipient.mutate(r._id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-500 hover:text-red-600 transition-colors">
+          </button>}
+          {canDelete && <button onClick={() => deleteRecipient.mutate(r._id)} className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-500 hover:text-red-600 transition-colors">
             <Trash2 size={14} />
-          </button>
+          </button>}
         </div>
       </td>
     </>
@@ -119,7 +122,7 @@ function RecipientsTab({ mobileFiltersOpen, onAdd }) {
     <div className="flex-1 flex flex-col min-h-0">
       {recipients.length === 0 ? (
         <EmptyState title="No recipients" description="Add payees and payers to get started"
-          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recipient</Button>} />
+          action={canAdd ? <Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recipient</Button> : null} />
       ) : (
       <DataTable
         columns={RECIPIENT_COLS}
@@ -177,6 +180,7 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
   const deleteOrder = useDeleteGeneralOrder()
   const sendGO      = useSendGeneralOrder()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  const canEmail = usePermission('general_orders', 'gen_orders', 'email')
 
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -314,7 +318,7 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
                 <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.recipient?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to recipient"><Mail size={14} /></button>
+                    {canEmail && <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.recipient?.email || ''); setSendError(''); setSendSheet(o) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to recipient"><Mail size={14} /></button>}
                     <button onClick={(e) => { e.stopPropagation(); if (!(o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered')) setStatusSheet(o) }} disabled={(o.direction === 'payable' ? o.status === 'received' : o.status === 'delivered') || updatingId === o._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                     <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                   </div>
@@ -510,6 +514,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
   const deleteInvoice = useDeleteGeneralInvoice()
   const sendInvoice   = useSendGeneralInvoice()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  const canEmail = usePermission('general_orders', 'gen_invoices', 'email')
 
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [editing, setEditing]       = useState(null)
@@ -645,7 +650,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
         <td className="px-4 py-3 font-semibold text-zinc-900">{fmt(inv.grandTotal, sym)}</td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => { setSendEmail(inv.recipient?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
+            {canEmail && <button onClick={() => { setSendEmail(inv.recipient?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>}
             <button onClick={() => inv.status !== 'paid' && setStatusSheet(inv)} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">
               {invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}
             </button>

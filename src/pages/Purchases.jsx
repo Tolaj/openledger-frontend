@@ -76,12 +76,12 @@ function VendorMobileCard({ v, onEdit, onDelete }) {
           </p>
         </div>
         <div className="flex gap-0 flex-shrink-0">
-          <button onClick={() => onEdit(v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+          {onEdit && <button onClick={() => onEdit(v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
             <Pencil size={17} />
-          </button>
-          <button onClick={() => onDelete(v._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+          </button>}
+          {onDelete && <button onClick={() => onDelete(v._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
             <Trash2 size={17} />
-          </button>
+          </button>}
           <button onClick={() => setIsOpen((val) => !val)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
             <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
           </button>
@@ -136,6 +136,9 @@ function VendorsTab({ mobileFiltersOpen, onAdd }) {
   const createVendor = useCreateVendor()
   const updateVendor = useUpdateVendor()
   const deleteVendor = useDeleteVendor()
+  const canAdd    = usePermission('purchase_orders', 'vendors', 'add')
+  const canEdit   = usePermission('purchase_orders', 'vendors', 'edit')
+  const canDelete = usePermission('purchase_orders', 'vendors', 'delete')
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -176,7 +179,7 @@ function VendorsTab({ mobileFiltersOpen, onAdd }) {
     <div className="flex-1 flex flex-col min-h-0">
       {vendors.length === 0 ? (
         <EmptyState icon={Users} title="No vendors yet" description="Add vendors to use in purchase orders"
-          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Vendor</Button>} />
+          action={canAdd ? <Button size="sm" onClick={openCreate}><Plus size={16} /> Add Vendor</Button> : null} />
       ) : (
         <>
           <DataTableMobileFilters columns={VENDOR_COLS} filters={filters} onFilterChange={setFilter} open={mobileFiltersOpen} />
@@ -184,7 +187,7 @@ function VendorsTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((v) => (
-              <VendorMobileCard key={v._id} v={v} onEdit={openEdit} onDelete={onDelete} />
+              <VendorMobileCard key={v._id} v={v} onEdit={canEdit ? openEdit : null} onDelete={canDelete ? onDelete : null} />
             ))}
           </div>
 
@@ -204,8 +207,8 @@ function VendorsTab({ mobileFiltersOpen, onAdd }) {
             <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-600">{v.gstin || '—'}</td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <button onClick={() => openEdit(v)} className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
-                <button onClick={() => onDelete(v._id)} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                {canEdit && <button onClick={() => openEdit(v)} className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>}
+                {canDelete && <button onClick={() => onDelete(v._id)} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>}
               </div>
             </td>
           </tr>
@@ -275,9 +278,9 @@ function POMobileCard({ o, sym, onDelete, onStatusSheet, onSend, updatingId }) {
           </p>
         </div>
         <div className="flex gap-0 flex-shrink-0">
-          <button onClick={() => onSend(o)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500">
+          {onSend && <button onClick={() => onSend(o)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500">
             <Mail size={17} />
-          </button>
+          </button>}
           <button onClick={() => o.status !== 'received' && onStatusSheet(o)} disabled={o.status === 'received' || updatingId === o._id} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed">
             {updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={17} />}
           </button>
@@ -358,6 +361,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
   const sendPO = useSendPurchaseOrder()
   const sym = useCurrencySymbol()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  const canEmail = usePermission('purchase_orders', 'po', 'email')
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -465,7 +469,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((o) => (
-              <POMobileCard key={o._id} o={o} sym={sym} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={(o) => { setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} updatingId={updatingId} />
+              <POMobileCard key={o._id} o={o} sym={sym} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={canEmail ? (o) => { setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) } : null} updatingId={updatingId} />
             ))}
           </div>
 
@@ -495,7 +499,7 @@ function PurchaseOrdersTab({ mobileFiltersOpen, onAdd }) {
               <td className="px-4 py-3 border-r border-zinc-100 text-sm font-semibold text-zinc-900">{sym}{(o.grandTotal || 0).toFixed(2)}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-1.5 whitespace-nowrap">
-                  <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Mail size={14} /></button>
+                  {canEmail && <button onClick={(e) => { e.stopPropagation(); setSendEmail(o.vendor?.email || ''); setSendError(''); setSendSheet(o) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send to vendor"><Mail size={14} /></button>}
                   <button onClick={(e) => { e.stopPropagation(); if (o.status !== 'received') setStatusSheet(o) }} disabled={o.status === 'received' || updatingId === o._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{updatingId === o._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                   <button onClick={(e) => { e.stopPropagation(); onDelete(o._id) }} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                 </div>
@@ -1103,9 +1107,9 @@ function PInvoiceMobileCard({ inv, sym, getRef, onDelete, onStatusSheet, onSend,
           </p>
         </div>
         <div className="flex gap-0 flex-shrink-0">
-          <button onClick={() => onSend(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500">
+          {onSend && <button onClick={() => onSend(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-blue-500">
             <Mail size={17} />
-          </button>
+          </button>}
           <button onClick={() => inv.status !== 'paid' && onStatusSheet(inv)} disabled={inv.status === 'paid' || updatingId === inv._id} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed">
             {updatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={17} />}
           </button>
@@ -1195,6 +1199,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
   const sendInvoice   = useSendPurchaseInvoice()
   const sym = useCurrencySymbol()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
+  const canEmail = usePermission('purchase_orders', 'po_inv', 'email')
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -1332,7 +1337,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
           {/* Mobile cards */}
           <div className="flex flex-col gap-2 md:hidden">
             {filtered.map((inv) => (
-              <PInvoiceMobileCard key={inv._id} inv={inv} sym={sym} getRef={getInvoiceRef} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={(inv) => { setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} updatingId={invUpdatingId} />
+              <PInvoiceMobileCard key={inv._id} inv={inv} sym={sym} getRef={getInvoiceRef} onDelete={onDelete} onStatusSheet={setStatusSheet} onSend={canEmail ? (inv) => { setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) } : null} updatingId={invUpdatingId} />
             ))}
           </div>
 
@@ -1365,7 +1370,7 @@ function PurchaseInvoicesTab({ mobileFiltersOpen, onAdd }) {
                   <td className="px-4 py-3 border-r border-zinc-100 text-sm text-zinc-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>
+                      {canEmail && <button onClick={(e) => { e.stopPropagation(); setSendEmail(inv.vendor?.email || ''); setSendError(''); setSendSheet(inv) }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-500 active:bg-zinc-100" title="Send invoice"><Mail size={14} /></button>}
                       <button onClick={(e) => { e.stopPropagation(); if (inv.status !== 'paid') setStatusSheet(inv) }} disabled={inv.status === 'paid' || invUpdatingId === inv._id} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-zinc-400" title="Update status">{invUpdatingId === inv._id ? <span className="h-3.5 w-3.5 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin inline-block" /> : <RefreshCw size={14} />}</button>
                       <button onClick={(e) => { e.stopPropagation(); onDelete(inv._id) }} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
                     </div>
@@ -1636,6 +1641,8 @@ export default function Purchases() {
   const canAddGRN      = usePermission('purchase_orders', 'grn',     'add')
   const canAddInvoices = usePermission('purchase_orders', 'po_inv',  'add')
   const canAddVendors  = usePermission('purchase_orders', 'vendors', 'add')
+  const canEmailPO     = usePermission('purchase_orders', 'po',      'email')
+  const canEmailInvoice = usePermission('purchase_orders', 'po_inv', 'email')
 
   const TABS = ALL_TABS.filter((t) => {
     if (t.key === 'po')       return canSeePO
