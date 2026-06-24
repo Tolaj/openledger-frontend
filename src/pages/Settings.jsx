@@ -2266,7 +2266,7 @@ function RoleForm({ open, onClose, editing }) {
 function PermMiniTable({ role }) {
   const perms = role.permissions || []
   return (
-    <div className="w-full flex flex-col gap-2">
+    <div className="w-full grid grid-cols-2 xl:grid-cols-3 gap-2">
       {PAGES.map((page) => {
         const pagePerm = perms.find((p) => p.page === page.key && (p.tab ?? null) === null)
         const pageOn   = !!pagePerm?.view
@@ -2291,7 +2291,7 @@ function PermMiniTable({ role }) {
               <div>
                 {/* Sub-header */}
                 <div className="grid bg-zinc-50 border-b border-zinc-100 px-3 py-1"
-                  style={{ gridTemplateColumns: `140px repeat(${pageActions.length}, 1fr)` }}>
+                  style={{ gridTemplateColumns: `1fr repeat(${pageActions.length}, 40px)` }}>
                   <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Tab</span>
                   {pageActions.map((a) => (
                     <span key={a} className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide text-center">{ACTION_LABELS[a]}</span>
@@ -2303,7 +2303,7 @@ function PermMiniTable({ role }) {
                     <div
                       key={tab.key}
                       className={`grid items-center px-3 py-1 ${ti < page.tabs.length - 1 ? 'border-b border-zinc-50' : ''} ${ti % 2 === 0 ? 'bg-white' : 'bg-zinc-50/50'}`}
-                      style={{ gridTemplateColumns: `140px repeat(${pageActions.length}, 1fr)` }}
+                      style={{ gridTemplateColumns: `1fr repeat(${pageActions.length}, 40px)` }}
                     >
                       <span className="text-[11px] text-zinc-600 font-medium">{tab.label}</span>
                       {pageActions.map((action) => {
