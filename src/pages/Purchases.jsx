@@ -22,8 +22,9 @@ import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import ProductPicker from '../components/features/ProductPicker'
 import Tabs from '../components/ui/Tabs'
+import { usePermission } from '../hooks/usePermission'
 
-const TABS = [
+const ALL_TABS = [
   { key: 'po',       label: 'Purchase Orders', mobileLabel: 'Purchase Order'      },
   { key: 'grn',      label: 'Goods Receipt',   mobileLabel: 'GRN'     },
   { key: 'invoices', label: 'Invoices',         mobileLabel: 'Invoices'},
@@ -1627,16 +1628,34 @@ export default function Purchases() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const onAddRef = useRef(null)
 
-  const hasFilters = ['po', 'grn', 'invoices', 'vendors'].includes(tab)
-  const hasAdd     = ['po', 'grn', 'invoices', 'vendors'].includes(tab)
+  const canSeePO       = usePermission('purchase_orders', 'po',      'view')
+  const canSeeGRN      = usePermission('purchase_orders', 'grn',     'view')
+  const canSeeInvoices = usePermission('purchase_orders', 'po_inv',  'view')
+  const canSeeVendors  = usePermission('purchase_orders', 'vendors', 'view')
+  const canAddPO       = usePermission('purchase_orders', 'po',      'add')
+  const canAddGRN      = usePermission('purchase_orders', 'grn',     'add')
+  const canAddInvoices = usePermission('purchase_orders', 'po_inv',  'add')
+  const canAddVendors  = usePermission('purchase_orders', 'vendors', 'add')
 
-  const addBtn = tab === 'po'
+  const TABS = ALL_TABS.filter((t) => {
+    if (t.key === 'po')       return canSeePO
+    if (t.key === 'grn')      return canSeeGRN
+    if (t.key === 'invoices') return canSeeInvoices
+    if (t.key === 'vendors')  return canSeeVendors
+    return true
+  })
+
+  const hasFilters = ['po', 'grn', 'invoices', 'vendors'].includes(tab)
+  const hasAdd     = (tab === 'po' && canAddPO) || (tab === 'grn' && canAddGRN) ||
+                     (tab === 'invoices' && canAddInvoices) || (tab === 'vendors' && canAddVendors)
+
+  const addBtn = tab === 'po' && canAddPO
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create PO</Button>
-    : tab === 'grn'
+    : tab === 'grn' && canAddGRN
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create GRN</Button>
-    : tab === 'invoices'
+    : tab === 'invoices' && canAddInvoices
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create Invoice</Button>
-    : tab === 'vendors'
+    : tab === 'vendors' && canAddVendors
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Add Vendor</Button>
     : null
 
@@ -1664,7 +1683,7 @@ export default function Purchases() {
 
       <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         <div className="flex items-center gap-3 flex-shrink-0 py-2 md:py-0 md:mb-4 md:justify-between">
-          <Tabs tabs={TABS} active={tab} onChange={setTab} />
+          <Tabs tabs={TABS} active={tab} onChange={(key) => { if (TABS.find(t => t.key === key)) setTab(key) }} />
           <PageActions add={addBtn} />
         </div>
 

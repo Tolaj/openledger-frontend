@@ -7,6 +7,7 @@ import AppLogo from '../ui/AppLogo'
 import useAuthStore from '../../store/authStore'
 import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
+import { usePagePermission } from '../../hooks/usePermission'
 
 const PERSONAL_NAV = [
   { to: '/',         icon: Home,       label: 'Dashboard', exact: true },
@@ -15,16 +16,16 @@ const PERSONAL_NAV = [
 ]
 
 const BUSINESS_NAV = [
-  { to: '/',          icon: Home,         label: 'Dashboard', exact: true },
+  { to: '/',          icon: Home,         label: 'Dashboard', exact: true,  pageKey: 'dashboard'      },
   { divider: true, label: 'Catalog' },
-  { to: '/products',  icon: Tag,          label: 'Products'               },
-  { to: '/stock',     icon: Boxes,        label: 'Stock'                  },
+  { to: '/products',  icon: Tag,          label: 'Products',               pageKey: 'products'        },
+  { to: '/stock',     icon: Boxes,        label: 'Stock',                  pageKey: 'stock'           },
   { divider: true, label: 'Orders' },
-  { to: '/general',   icon: Layers,       label: 'General'                },
-  { to: '/purchases', icon: ShoppingCart, label: 'Purchases'              },
-  { to: '/sales',     icon: TrendingUp,   label: 'Sales'                  },
+  { to: '/general',   icon: Layers,       label: 'General',                pageKey: 'general_orders'  },
+  { to: '/purchases', icon: ShoppingCart, label: 'Purchases',              pageKey: 'purchase_orders' },
+  { to: '/sales',     icon: TrendingUp,   label: 'Sales',                  pageKey: 'sales_orders'    },
   { divider: true, label: 'Insights' },
-  { to: '/finance',   icon: CreditCard,   label: 'Finance'                },
+  { to: '/finance',   icon: CreditCard,   label: 'Finance',                pageKey: 'finance'         },
 ]
 
 function NavItem({ to, icon: Icon, label, exact }) {
@@ -55,6 +56,13 @@ function Divider({ label }) {
   )
 }
 
+// Gate a single nav item by page permission (hook must be called at component level)
+function NavItemGated({ pageKey, ...props }) {
+  const canView = usePagePermission(pageKey)
+  if (!canView) return null
+  return <NavItem {...props} />
+}
+
 export default function Sidebar() {
   const user = useAuthStore((s) => s.user)
   const { activeGroupId } = useGroupStore()
@@ -79,7 +87,9 @@ export default function Sidebar() {
         {navItems.map((item, i) =>
           item.divider
             ? <Divider key={i} label={item.label} />
-            : <NavItem key={item.to} {...item} />
+            : isBusiness && item.pageKey
+              ? <NavItemGated key={item.to} {...item} />
+              : <NavItem key={item.to} {...item} />
         )}
 
         {/* Settings pinned at bottom */}

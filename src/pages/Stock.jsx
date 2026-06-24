@@ -16,11 +16,12 @@ import useCartStore from '../store/cartStore'
 import useGroupStore from '../store/groupStore'
 import { useGroup } from '../hooks/useGroups'
 import { useCurrencySymbol } from '../hooks/useCurrency'
+import { usePermission } from '../hooks/usePermission'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const LOW_STOCK_THRESHOLD = 5
 
-const TABS = [
+const ALL_TABS = [
   { key: 'levels',      label: 'Levels'      },
   { key: 'movements',   label: 'Movements'   },
   { key: 'adjustments', label: 'Adjustments' },
@@ -554,8 +555,20 @@ export default function Stock() {
   const { data: group } = useGroup(activeGroupId)
   const groupMembers = (group?.members || []).map((m) => String(m._id || m))
 
+  const canSeeLevels      = usePermission('stock', 'levels',      'view')
+  const canSeeMovements   = usePermission('stock', 'movements',   'view')
+  const canSeeAdjustments = usePermission('stock', 'adjustment',  'view')
+  const canAddAdjustment  = usePermission('stock', 'adjustment',  'add')
+
+  const TABS = ALL_TABS.filter((t) => {
+    if (t.key === 'levels')      return canSeeLevels
+    if (t.key === 'movements')   return canSeeMovements
+    if (t.key === 'adjustments') return canSeeAdjustments
+    return true
+  })
+
   const hasFilters = tab !== 'adjustments'
-  const addBtn = tab === 'adjustments'
+  const addBtn = tab === 'adjustments' && canAddAdjustment
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> New Adjustment</Button>
     : null
 
@@ -564,7 +577,7 @@ export default function Stock() {
       <TopBar
         title="Stock"
         filterIcon={hasFilters && <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />}
-        right={tab === 'adjustments' && (
+        right={tab === 'adjustments' && canAddAdjustment && (
           <button onClick={() => onAddRef.current?.()} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
             <Plus size={20} />
           </button>

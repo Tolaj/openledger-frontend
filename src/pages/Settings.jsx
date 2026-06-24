@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   LogOut, Users, UserPlus, Check, X, Trash2, Plus,
   Filter, ChevronDown, Pencil, LayoutTemplate, Home, Briefcase,
+  ShieldCheck, Eye, PencilLine, PlusCircle, Trash,
 } from 'lucide-react'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import Tabs from '../components/ui/Tabs'
@@ -20,6 +21,8 @@ import useGroupStore from '../store/groupStore'
 import { useMe, useUpdateUser } from '../hooks/useUser'
 import { useSendFriendRequest, useRespondFriendRequest } from '../hooks/useFriends'
 import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup } from '../hooks/useGroups'
+import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from '../hooks/useRoles'
+import { usePermission, getPermissionForGroup } from '../hooks/usePermission'
 
 function sharesGroup(groups, friendId) {
   return groups.some((g) => g.members?.some((m) => String(m._id || m) === String(friendId)))
@@ -134,11 +137,46 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
   const { mutate: update, isPending: updating } = useUpdateGroup()
   const { setActiveGroup } = useGroupStore()
   const qc = useQueryClient()
+
+  const [createdGroupId, setCreatedGroupId] = useState(null)
+  const [createdMembers, setCreatedMembers] = useState([])
+  const phase2 = !!createdGroupId
+
+  const { activeGroupId } = useGroupStore()
+  // When editing: use that group's roles. When creating: fall back to active group's roles.
+  const targetGroupId = editing?._id || createdGroupId || activeGroupId
+  const { data: roles = [] } = useQuery({
+    queryKey: ['roles', targetGroupId],
+    queryFn: () => import('../api/roles').then((m) => m.getRoles(targetGroupId).then((r) => r.data)),
+    enabled: !!targetGroupId,
+  })
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm({
     defaultValues: { name: '', type: 'personal', members: [], templateId: null },
   })
   const groupType = watch('type')
   const selectedTemplate = watch('templateId')
+
+  // memberRoles: { [memberId]: roleId }
+  const [memberRoles, setMemberRoles] = useState({})
+  const [transferAdminTo, setTransferAdminTo] = useState('') // userId to transfer admin to
+
+  // Derived admin info for this workspace
+  const adminRole    = roles.find((r) => r.isSystem)
+  const adminRoleId  = adminRole?._id
+  const nonAdminRoles = roles.filter((r) => !r.isSystem)
+
+  // Who currently holds admin in this group
+  const currentAdminMemberId = (() => {
+    if (!adminRoleId) return null
+    // In phase 2 (just created), creator is always admin
+    if (phase2) return String(myId)
+    if (!editing) return null
+    const mr = (editing.memberRoles || []).find(
+      (r) => String(r.roleId?._id || r.roleId) === String(adminRoleId)
+    )
+    return mr ? String(mr.userId?._id || mr.userId) : null
+  })()
+  const iAmAdmin = currentAdminMemberId === String(myId)
 
   // Fetch templates filtered by type (only when creating)
   const { data: templatesData } = useQuery({
@@ -154,23 +192,60 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
         .map((m) => String(m._id || m))
         .filter((id) => id !== String(myId))
       reset({ name: editing.displayName || editing.name, type: editing.type || 'personal', members: memberIds, templateId: null })
+      // Seed role assignments from existing memberRoles
+      const rolesMap = {}
+      ;(editing.memberRoles || []).forEach((mr) => {
+        rolesMap[String(mr.userId?._id || mr.userId)] = String(mr.roleId?._id || mr.roleId)
+      })
+      setMemberRoles(rolesMap)
     } else {
       reset({ name: '', type: 'personal', members: [], templateId: null })
+      setMemberRoles({})
     }
+    setTransferAdminTo('')
+    setCreatedGroupId(null)
+    setCreatedMembers([])
   }, [editing, open])
 
   const [submitting, setSubmitting] = useState(false)
 
+  const buildMemberRolesArray = (memberIds) => {
+    const result = []
+    for (const id of memberIds) {
+      // Admin transfer: if transferring, new admin gets adminRoleId; current admin loses it
+      if (adminRoleId && iAmAdmin && transferAdminTo) {
+        if (id === transferAdminTo) {
+          result.push({ userId: id, roleId: adminRoleId })
+          continue
+        }
+        if (id === String(myId)) {
+          // Current admin gets their newly selected role (or none)
+          if (memberRoles[id]) result.push({ userId: id, roleId: memberRoles[id] })
+          continue
+        }
+      } else if (adminRoleId && id === String(myId) && iAmAdmin) {
+        // Admin keeps their admin role — always include it
+        result.push({ userId: id, roleId: adminRoleId })
+        continue
+      }
+      if (memberRoles[id]) result.push({ userId: id, roleId: memberRoles[id] })
+    }
+    return result
+  }
+
   const onSubmit = async (data) => {
+    // ── Edit mode ──────────────────────────────────────────────
     if (editing) {
       const memberIds = [...new Set([String(myId), ...data.members])]
-      update({ id: editing._id, data: { displayName: data.name, members: memberIds } }, { onSuccess: onClose })
+      if (iAmAdmin && transferAdminTo && !memberIds.includes(transferAdminTo)) return
+      const memberRolesArr = buildMemberRolesArray(memberIds)
+      update({ id: editing._id, data: { displayName: data.name, members: memberIds, memberRoles: memberRolesArr } }, { onSuccess: onClose })
       return
     }
 
+    // ── Create mode ─────────────────────────────────────────────
     setSubmitting(true)
     try {
-      // 1. Create the group
       const groupRes = await api.post('/groups', {
         name: data.name,
         displayName: data.name,
@@ -181,15 +256,23 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
       const group = groupRes.data
       const groupId = group._id
 
-      // 2. Switch to the new group immediately
       setActiveGroup(groupId)
 
-      // 3. Apply template if selected
       if (data.templateId) {
         await api.post('/apply-template', { templateId: data.templateId, groupId })
       }
 
-      // Invalidate all relevant queries so Products/Categories refresh
+      // Save role assignments if any were selected
+      if (data.type === 'business' && Object.keys(memberRoles).length > 0) {
+        const memberIds = [...new Set([String(myId), ...data.members])]
+        const memberRolesArr = memberIds
+          .filter((id) => memberRoles[id])
+          .map((id) => ({ userId: id, roleId: memberRoles[id] }))
+        if (memberRolesArr.length > 0) {
+          await api.put(`/groups/${groupId}`, { memberRoles: memberRolesArr })
+        }
+      }
+
       await qc.invalidateQueries({ queryKey: ['groups'] })
       await qc.invalidateQueries({ queryKey: ['products', groupId] })
       await qc.invalidateQueries({ queryKey: ['categories', groupId] })
@@ -206,7 +289,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
     <BottomSheet
       open={open}
       onClose={onClose}
-      title={editing ? 'Edit Group' : 'New Group'}
+      title={editing ? 'Edit Workspace' : 'New Group'}
       footer={
         <Button type="submit" form="group-form" fullWidth loading={submitting || updating}>
           {editing ? 'Save changes' : 'Create group'}
@@ -269,6 +352,107 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
             )}
           />
           <p className="text-xs text-zinc-400">{groupType === 'business' ? 'You are always included as the owner.' : 'You are always included as a member.'}</p>
+
+          {/* Role assignment — business groups, whenever members are selected */}
+          {groupType === 'business' && (
+            <Controller
+              name="members"
+              control={control}
+              render={({ field }) =>
+                field.value.length > 0 ? (
+                  <div className="flex flex-col gap-0 mt-3 border border-zinc-200 rounded-xl overflow-hidden">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-3 py-2 bg-zinc-50 border-b border-zinc-200">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck size={13} className="text-zinc-500" />
+                        <p className="text-xs font-bold text-zinc-600 uppercase tracking-wide">Assign Roles</p>
+                      </div>
+                      {nonAdminRoles.length === 0 && (
+                        <span className="text-[11px] text-zinc-400">Create roles in the Roles tab first</span>
+                      )}
+                    </div>
+
+                    {/* Member rows */}
+                    {field.value.map((memberId, i) => {
+                      const friend = acceptedFriends.find((f) => f.id === memberId)
+                      if (!friend) return null
+                      const isThisAdmin = memberId === currentAdminMemberId
+                      const isMe = memberId === String(myId)
+
+                      return (
+                        <div key={memberId} className={`flex items-center gap-3 px-3 py-2.5 ${i < field.value.length - 1 ? 'border-b border-zinc-100' : ''}`}>
+                          <div className="w-7 h-7 rounded-full bg-zinc-200 flex items-center justify-center flex-shrink-0 text-xs font-bold text-zinc-600">
+                            {(friend.name || friend.email || '?')[0].toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-zinc-800 truncate">{friend.name || friend.email}</p>
+                            {friend.name && <p className="text-[11px] text-zinc-400 truncate">{friend.email}</p>}
+                          </div>
+
+                          {/* Admin badge — locked, not changeable here */}
+                          {isThisAdmin ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-900 text-white text-[11px] font-bold flex-shrink-0">
+                              <ShieldCheck size={11} /> Admin
+                            </span>
+                          ) : (
+                            /* Non-admin members: show role picker (excluding Admin role) */
+                            <select
+                              value={memberRoles[memberId] || ''}
+                              onChange={(e) => setMemberRoles((prev) => ({ ...prev, [memberId]: e.target.value || undefined }))}
+                              disabled={nonAdminRoles.length === 0}
+                              className="border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900 w-36 flex-shrink-0 disabled:opacity-40"
+                            >
+                              <option value="">No role</option>
+                              {nonAdminRoles.map((r) => (
+                                <option key={r._id} value={r._id}>{r.name}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {/* Admin transfer — only visible to current admin */}
+                    {editing && iAmAdmin && field.value.length > 0 && (
+                      <div className="border-t border-zinc-200 bg-amber-50 px-3 py-3 flex flex-col gap-2">
+                        <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide">Transfer Admin</p>
+                        <p className="text-[11px] text-amber-600">To change your own role you must transfer Admin to another member first. The workspace must always have one Admin.</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <select
+                            value={transferAdminTo}
+                            onChange={(e) => setTransferAdminTo(e.target.value)}
+                            className="flex-1 border border-amber-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                          >
+                            <option value="">— Keep Admin role —</option>
+                            {field.value.map((memberId) => {
+                              if (memberId === String(myId)) return null
+                              const friend = acceptedFriends.find((f) => f.id === memberId)
+                              if (!friend) return null
+                              return <option key={memberId} value={memberId}>{friend.name || friend.email}</option>
+                            })}
+                          </select>
+                          {transferAdminTo && (
+                            <div className="flex flex-col gap-1 flex-shrink-0">
+                              <select
+                                value={memberRoles[String(myId)] || ''}
+                                onChange={(e) => setMemberRoles((prev) => ({ ...prev, [String(myId)]: e.target.value || undefined }))}
+                                className="border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-zinc-900 w-36"
+                              >
+                                <option value="">My new role (none)</option>
+                                {nonAdminRoles.map((r) => (
+                                  <option key={r._id} value={r._id}>{r.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null
+              }
+            />
+          )}
         </div>
 
         {/* Template picker — only on create */}
@@ -512,7 +696,7 @@ function RejectBtn({ canReject, onClick, size = 13, className = 'p-1.5 rounded-l
 }
 
 // ── Friend card (mobile accordion) ────────────────────────────────────────────
-function FriendCard({ r, myId, respond, canReject, isBusiness }) {
+function FriendCard({ r, myId, respond, canReject, isBusiness, canEdit = true, canDelete = true }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -528,18 +712,18 @@ function FriendCard({ r, myId, respond, canReject, isBusiness }) {
         <div className="flex items-center gap-1 flex-shrink-0">
           {r.status === 'PENDING' ? (
             <>
-              <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-2 rounded-xl bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={14} /></button>
-              <RejectBtn canReject={canReject} size={14} className="p-2 rounded-xl" onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
+              {canEdit && <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-2 rounded-xl bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={14} /></button>}
+              {canEdit && <RejectBtn canReject={canReject} size={14} className="p-2 rounded-xl" onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
             </>
           ) : r.status === 'ACCEPTED' ? (
             <>
-              <RejectBtn canReject={canReject} size={14} className="p-2 rounded-xl" onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
-              <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={16} /></button>
+              {canEdit && <RejectBtn canReject={canReject} size={14} className="p-2 rounded-xl" onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
+              {canDelete && <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1 rounded-xl text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={16} /></button>}
             </>
           ) : (
             <>
-              <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-2 rounded-xl bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={14} /></button>
-              <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-2 rounded-xl text-zinc-500 active:bg-zinc-100" title="Delete"><Trash2 size={16} /></button>
+              {canEdit && <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-2 rounded-xl bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={14} /></button>}
+              {canDelete && <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-2 rounded-xl text-zinc-500 active:bg-zinc-100" title="Delete"><Trash2 size={16} /></button>}
             </>
           )}
           <button onClick={() => setOpen((o) => !o)} className="p-2 rounded-xl text-zinc-400 active:bg-zinc-100">
@@ -573,7 +757,7 @@ function FriendCard({ r, myId, respond, canReject, isBusiness }) {
 }
 
 // ── Friends Tab ───────────────────────────────────────────────────────────────
-function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
+function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness, canEdit = true, canDelete = true }) {
   const { data: me, isLoading } = useMe()
   const { data: groups = [] } = useGroups()
   const { mutate: sendReq, isPending: sending } = useSendFriendRequest()
@@ -682,18 +866,18 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
                   const cr = !sharesGroup(groups, r.id)
                   return r.status === 'PENDING' ? (
                     <>
-                      <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>
-                      <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
+                      {canEdit && <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>}
+                      {canEdit && <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
                     </>
                   ) : r.status === 'ACCEPTED' ? (
                     <>
-                      <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />
-                      <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={14} /></button>
+                      {canEdit && <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
+                      {canDelete && <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={14} /></button>}
                     </>
                   ) : (
                     <>
-                      <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>
-                      <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>
+                      {canEdit && <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>}
+                      {canDelete && <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>}
                     </>
                   )
                 })()}
@@ -718,6 +902,8 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
                 respond={respond}
                 canReject={!sharesGroup(groups, r.id)}
                 isBusiness={isBusiness}
+                canEdit={canEdit}
+                canDelete={canDelete}
               />
             ))
         }
@@ -745,13 +931,17 @@ function GroupMobileCard({ g, onEdit, onDelete, cantDelete }) {
           <p className="text-xs text-zinc-400 mt-0.5">{g.members?.length || 0} members</p>
         </div>
         <div className="flex gap-0 flex-shrink-0">
-          <button onClick={() => onEdit(g)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
-            <Pencil size={17} />
-          </button>
-          <button onClick={() => onDelete(g)} disabled={cantDelete}
-            className={`px-1 py-2 rounded-xl ${cantDelete ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 active:bg-zinc-100 hover:text-red-500'}`}>
-            <Trash2 size={17} />
-          </button>
+          {onEdit && (
+            <button onClick={() => onEdit(g)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+              <Pencil size={17} />
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={() => onDelete(g)} disabled={cantDelete}
+              className={`px-1 py-2 rounded-xl ${cantDelete ? 'text-zinc-200 cursor-not-allowed' : 'text-zinc-400 active:bg-zinc-100 hover:text-red-500'}`}>
+              <Trash2 size={17} />
+            </button>
+          )}
           <button onClick={() => setIsOpen((v) => !v)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
             <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
           </button>
@@ -783,7 +973,7 @@ function GroupMobileCard({ g, onEdit, onDelete, cantDelete }) {
   )
 }
 
-function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
+function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness, canEdit = true, canDelete = true }) {
   const { data: me } = useMe()
   const { data: groups = [], isLoading } = useGroups()
   const { mutate: deleteGroup } = useDeleteGroup()
@@ -855,12 +1045,16 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
               <div className="flex flex-wrap gap-1">
                 {(g.members || []).slice(0, 4).map((m, i) => {
                   const name = m?.name || m?.email || '?'
+                  const memberId = String(m?._id || m)
+                  const mr = (g.memberRoles || []).find((r) => String(r.userId?._id || r.userId) === memberId)
+                  const roleName = mr?.roleId?.name || null
                   return (
                     <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 text-xs text-zinc-700">
                       <span className="w-4 h-4 rounded-full bg-zinc-300 flex items-center justify-center text-[10px] font-bold">
                         {name[0]?.toUpperCase()}
                       </span>
                       {name}
+                      {roleName && <span className="text-[10px] px-1 py-0.5 rounded-full bg-blue-100 text-blue-600 font-semibold">{roleName}</span>}
                     </span>
                   )
                 })}
@@ -871,8 +1065,10 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
             </td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-2">
-                <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
-                {(() => {
+                {getPermissionForGroup(g, myId, 'settings', 'workspace', 'edit') && (
+                  <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
+                )}
+                {getPermissionForGroup(g, myId, 'settings', 'workspace', 'delete') && (() => {
                   const isCreator = g.createdBy === String(myId) || g.createdBy?._id === String(myId) || !g.createdBy
                   const cantDelete = allGroups.length <= 1 || g._id === activeGroupId || !isCreator
                   const deleteTitle = !isCreator ? 'Only the group creator can delete this' : allGroups.length <= 1 ? 'Last group cannot be deleted' : g._id === activeGroupId ? 'Switch away from this group first' : 'Delete'
@@ -901,12 +1097,14 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
         ) : sharedGroups.map((g) => {
           const isCreator = g.createdBy === String(myId) || g.createdBy?._id === String(myId) || !g.createdBy
           const cantDelete = allGroups.length <= 1 || g._id === activeGroupId || !isCreator
+          const rowCanEdit   = getPermissionForGroup(g, myId, 'settings', 'workspace', 'edit')
+          const rowCanDelete = getPermissionForGroup(g, myId, 'settings', 'workspace', 'delete')
           return (
             <GroupMobileCard
               key={g._id}
               g={g}
-              onEdit={openEdit}
-              onDelete={(g) => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) }}
+              onEdit={rowCanEdit ? openEdit : null}
+              onDelete={rowCanDelete ? (g) => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) } : null}
               cantDelete={cantDelete}
             />
           )
@@ -925,7 +1123,7 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
 }
 
 // ── Configuration Tab ─────────────────────────────────────────────────────────
-function ConfigurationTab() {
+function ConfigurationTab({ canEdit = true }) {
   const { data: me, isLoading } = useMe()
   const { data: groups = [], isLoading: groupsLoading } = useGroups()
   const { activeGroupId } = useGroupStore()
@@ -977,30 +1175,35 @@ function ConfigurationTab() {
   const [converting, setConverting] = useState(false)
   const [convertError, setConvertError] = useState(null)
 
+  // Active group's currency (group-level, shared by all members)
+  const groupCurrency = activeGroup?.currency || me?.currency || 'INR'
+
   const handleCurrencySelect = (newCode) => {
-    const old = me?.currency || 'INR'
-    if (newCode === old) return
+    if (newCode === groupCurrency) return
     setPendingCurrency(newCode)
     setConvertError(null)
   }
 
   const confirmCurrencyChange = async (convertPrices) => {
-    const fromCode = me?.currency || 'INR'
+    const fromCode = groupCurrency
     const toCode = pendingCurrency
     setConverting(true)
     setConvertError(null)
     try {
       if (convertPrices) {
         const rate = await getRate(fromCode, toCode)
-        await convertCurrencyApi(rate)
+        await convertCurrencyApi(rate, activeGroupId, toCode)
         queryClient.invalidateQueries({ queryKey: ['products'] })
         queryClient.invalidateQueries({ queryKey: ['inventory'] })
         queryClient.invalidateQueries({ queryKey: ['wishlists'] })
         queryClient.invalidateQueries({ queryKey: ['orders'] })
         queryClient.invalidateQueries({ queryKey: ['finance'] })
         queryClient.invalidateQueries({ queryKey: ['budgets'] })
+      } else {
+        // No price conversion — just update the group currency
+        updateGroup({ id: activeGroupId, data: { currency: toCode } })
       }
-      updateUser({ id: me._id, data: { currency: toCode } })
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
       setPendingCurrency(null)
     } catch (err) {
       setConvertError(err.message || 'Failed to fetch exchange rate. Try again.')
@@ -1033,8 +1236,8 @@ function ConfigurationTab() {
                 ) : (
                   <div className="h-9 w-9 rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 flex items-center justify-center text-zinc-400 text-[9px] text-center leading-tight flex-shrink-0">Logo</div>
                 )}
-                <label className={`cursor-pointer flex-1 h-8 px-3 rounded-lg border border-zinc-300 bg-white text-xs text-zinc-700 hover:bg-zinc-50 flex items-center justify-center gap-1.5 transition-colors ${logoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={async (e) => {
+                <label className={`flex-1 h-8 px-3 rounded-lg border border-zinc-300 bg-white text-xs text-zinc-700 flex items-center justify-center gap-1.5 transition-colors ${canEdit ? 'cursor-pointer hover:bg-zinc-50' : 'opacity-50 cursor-not-allowed'} ${logoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" disabled={!canEdit} onChange={async (e) => {
                     const file = e.target.files?.[0]
                     if (!file) return
                     setLogoUploading(true)
@@ -1056,7 +1259,7 @@ function ConfigurationTab() {
                   }} />
                   {logoUploading ? <><span className="h-3 w-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> Uploading…</> : 'Upload logo'}
                 </label>
-                {biz.logo && (
+                {biz.logo && canEdit && (
                   <button onClick={() => setBiz((b) => ({ ...b, logo: '' }))}
                     className="h-8 px-2.5 rounded-lg border border-zinc-200 text-xs text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
                     Remove
@@ -1072,7 +1275,7 @@ function ConfigurationTab() {
                 <div key={key} className="flex flex-col gap-1">
                   <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">{label}</label>
                   <input value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
-                    placeholder={placeholder} className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                    readOnly={!canEdit} placeholder={placeholder} className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
                 </div>
               ))}
 
@@ -1081,7 +1284,7 @@ function ConfigurationTab() {
                   <div key={key} className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">{label}</label>
                     <input type={key === 'email' ? 'email' : 'text'} value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
-                      placeholder={placeholder} className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                      readOnly={!canEdit} placeholder={placeholder} className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
                   </div>
                 ))}
               </div>
@@ -1089,25 +1292,25 @@ function ConfigurationTab() {
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">Website</label>
                 <input value={biz.website || ''} onChange={(e) => setBiz((b) => ({ ...b, website: e.target.value }))}
-                  placeholder="https://yourcompany.com" className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                  readOnly={!canEdit} placeholder="https://yourcompany.com" className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
               </div>
 
               <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">Address</label>
                 <div className="flex flex-col gap-1.5">
                   <input value={biz.addressLine1 || ''} onChange={(e) => setBiz((b) => ({ ...b, addressLine1: e.target.value }))}
-                    placeholder="Street / Building" className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                    readOnly={!canEdit} placeholder="Street / Building" className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
                   <input value={biz.addressLine2 || ''} onChange={(e) => setBiz((b) => ({ ...b, addressLine2: e.target.value }))}
-                    placeholder="Area / Locality (optional)" className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                    readOnly={!canEdit} placeholder="Area / Locality (optional)" className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
                   <div className="grid grid-cols-2 gap-1.5">
                     {[['City', 'city'], ['State', 'state'], ['Pincode', 'pincode'], ['Country', 'country']].map(([ph, key]) => (
                       <input key={key} value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
-                        placeholder={ph} className="h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900" />
+                        readOnly={!canEdit} placeholder={ph} className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
                     ))}
                   </div>
                 </div>
               </div>
-              <button onClick={handleBizSave} disabled={savingBiz}
+              <button onClick={handleBizSave} disabled={savingBiz || !canEdit}
                 className="h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
                 {savingBiz ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
                 {bizSaved ? '✓ Saved' : savingBiz ? 'Saving…' : 'Save Business Details'}
@@ -1142,21 +1345,22 @@ function ConfigurationTab() {
                 Changing currency can also convert all your product prices using live exchange rates.
               </p>
               <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200 mb-3">
-                <span className="text-2xl font-bold text-zinc-900">{currencySymbol(me?.currency || 'INR')}</span>
+                <span className="text-2xl font-bold text-zinc-900">{currencySymbol(groupCurrency)}</span>
                 <div>
-                  <p className="text-sm font-semibold text-zinc-900">{me?.currency || 'INR'}</p>
-                  <p className="text-xs text-zinc-400">{CURRENCY_LIST.find(c => c.code === (me?.currency || 'INR'))?.name || ''}</p>
+                  <p className="text-sm font-semibold text-zinc-900">{groupCurrency}</p>
+                  <p className="text-xs text-zinc-400">{CURRENCY_LIST.find(c => c.code === groupCurrency)?.name || ''}</p>
                 </div>
               </div>
               <select
-                key={me?.currency}
-                defaultValue={me?.currency || 'INR'}
-                onChange={(e) => handleCurrencySelect(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900"
+                key={groupCurrency}
+                defaultValue={groupCurrency}
+                onChange={(e) => canEdit && handleCurrencySelect(e.target.value)}
+                disabled={!canEdit}
+                className={`w-full h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 {[...CURRENCY_LIST].sort((a, b) => {
-                  if (a.code === (me?.currency || 'INR')) return -1
-                  if (b.code === (me?.currency || 'INR')) return 1
+                  if (a.code === groupCurrency) return -1
+                  if (b.code === groupCurrency) return 1
                   return a.code.localeCompare(b.code)
                 }).map((c) => (
                   <option key={c.code} value={c.code}>
@@ -1190,13 +1394,14 @@ function ConfigurationTab() {
                   ].map((t) => {
                     const active = (biz.template || 'classic') === t.key
                     return (
-                      <div key={t.key} className={`rounded-lg border transition-all ${active ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 hover:border-zinc-300'}`}>
+                      <div key={t.key} className={`rounded-lg border transition-all ${active ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 hover:border-zinc-300'} ${!canEdit ? 'opacity-60' : ''}`}>
                         <button
+                          disabled={!canEdit}
                           onClick={() => {
                             setBiz((b) => ({ ...b, template: t.key }))
                             updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, template: t.key } } })
                           }}
-                          className="flex items-start gap-2 px-2.5 py-2 w-full text-left"
+                          className="flex items-start gap-2 px-2.5 py-2 w-full text-left disabled:cursor-not-allowed"
                         >
                           <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${active ? 'border-zinc-900' : 'border-zinc-300'}`}>
                             {active && <div className="w-1.5 h-1.5 rounded-full bg-zinc-900" />}
@@ -1235,11 +1440,12 @@ function ConfigurationTab() {
                         <button
                           key={c.key}
                           title={c.label}
+                          disabled={!canEdit}
                           onClick={() => {
                             setBiz((b) => ({ ...b, color: c.key }))
                             updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, color: c.key } } })
                           }}
-                          className={`w-6 h-6 rounded-full transition-all ${active ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : 'hover:scale-110'}`}
+                          className={`w-6 h-6 rounded-full transition-all disabled:cursor-not-allowed ${active ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : 'hover:scale-110'} ${!canEdit ? 'opacity-60' : ''}`}
                           style={{ backgroundColor: c.color }}
                         />
                       )
@@ -1262,8 +1468,8 @@ function ConfigurationTab() {
           {/* From → To */}
           <div className="flex items-center justify-center gap-4 py-2">
             <div className="text-center">
-              <p className="text-2xl font-bold text-zinc-900">{currencySymbol(me?.currency || 'INR')}</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{me?.currency || 'INR'}</p>
+              <p className="text-2xl font-bold text-zinc-900">{currencySymbol(groupCurrency)}</p>
+              <p className="text-xs text-zinc-500 mt-0.5">{groupCurrency}</p>
             </div>
             <div className="text-zinc-300 text-xl">→</div>
             <div className="text-center">
@@ -1274,7 +1480,7 @@ function ConfigurationTab() {
 
           <p className="text-sm text-zinc-600 text-center leading-relaxed">
             Do you also want to convert all your <strong>product prices</strong> from{' '}
-            <strong>{me?.currency}</strong> to <strong>{pendingCurrency}</strong> using live exchange rates?
+            <strong>{groupCurrency}</strong> to <strong>{pendingCurrency}</strong> using live exchange rates?
           </p>
 
           {convertError && (
@@ -1706,12 +1912,594 @@ function buildTemplatePreview(template, biz = {}, colorKey = 'forest') {
 </body></html>`
 }
 
+// ── Roles Tab ─────────────────────────────────────────────────────────────────
+const PAGES = [
+  { key: 'products', label: 'Products', tabs: [
+    { key: 'products',  label: 'Products',  actions: ['view','add','edit','delete','cart'] },
+    { key: 'category',  label: 'Category',  actions: ['view','add','edit','delete'] },
+    { key: 'wishlist',  label: 'Wish List', actions: ['view','add','edit','delete','cart'] },
+    { key: 'orders',    label: 'Orders',    actions: ['view','delete'] },
+  ]},
+  { key: 'stock', label: 'Stock', tabs: [
+    { key: 'levels',     label: 'Levels',     actions: ['view','cart','delete'] },
+    { key: 'movements',  label: 'Movements',  actions: ['view'] },
+    { key: 'adjustment', label: 'Adjustment', actions: ['view','add'] },
+  ]},
+  { key: 'general_orders', label: 'General Orders', tabs: [
+    { key: 'gen_orders',   label: 'Orders',     actions: ['view','add','status','email','delete'] },
+    { key: 'gen_invoices', label: 'Invoice',    actions: ['view','add','status','email','delete'] },
+    { key: 'recipients',   label: 'Recipients', actions: ['view','add','edit','delete'] },
+    { key: 'recurring',    label: 'Recurring',  actions: ['view','add','status','edit','delete'] },
+  ]},
+  { key: 'purchase_orders', label: 'Purchase Orders', tabs: [
+    { key: 'po',      label: 'Purchase Orders', actions: ['view','add','status','email','delete'] },
+    { key: 'grn',     label: 'Goods Receipt',   actions: ['view','add','delete'] },
+    { key: 'po_inv',  label: 'Invoice',         actions: ['view','add','status','email','delete'] },
+    { key: 'vendors', label: 'Vendors',         actions: ['view','add','edit','delete'] },
+  ]},
+  { key: 'sales_orders', label: 'Sales Orders', tabs: [
+    { key: 'so',       label: 'Sales Orders', actions: ['view','add','status','email','delete'] },
+    { key: 'delivery', label: 'Delivery',     actions: ['view','add','delete'] },
+    { key: 'so_inv',   label: 'Invoice',      actions: ['view','add','status','email','delete'] },
+    { key: 'customers',label: 'Customers',    actions: ['view','add','edit','delete'] },
+  ]},
+  { key: 'finance', label: 'Finance', tabs: [
+    { key: 'overview',     label: 'Overview',     actions: ['view'] },
+    { key: 'transactions', label: 'Transactions', actions: ['view','add','edit','delete'] },
+    { key: 'budget',       label: 'Budget',       actions: ['view','add','edit','delete'] },
+    { key: 'ap_ar',        label: 'AP/AR',        actions: ['view'] },
+  ]},
+  { key: 'cart', label: 'Cart', tabs: [] },
+  { key: 'settings', label: 'Settings', tabs: [
+    { key: 'team',          label: 'Team',          actions: ['view','add','edit','delete'] },
+    { key: 'roles',         label: 'Roles',         actions: ['view','add','edit','delete'] },
+    { key: 'workspace',     label: 'Workspace',     actions: ['view','edit','delete'] },
+    { key: 'configuration', label: 'Configuration', actions: ['view','edit'] },
+  ], alwaysAccessible: true },
+]
+
+const ALL_ACTIONS = ['view','add','edit','delete','status','email','cart','place_order']
+const ACTION_LABELS = { view:'View', add:'Add', edit:'Edit', delete:'Delete', status:'Status', email:'Email', cart:'Cart', place_order:'Place Order' }
+
+const buildBlankPermissions = () => {
+  const perms = []
+  for (const page of PAGES) {
+    perms.push({ page: page.key, tab: null, view: false, place_order: false })
+    for (const tab of page.tabs) {
+      const entry = { page: page.key, tab: tab.key }
+      for (const a of ALL_ACTIONS) entry[a] = false
+      perms.push(entry)
+    }
+  }
+  return perms
+}
+const BLANK_PERMISSIONS = buildBlankPermissions()
+
+function PermCheckbox({ checked, onChange, disabled }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`w-5 h-5 rounded flex items-center justify-center transition-all flex-shrink-0
+        ${checked
+          ? 'bg-zinc-900 border-zinc-900 text-white'
+          : 'bg-white border border-zinc-300 text-transparent'}
+        ${disabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer hover:border-zinc-500'}`}
+    >
+      <Check size={11} strokeWidth={3} />
+    </button>
+  )
+}
+
+function RoleForm({ open, onClose, editing }) {
+  const { mutate: create, isPending: creating } = useCreateRole()
+  const { mutate: update, isPending: updating } = useUpdateRole()
+  const saving = creating || updating
+
+  const [name, setName]               = useState('')
+  const [description, setDescription] = useState('')
+  const [isDefault, setIsDefault]     = useState(false)
+  const [permissions, setPermissions] = useState(BLANK_PERMISSIONS)
+  const [expanded, setExpanded]       = useState({})
+
+  const togglePage = (pageKey) => setExpanded((e) => ({ ...e, [pageKey]: !e[pageKey] }))
+
+  useEffect(() => {
+    if (editing) {
+      setName(editing.name || '')
+      setDescription(editing.description || '')
+      setIsDefault(editing.isDefault || false)
+      // Rebuild permissions from saved data
+      setPermissions(buildBlankPermissions().map((blank) => {
+        const saved = editing.permissions?.find(
+          (p) => p.page === blank.page && (p.tab ?? null) === (blank.tab ?? null)
+        )
+        return saved ? { ...blank, ...saved } : blank
+      }))
+    } else {
+      setName(''); setDescription(''); setIsDefault(false)
+      setPermissions(BLANK_PERMISSIONS)
+      setExpanded({})
+    }
+  }, [editing, open])
+
+  const setPerm = (page, tab, field, val) => {
+    setPermissions((prev) => prev.map((p) =>
+      p.page === page && (p.tab ?? null) === (tab ?? null) ? { ...p, [field]: val } : p
+    ))
+  }
+
+  // Toggle page-level view — if turning off, also uncheck all tabs underneath
+  const setPageView = (pageKey, val) => {
+    setPermissions((prev) => prev.map((p) => {
+      if (p.page !== pageKey) return p
+      if (p.tab === null) return { ...p, view: val, place_order: val ? p.place_order : false }
+      // If page view turned off, disable all tab perms
+      if (!val) {
+        const reset = { ...p }
+        for (const a of ALL_ACTIONS) reset[a] = false
+        return reset
+      }
+      return p
+    }))
+  }
+
+  // Toggle all actions for a single tab row
+  const toggleTabAll = (pageKey, tabKey, tabActions, val) => {
+    setPermissions((prev) => prev.map((p) => {
+      if (p.page !== pageKey || p.tab !== tabKey) return p
+      const updated = { ...p }
+      for (const a of tabActions) updated[a] = val
+      return updated
+    }))
+  }
+
+  const handleSave = () => {
+    if (!name.trim()) return
+    const data = { name: name.trim(), description: description.trim(), isDefault, permissions }
+    if (editing) {
+      update({ id: editing._id, data }, { onSuccess: onClose })
+    } else {
+      create(data, { onSuccess: onClose })
+    }
+  }
+
+  if (!open) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex items-end md:items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}>
+      <div
+        className="bg-white w-full md:max-w-3xl md:rounded-2xl rounded-t-3xl max-h-[92dvh] flex flex-col overflow-hidden shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {/* Handle bar (mobile) */}
+        <div className="w-10 h-1 bg-zinc-200 rounded-full mx-auto mt-3 md:hidden flex-shrink-0" />
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 flex-shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center">
+              <ShieldCheck size={16} className="text-white" />
+            </div>
+            <h2 className="text-base font-bold text-zinc-900">{editing ? 'Edit Role' : 'New Role'}</h2>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 hover:text-zinc-700">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+          {/* Top fields */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Role Title</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Manager"
+                className="border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Description</label>
+              <input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What does this role do?"
+                className="border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">Default Role</label>
+              <select
+                value={isDefault ? 'yes' : 'no'}
+                onChange={(e) => setIsDefault(e.target.value === 'yes')}
+                className="border border-zinc-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900 bg-white"
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Permissions accordion */}
+          <div>
+            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3">Permissions</p>
+            <div className="flex flex-col gap-2">
+              {PAGES.map((page) => {
+                const pagePerm = permissions.find((p) => p.page === page.key && p.tab === null) || {}
+                const pageOn   = page.alwaysAccessible ? true : !!pagePerm.view
+                const isOpen   = !!expanded[page.key]
+
+                return (
+                  <div key={page.key} className="border border-zinc-200 rounded-xl overflow-hidden">
+                    {/* Page header row */}
+                    <div className="flex items-center gap-3 px-4 py-3 bg-zinc-50">
+                      {/* Expand toggle (only if has tabs) */}
+                      {page.tabs.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => togglePage(page.key)}
+                          className="text-zinc-400 hover:text-zinc-700 transition-colors flex-shrink-0"
+                        >
+                          <ChevronDown size={15} className={`transition-transform duration-200 ${isOpen ? '' : '-rotate-90'}`} />
+                        </button>
+                      ) : (
+                        <span className="w-[15px] flex-shrink-0" />
+                      )}
+
+                      {/* Page name */}
+                      <span className="flex-1 text-sm font-bold text-zinc-800">{page.label}</span>
+
+                      {/* Page-level VIEW toggle — hidden for always-accessible pages */}
+                      {page.alwaysAccessible ? (
+                        <span className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wide px-2 py-0.5 bg-emerald-50 rounded-full">Always On</span>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-zinc-400 font-medium uppercase tracking-wide">Page Access</span>
+                          <PermCheckbox
+                            checked={pageOn}
+                            onChange={(val) => { setPageView(page.key, val); if (val && page.tabs.length > 0) setExpanded((e) => ({ ...e, [page.key]: true })) }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Cart: place_order */}
+                      {page.key === 'cart' && (
+                        <div className="flex items-center gap-2 ml-4">
+                          <span className="text-[11px] text-zinc-400 font-medium uppercase tracking-wide">Place Order</span>
+                          <PermCheckbox
+                            checked={!!pagePerm.place_order}
+                            onChange={(val) => setPerm(page.key, null, 'place_order', val)}
+                            disabled={!pageOn}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tabs sub-table */}
+                    {isOpen && page.tabs.length > 0 && (() => {
+                      // Collect all unique actions across tabs for this page
+                      const pageActions = [...new Set(page.tabs.flatMap((t) => t.actions))]
+                      return (
+                        <div className="border-t border-zinc-100">
+                          {/* Sub-header */}
+                          <div className="grid bg-white border-b border-zinc-100 px-4 py-2"
+                            style={{ gridTemplateColumns: `180px repeat(${pageActions.length}, 1fr)` }}>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Tab</span>
+                            {pageActions.map((a) => (
+                              <span key={a} className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide text-center">{ACTION_LABELS[a]}</span>
+                            ))}
+                          </div>
+                          {/* Tab rows */}
+                          {page.tabs.map((tab, ti) => {
+                            const tabPerm   = permissions.find((p) => p.page === page.key && p.tab === tab.key) || {}
+                            const tabAllOn  = tab.actions.every((a) => !!tabPerm[a])
+                            return (
+                              <div
+                                key={tab.key}
+                                className={`grid items-center px-4 py-2.5 ${ti < page.tabs.length - 1 ? 'border-b border-zinc-50' : ''}`}
+                                style={{ gridTemplateColumns: `180px repeat(${pageActions.length}, 1fr)` }}
+                              >
+                                {/* Tab label — click to toggle all actions for this tab */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleTabAll(page.key, tab.key, tab.actions, !tabAllOn)}
+                                  disabled={!pageOn}
+                                  className="text-xs text-zinc-600 font-medium text-left hover:text-zinc-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  {tab.label}
+                                </button>
+                                {pageActions.map((action) => {
+                                  const applicable = tab.actions.includes(action)
+                                  return (
+                                    <div key={action} className="flex justify-center">
+                                      {applicable ? (
+                                        <PermCheckbox
+                                          checked={!!tabPerm[action]}
+                                          onChange={(val) => setPerm(page.key, tab.key, action, val)}
+                                          disabled={!pageOn}
+                                        />
+                                      ) : (
+                                        <span className="text-zinc-200 text-sm select-none">—</span>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })()}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-zinc-400 mt-2">Enable Page Access first to configure tab permissions. Click a tab name to toggle all its actions.</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-zinc-100 flex-shrink-0">
+          <button onClick={onClose} className="px-4 py-2 text-sm font-semibold text-zinc-500 hover:text-zinc-700">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !name.trim()}
+            className="px-5 py-2 bg-zinc-900 text-white text-sm font-bold rounded-xl disabled:opacity-50 active:bg-zinc-700"
+          >
+            {saving ? 'Saving…' : editing ? 'Update Role' : 'Save Role'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )
+}
+
+// Inline permission mini-table used in expanded row and mobile card
+function PermMiniTable({ role }) {
+  const perms = role.permissions || []
+  return (
+    <div className="w-full flex flex-col gap-2">
+      {PAGES.map((page) => {
+        const pagePerm = perms.find((p) => p.page === page.key && (p.tab ?? null) === null)
+        const pageOn   = !!pagePerm?.view
+        const pageActions = [...new Set(page.tabs.flatMap((t) => t.actions))]
+
+        return (
+          <div key={page.key} className="border border-zinc-100 rounded-lg overflow-hidden">
+            {/* Page header */}
+            <div className={`flex items-center justify-between px-3 py-1.5 ${pageOn ? 'bg-zinc-900' : 'bg-zinc-100'}`}>
+              <span className={`text-[11px] font-bold uppercase tracking-wide ${pageOn ? 'text-white' : 'text-zinc-400'}`}>{page.label}</span>
+              <div className="flex items-center gap-1.5">
+                {page.key === 'cart' && !!pagePerm?.place_order && (
+                  <span className="text-[10px] bg-white/20 text-white px-1.5 py-0.5 rounded font-medium">Place Order</span>
+                )}
+                {pageOn
+                  ? <Check size={11} className="text-emerald-400" strokeWidth={3} />
+                  : <X size={11} className="text-zinc-400" strokeWidth={2.5} />}
+              </div>
+            </div>
+            {/* Tabs */}
+            {page.tabs.length > 0 && (
+              <div>
+                {/* Sub-header */}
+                <div className="grid bg-zinc-50 border-b border-zinc-100 px-3 py-1"
+                  style={{ gridTemplateColumns: `140px repeat(${pageActions.length}, 1fr)` }}>
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide">Tab</span>
+                  {pageActions.map((a) => (
+                    <span key={a} className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide text-center">{ACTION_LABELS[a]}</span>
+                  ))}
+                </div>
+                {page.tabs.map((tab, ti) => {
+                  const tabPerm = perms.find((p) => p.page === page.key && p.tab === tab.key) || {}
+                  return (
+                    <div
+                      key={tab.key}
+                      className={`grid items-center px-3 py-1 ${ti < page.tabs.length - 1 ? 'border-b border-zinc-50' : ''} ${ti % 2 === 0 ? 'bg-white' : 'bg-zinc-50/50'}`}
+                      style={{ gridTemplateColumns: `140px repeat(${pageActions.length}, 1fr)` }}
+                    >
+                      <span className="text-[11px] text-zinc-600 font-medium">{tab.label}</span>
+                      {pageActions.map((action) => {
+                        const applicable = tab.actions.includes(action)
+                        return (
+                          <div key={action} className="flex justify-center">
+                            {applicable
+                              ? tabPerm[action]
+                                ? <Check size={11} className="text-emerald-500" strokeWidth={3} />
+                                : <X size={11} className="text-zinc-300" strokeWidth={2.5} />
+                              : <span className="text-zinc-100 text-xs">—</span>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Mobile accordion card
+function RoleMobileCard({ role, onEdit, onDelete }) {
+  const [open, setOpen] = useState(false)
+  const permCount = role.permissions?.filter((p) => p.tab === null && p.view).length || 0
+
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="w-9 h-9 bg-zinc-100 rounded-xl flex items-center justify-center flex-shrink-0">
+          <ShieldCheck size={16} className="text-zinc-600" />
+        </div>
+        <div className="flex-1 min-w-0" onClick={() => setOpen((o) => !o)}>
+          <p className="text-sm font-bold text-zinc-900 flex items-center gap-2">
+            {role.name}
+            {role.isDefault && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Default</span>}
+          </p>
+          <p className="text-xs text-zinc-500">{role.description || `${permCount} module${permCount !== 1 ? 's' : ''} with access`}</p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {!role.isSystem && <button onClick={() => onEdit(role)} className="p-2 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>}
+          {!role.isSystem && <button onClick={() => onDelete(role._id)} className="p-2 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>}
+          {role.isSystem && <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-400 uppercase tracking-wide">System</span>}
+          <button onClick={() => setOpen((o) => !o)} className={`p-2 rounded-lg text-zinc-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+            <ChevronDown size={14} />
+          </button>
+        </div>
+      </div>
+      {open && (
+        <div className="border-t border-zinc-100 px-4 pb-4">
+          <PermMiniTable role={role} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RolesTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, canEdit = true, canDelete = true }) {
+  const { data: roles = [], isLoading } = useRoles()
+  const { mutate: deleteRole } = useDeleteRole()
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing]   = useState(null)
+  const [nameFilter, setNameFilter] = useState('')
+  const [dropSel, setDropSel]   = useState([])
+
+  const [expanded, setExpanded] = useState({})
+  const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
+
+  const openCreate = useCallback(() => { setEditing(null); setFormOpen(true) }, [])
+  useEffect(() => { if (openAddRef) openAddRef.current = openCreate }, [openCreate, openAddRef])
+
+  const openEdit     = (role) => { setEditing(role); setFormOpen(true) }
+  const handleDelete = (id)   => { if (confirm('Delete this role?')) deleteRole(id) }
+
+  const ROLE_COLS = [{ key: 'name', label: 'name', filterable: true }]
+  const nameOpts  = [...new Set(roles.map((r) => r.name).filter(Boolean))]
+
+  const filtered = roles.filter((r) =>
+    r.name.toLowerCase().includes(nameFilter.toLowerCase()) &&
+    (dropSel.length === 0 || dropSel.includes(r.name))
+  )
+
+  if (isLoading) return <Spinner className="py-12" />
+
+  return (
+    <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
+      <DataTableMobileFilters
+        columns={ROLE_COLS}
+        filters={{ name: nameFilter }}
+        onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }}
+        dropOpts={{ name: nameOpts }}
+        dropSel={{ name: dropSel }}
+        onDropChange={(key, vals) => setDropSel(vals)}
+        open={mobileFiltersOpen}
+      />
+
+      {/* Desktop DataTable */}
+      {roles.length === 0 ? (
+        <EmptyState icon={ShieldCheck} title="No roles yet" description="Create roles to define what your team members can access" />
+      ) : (
+        <DataTable
+          leadingCol
+          columns={[
+            { key: 'name',        label: 'Role',        filterable: true },
+            { key: 'description', label: 'Description' },
+            { key: 'default',     label: 'Default'     },
+            { key: 'action',      label: 'Action'      },
+          ]}
+          data={filtered}
+          filters={{ name: nameFilter }}
+          onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }}
+          dropOpts={{ name: nameOpts }}
+          dropSel={{ name: dropSel }}
+          onDropChange={(key, vals) => setDropSel(vals)}
+          renderRow={(role) => (
+            <React.Fragment key={role._id}>
+              <tr
+                className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 transition-colors cursor-pointer"
+                onClick={() => toggleExpand(role._id)}
+              >
+                <td className="px-3 py-3 border-r border-zinc-100 text-zinc-400">
+                  <ChevronDown
+                    size={14}
+                    className={`transition-transform ${expanded[role._id] ? '' : '-rotate-90'}`}
+                  />
+                </td>
+                <td className="px-4 py-3 border-r border-zinc-100 font-medium text-zinc-900">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-zinc-100 flex items-center justify-center flex-shrink-0">
+                      <ShieldCheck size={13} className="text-zinc-600" />
+                    </div>
+                    {role.name}
+                  </div>
+                </td>
+                <td className="px-4 py-3 border-r border-zinc-100 text-zinc-500 max-w-[200px] truncate text-sm">
+                  {role.description || '—'}
+                </td>
+                <td className="px-4 py-3 border-r border-zinc-100">
+                  {role.isDefault
+                    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Yes</span>
+                    : <span className="text-xs text-zinc-400">No</span>}
+                </td>
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2">
+                    {role.isSystem
+                      ? <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-100 text-zinc-400 uppercase tracking-wide">System</span>
+                      : <>
+                          {canEdit   && <button onClick={() => openEdit(role)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>}
+                          {canDelete && <button onClick={() => handleDelete(role._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete"><Trash2 size={14} /></button>}
+                        </>}
+                  </div>
+                </td>
+              </tr>
+              {expanded[role._id] && (
+                <tr className="bg-zinc-50 border-b border-zinc-100">
+                  <td />
+                  <td colSpan={4} className="px-4 py-4">
+                    <PermMiniTable role={role} />
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          )}
+          emptyMessage="No roles found"
+          mobileFiltersOpen={mobileFiltersOpen}
+          onMobileFiltersOpenChange={onMobileFiltersOpenChange}
+        />
+      )}
+
+      {/* Mobile cards */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {filtered.length === 0
+          ? <EmptyState icon={ShieldCheck} title="No roles yet" description="Create roles to define what your team members can access" />
+          : filtered.map((r) => (
+              <RoleMobileCard key={r._id} role={r} onEdit={openEdit} onDelete={handleDelete} />
+            ))
+        }
+      </div>
+
+      <RoleForm open={formOpen} onClose={() => setFormOpen(false)} editing={editing} />
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function Settings() {
   const [tab, setTab] = useState('profile')
   const [showAddFriend, setShowAddFriend] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const openGroupAdd = useRef(null)
+  const openRoleAdd  = useRef(null)
 
   // Detect active group type for context-aware copy
   const { activeGroupId } = useGroupStore()
@@ -1719,11 +2507,36 @@ export default function Settings() {
   const activeGroup = groups.find((g) => g._id === activeGroupId)
   const isBusiness = activeGroup?.type === 'business'
 
+  // Business-only permission gates (hooks always called, ignored for personal)
+  const canViewTeam   = usePermission('settings', 'team',          'view')
+  const canViewRoles  = usePermission('settings', 'roles',         'view')
+  const canViewWS     = usePermission('settings', 'workspace',     'view')
+  const canViewConfig = usePermission('settings', 'configuration', 'view')
+  const canAddTeam    = usePermission('settings', 'team',          'add')
+  const canEditTeam   = usePermission('settings', 'team',          'edit')
+  const canDeleteTeam = usePermission('settings', 'team',          'delete')
+  const canAddRole    = usePermission('settings', 'roles',         'add')
+  const canEditRole   = usePermission('settings', 'roles',         'edit')
+  const canDeleteRole = usePermission('settings', 'roles',         'delete')
+  const canAddWS      = usePermission('settings', 'workspace',     'add')
+  const canEditWS     = usePermission('settings', 'workspace',     'edit')
+  const canDeleteWS   = usePermission('settings', 'workspace',     'delete')
+  const canEditConfig = usePermission('settings', 'configuration', 'edit')
+
   const TABS = [
-    { key: 'profile',       label: 'My Profile',                        mobileLabel: 'Profile' },
-    { key: 'friends',       label: isBusiness ? 'Team' : 'Friends',     mobileLabel: isBusiness ? 'Team' : 'Friends' },
-    { key: 'groups',        label: isBusiness ? 'Workspaces' : 'Groups', mobileLabel: isBusiness ? 'Spaces' : 'Groups' },
-    { key: 'configuration', label: 'Configuration',                     mobileLabel: 'Config'  },
+    { key: 'profile', label: 'My Profile', mobileLabel: 'Profile' },
+    ...(!isBusiness || canViewTeam
+      ? [{ key: 'friends', label: isBusiness ? 'Team' : 'Friends', mobileLabel: isBusiness ? 'Team' : 'Friends' }]
+      : []),
+    ...(isBusiness && canViewRoles
+      ? [{ key: 'roles', label: 'Roles', mobileLabel: 'Roles' }]
+      : []),
+    ...(!isBusiness || canViewWS
+      ? [{ key: 'groups', label: isBusiness ? 'Workspaces' : 'Groups', mobileLabel: isBusiness ? 'Spaces' : 'Groups' }]
+      : []),
+    ...(!isBusiness || canViewConfig
+      ? [{ key: 'configuration', label: 'Configuration', mobileLabel: 'Config' }]
+      : []),
   ]
 
   const handleTabChange = (key) => {
@@ -1736,19 +2549,24 @@ export default function Settings() {
     <>
       <TopBar
         title="Settings"
-        filterIcon={(tab === 'friends' || tab === 'groups') && (
+        filterIcon={(tab === 'friends' || tab === 'groups' || tab === 'roles') && (
           <DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />
         )}
         right={
           <div className="flex items-center">
-            {tab === 'friends' && !showAddFriend && (
+            {tab === 'friends' && !showAddFriend && (!isBusiness || canAddTeam) && (
               <button onClick={() => setShowAddFriend(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
-                <UserPlus size={20} className="text-zinc-600" />
+                <UserPlus size={20} />
               </button>
             )}
-            {tab === 'groups' && (
+            {tab === 'groups' && (!isBusiness || canAddWS) && (
               <button onClick={() => openGroupAdd.current?.()} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
-                <Plus size={20} className="text-zinc-600" />
+                <Plus size={20} />
+              </button>
+            )}
+            {tab === 'roles' && canAddRole && (
+              <button onClick={() => openRoleAdd.current?.()} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
+                <Plus size={20} />
               </button>
             )}
           </div>
@@ -1761,20 +2579,23 @@ export default function Settings() {
                         md:static md:top-auto md:bg-transparent md:px-0 md:py-0 md:mb-4">
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
           <PageActions add={
-            tab === 'friends' && !showAddFriend
+            tab === 'friends' && !showAddFriend && (!isBusiness || canAddTeam)
               ? <Button size="sm" onClick={() => setShowAddFriend(true)}><UserPlus size={15} /> {isBusiness ? 'Add colleague' : 'Add friend'}</Button>
-              : tab === 'groups'
+              : tab === 'groups' && (!isBusiness || canAddWS)
               ? <Button size="sm" onClick={() => openGroupAdd.current?.()}><Plus size={15} /> {isBusiness ? 'New workspace' : 'New group'}</Button>
+              : tab === 'roles' && canAddRole
+              ? <Button size="sm" onClick={() => openRoleAdd.current?.()}><Plus size={15} /> New role</Button>
               : null
           } />
         </div>
 
         {/* Content — scrolls internally on desktop, naturally on mobile */}
         <div className="px-4 pb-5 md:px-0 md:pb-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col">
-          {tab === 'profile'   && <ProfileTab isBusiness={isBusiness} />}
-          {tab === 'friends'   && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} />}
-          {tab === 'groups'    && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} />}
-          {tab === 'configuration' && <ConfigurationTab />}
+          {tab === 'profile'       && <ProfileTab isBusiness={isBusiness} />}
+          {tab === 'friends'       && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} canEdit={!isBusiness || canEditTeam} canDelete={!isBusiness || canDeleteTeam} />}
+          {tab === 'groups'        && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} canEdit={!isBusiness || canEditWS} canDelete={!isBusiness || canDeleteWS} />}
+          {tab === 'roles'         && <RolesTab openAddRef={openRoleAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} canEdit={canEditRole} canDelete={canDeleteRole} />}
+          {tab === 'configuration' && <ConfigurationTab canEdit={!isBusiness || canEditConfig} />}
         </div>
       </div>
     </>

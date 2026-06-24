@@ -21,8 +21,9 @@ import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import ProductPicker from '../components/features/ProductPicker'
 import Tabs from '../components/ui/Tabs'
+import { usePermission } from '../hooks/usePermission'
 
-const TABS = [
+const ALL_TABS = [
   { key: 'so',        label: 'Sales Orders', mobileLabel: 'Sales Order'       },
   { key: 'delivery',  label: 'Delivery',     mobileLabel: 'Delivery' },
   { key: 'invoices',  label: 'Invoices',     mobileLabel: 'Invoices' },
@@ -1483,16 +1484,34 @@ export default function Sales() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const onAddRef = useRef(null)
 
-  const hasFilters = ['so', 'delivery', 'invoices', 'customers'].includes(tab)
-  const hasAdd     = ['so', 'delivery', 'invoices', 'customers'].includes(tab)
+  const canSeeSO        = usePermission('sales_orders', 'so',        'view')
+  const canSeeDelivery  = usePermission('sales_orders', 'delivery',  'view')
+  const canSeeInvoices  = usePermission('sales_orders', 'so_inv',    'view')
+  const canSeeCustomers = usePermission('sales_orders', 'customers', 'view')
+  const canAddSO        = usePermission('sales_orders', 'so',        'add')
+  const canAddDelivery  = usePermission('sales_orders', 'delivery',  'add')
+  const canAddInvoices  = usePermission('sales_orders', 'so_inv',    'add')
+  const canAddCustomers = usePermission('sales_orders', 'customers', 'add')
 
-  const addBtn = tab === 'so'
+  const TABS = ALL_TABS.filter((t) => {
+    if (t.key === 'so')        return canSeeSO
+    if (t.key === 'delivery')  return canSeeDelivery
+    if (t.key === 'invoices')  return canSeeInvoices
+    if (t.key === 'customers') return canSeeCustomers
+    return true
+  })
+
+  const hasFilters = ['so', 'delivery', 'invoices', 'customers'].includes(tab)
+  const hasAdd     = (tab === 'so' && canAddSO) || (tab === 'delivery' && canAddDelivery) ||
+                     (tab === 'invoices' && canAddInvoices) || (tab === 'customers' && canAddCustomers)
+
+  const addBtn = tab === 'so' && canAddSO
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create SO</Button>
-    : tab === 'delivery'
+    : tab === 'delivery' && canAddDelivery
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create Delivery</Button>
-    : tab === 'invoices'
+    : tab === 'invoices' && canAddInvoices
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create Invoice</Button>
-    : tab === 'customers'
+    : tab === 'customers' && canAddCustomers
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Add Customer</Button>
     : null
 
@@ -1520,7 +1539,7 @@ export default function Sales() {
 
       <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         <div className="flex items-center gap-3 flex-shrink-0 py-2 md:py-0 md:mb-4 md:justify-between">
-          <Tabs tabs={TABS} active={tab} onChange={setTab} />
+          <Tabs tabs={TABS} active={tab} onChange={(key) => { if (TABS.find(t => t.key === key)) setTab(key) }} />
           <PageActions add={addBtn} />
         </div>
 

@@ -31,6 +31,7 @@ import { useCategories } from '../hooks/useCategories'
 import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import { useIsBusiness } from '../hooks/useActiveGroupType'
+import { usePermission } from '../hooks/usePermission'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays, parseISO } from 'date-fns'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -1818,7 +1819,22 @@ export default function Finance() {
   const { data: me } = useMe()
   const { data: groups } = useGroups()
   const isBusiness = useIsBusiness()
-  const TABS = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
+
+  const canSeeOverview      = usePermission('finance', 'overview',     'view')
+  const canSeeTransactions  = usePermission('finance', 'transactions', 'view')
+  const canSeeBudgets       = usePermission('finance', 'budget',       'view')
+  const canSeeAPAR          = usePermission('finance', 'ap_ar',        'view')
+  const canAddTransactions  = usePermission('finance', 'transactions', 'add')
+  const canAddBudgets       = usePermission('finance', 'budget',       'add')
+
+  const TABS = (isBusiness ? BUSINESS_TABS : PERSONAL_TABS).filter((t) => {
+    if (!isBusiness) return true
+    if (t.key === 'overview')      return canSeeOverview
+    if (t.key === 'transactions')  return canSeeTransactions
+    if (t.key === 'budgets')       return canSeeBudgets
+    if (t.key === 'debts')         return canSeeAPAR
+    return true
+  })
   const { data: categories = [] } = useCategories()
 
   const symbol = useCurrencySymbol()
@@ -1842,12 +1858,12 @@ export default function Finance() {
         )}
         right={
           <div className="flex items-center">
-            {tab === 'transactions' && (
+            {tab === 'transactions' && canAddTransactions && (
               <button onClick={() => setShowAddTxn(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <Plus size={20} className="text-zinc-600" />
               </button>
             )}
-            {tab === 'budgets' && (
+            {tab === 'budgets' && canAddBudgets && (
               <button onClick={() => setShowAddBudget(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
                 <Plus size={20} className="text-zinc-600" />
               </button>
@@ -1863,8 +1879,8 @@ export default function Finance() {
         >
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
           <PageActions add={
-            tab === 'transactions' ? <Button size="sm" onClick={() => setShowAddTxn(true)}><Plus size={15} /> Add</Button>
-            : tab === 'budgets' ? <Button size="sm" onClick={() => setShowAddBudget(true)}><Plus size={15} /> New Budget</Button>
+            tab === 'transactions' && canAddTransactions ? <Button size="sm" onClick={() => setShowAddTxn(true)}><Plus size={15} /> Add</Button>
+            : tab === 'budgets' && canAddBudgets ? <Button size="sm" onClick={() => setShowAddBudget(true)}><Plus size={15} /> New Budget</Button>
             : null
           } />
         </div>

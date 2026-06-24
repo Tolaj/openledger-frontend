@@ -29,6 +29,7 @@ import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import useWishlistStore from '../store/wishlistStore'
 import { useGroup, useGroups } from '../hooks/useGroups'
+import { usePermission } from '../hooks/usePermission'
 
 // ── InlineNumber — click to edit ─────────────────────────────────────────────
 function InlineNumber({ value, onCommit, format = (v) => v }) {
@@ -140,7 +141,7 @@ function SplitDropdown({ members = [], splitAmong, onChange }) {
 }
 
 // ── Products List tab ─────────────────────────────────────────────────────────
-function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness }) {
+function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness, canEdit = true, canDelete = true, canCart = true }) {
   const { addItem, items } = useCartStore()
   const sym = useCurrencySymbol()
   const [qty, setQty] = useState({})
@@ -244,15 +245,15 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                   </div>
                 </div>
                 <div className="flex gap-0 flex-shrink-0" >
-                  <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                  {canCart && <button onClick={() => addItem({ ...p, price }, unit, 'equal', split, groupMembers)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <ShoppingBasket size={17} />
-                  </button>
-                  <button onClick={() => onEdit(p)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                  </button>}
+                  {canEdit && <button onClick={() => onEdit(p)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <Pencil size={17} />
-                  </button>
-                  <button onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+                  </button>}
+                  {canDelete && <button onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
                     <Trash2 size={17} />
-                  </button>
+                  </button>}
                   <button onClick={() => toggleExpand(p._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
                     <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
                   </button>
@@ -383,13 +384,15 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
             {/* actions */}
             <td className="px-4 py-3">
               <div className="flex items-center gap-1.5 whitespace-nowrap">
-                <button
-                  onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
-                  className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
-                  title="Add to cart"
-                >
-                  <ShoppingBasket size={14} />
-                </button>
+                {canCart && (
+                  <button
+                    onClick={() => addItem({ ...p, price: getPrice(p) }, p.unit, 'equal', getSplit(p), groupMembers)}
+                    className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700"
+                    title="Add to cart"
+                  >
+                    <ShoppingBasket size={14} />
+                  </button>
+                )}
                 <button
                   onClick={() => setDetailProduct(p)}
                   className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
@@ -397,20 +400,24 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
                 >
                   <ClipboardList size={14} />
                 </button>
-                <button
-                  onClick={() => onEdit(p)}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
-                  title="Edit"
-                >
-                  <Pencil size={14} />
-                </button>
-                <button
-                  onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"
-                  title="Delete"
-                >
-                  <Trash2 size={14} />
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => onEdit(p)}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"
+                    title="Edit"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => { if (confirm(`Delete "${p.name}"?`)) onDelete(p._id) }}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
             </td>
           </tr>
@@ -463,7 +470,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
 }
 
 // ── Category tab ──────────────────────────────────────────────────────────────
-function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange }) {
+function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange, canEdit = true, canDelete = true }) {
   const [filters, setFilters] = useState({ name: '' })
   const [dropSel, setDropSel] = useState({})
   const [expanded, setExpanded] = useState({})
@@ -509,12 +516,12 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFi
                   <p className="text-xs text-zinc-400 mt-0.5">{productCount} products</p>
                 </div>
                 <div className="flex gap-0 flex-shrink-0" >
-                  <button onClick={() => onEdit(c)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
+                  {canEdit && <button onClick={() => onEdit(c)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700">
                     <Pencil size={17} />
-                  </button>
-                  <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
+                  </button>}
+                  {canDelete && <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
                     <Trash2 size={17} />
-                  </button>
+                  </button>}
                   <button onClick={() => toggleExpand(c._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100">
                     <ChevronDown size={17} className={`transition-transform ${isOpen ? '' : '-rotate-90'}`} />
                   </button>
@@ -579,12 +586,12 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFi
               <td className="px-4 py-3 border-r border-zinc-100 text-zinc-700">{productCount}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => onEdit(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit">
+                  {canEdit && <button onClick={() => onEdit(c)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit">
                     <Pencil size={14} />
-                  </button>
-                  <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
+                  </button>}
+                  {canDelete && <button onClick={() => { if (confirm(`Delete "${c.name}"?`)) onDelete(c._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
                     <Trash2 size={14} />
-                  </button>
+                  </button>}
                 </div>
               </td>
             </tr>
@@ -1730,13 +1737,38 @@ export default function Products() {
   const { data: groups = [] } = useGroups()
   const activeGroup = groups.find(g => g._id === activeGroupId)
   const isBusiness = activeGroup?.type === 'business'
-  const TABS = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
+
+  // Tab-level permissions
+  const canSeeProducts = usePermission('products', 'products', 'view')
+  const canSeeCategory = usePermission('products', 'category', 'view')
+  const canSeeWishlist = usePermission('products', 'wishlist', 'view')
+  const canSeeOrders   = usePermission('products', 'orders',   'view')
+
+  const canAddProduct  = usePermission('products', 'products', 'add')
+  const canEditProduct = usePermission('products', 'products', 'edit')
+  const canDelProduct  = usePermission('products', 'products', 'delete')
+  const canCartProduct = usePermission('products', 'products', 'cart')
+
+  const canAddCategory = usePermission('products', 'category', 'add')
+  const canEditCategory = usePermission('products', 'category', 'edit')
+  const canDelCategory  = usePermission('products', 'category', 'delete')
+
+  const TABS = (isBusiness ? BUSINESS_TABS : PERSONAL_TABS).filter((t) => {
+    if (!isBusiness) return true
+    if (t.key === 'products') return canSeeProducts
+    if (t.key === 'category') return canSeeCategory
+    if (t.key === 'wishlist') return canSeeWishlist
+    if (t.key === 'orders')   return canSeeOrders
+    return true
+  })
 
   const [tab, setTab] = useState('products')
-  // Reset to products tab when switching group type
+  // Reset to first visible tab when switching group type or permissions change
   useEffect(() => {
-    setTab('products')
-  }, [isBusiness])
+    if (TABS.length > 0 && !TABS.find((t) => t.key === tab)) {
+      setTab(TABS[0].key)
+    }
+  }, [isBusiness, canSeeProducts, canSeeCategory, canSeeWishlist, canSeeOrders])
   const [productSheet, setProductSheet] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
   const [categorySheet, setCategorySheet] = useState(false)
@@ -1747,13 +1779,13 @@ export default function Products() {
   const openAddCategory = useCallback(() => { setEditingCategory(null); setCategorySheet(true) }, [])
   const openEditCategory = (c) => { setEditingCategory(c); setCategorySheet(true) }
 
-  const addBtn = tab === 'products'
+  const addBtn = tab === 'products' && canAddProduct
     ? <Button size="sm" onClick={openAddProduct}><Plus size={16} /> Add product</Button>
-    : tab === 'category'
+    : tab === 'category' && canAddCategory
       ? <Button size="sm" onClick={openAddCategory}><Plus size={16} /> Add category</Button>
       : null
 
-  const mobileAddFn = tab === 'products' ? openAddProduct : tab === 'category' ? openAddCategory : null
+  const mobileAddFn = (tab === 'products' && canAddProduct) ? openAddProduct : (tab === 'category' && canAddCategory) ? openAddCategory : null
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   return (
@@ -1787,6 +1819,9 @@ export default function Products() {
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
               isBusiness={isBusiness}
+              canEdit={canEditProduct}
+              canDelete={canDelProduct}
+              canCart={canCartProduct}
             />
           )}
 
@@ -1799,6 +1834,8 @@ export default function Products() {
               onDelete={(id) => deleteCategory(id)}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
+              canEdit={canEditCategory}
+              canDelete={canDelCategory}
             />
           )}
 

@@ -22,8 +22,9 @@ import { getGeneralInvoicePDF } from '../api/generalInvoices'
 import { useRecurring, useCreateRecurring, useUpdateRecurring, useDeleteRecurring } from '../hooks/useRecurring'
 import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
+import { usePermission } from '../hooks/usePermission'
 
-const TABS = [
+const ALL_TABS = [
   { key: 'orders',    label: 'Orders',     icon: FileText  },
   { key: 'invoices',  label: 'Invoices',   icon: FileText  },
   { key: 'recipients',label: 'Recipients', icon: Users     },
@@ -1190,11 +1191,28 @@ export default function General() {
   const { data: orders = [] }     = useGeneralOrders()
   const { data: products = [] }   = useProducts()
 
+  const canSeeOrders     = usePermission('general_orders', 'gen_orders',  'view')
+  const canSeeInvoices   = usePermission('general_orders', 'gen_invoices','view')
+  const canSeeRecipients = usePermission('general_orders', 'recipients',  'view')
+  const canSeeRecurring  = usePermission('general_orders', 'recurring',   'view')
+  const canAddOrders     = usePermission('general_orders', 'gen_orders',  'add')
+  const canAddInvoices   = usePermission('general_orders', 'gen_invoices','add')
+  const canAddRecipients = usePermission('general_orders', 'recipients',  'add')
+  const canAddRecurring  = usePermission('general_orders', 'recurring',   'add')
+
+  const TABS = ALL_TABS.filter((t) => {
+    if (t.key === 'orders')     return canSeeOrders
+    if (t.key === 'invoices')   return canSeeInvoices
+    if (t.key === 'recipients') return canSeeRecipients
+    if (t.key === 'recurring')  return canSeeRecurring
+    return true
+  })
+
   const addBtn =
-    tab === 'orders'     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create GO</Button>
-    : tab === 'invoices'  ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create Invoice</Button>
-    : tab === 'recipients'? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Add Recipient</Button>
-    : tab === 'recurring' ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Add Recurring</Button>
+    tab === 'orders'      && canAddOrders     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create GO</Button>
+    : tab === 'invoices'  && canAddInvoices   ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Create Invoice</Button>
+    : tab === 'recipients'&& canAddRecipients ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Add Recipient</Button>
+    : tab === 'recurring' && canAddRecurring  ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> Add Recurring</Button>
     : null
 
   const renderTab = () => {
@@ -1212,11 +1230,11 @@ export default function General() {
       <TopBar
         title="General"
         filterIcon={<DataTableFilterIcon open={mobileFiltersOpen} onChange={setMobileFiltersOpen} />}
-        right={
+        right={addBtn && (
           <button onClick={() => onAddRef.current?.()} className="p-2 rounded-xl active:bg-zinc-100">
             <Plus size={20} />
           </button>
-        }
+        )}
       />
 
       <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
