@@ -25,10 +25,18 @@ import Sales from './pages/Sales'
 import General from './pages/General'
 import Stock from './pages/Stock'
 
+/** True when running as an installed PWA (standalone window, no browser chrome) */
+const isPwa = () =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  window.navigator.standalone === true
+
 function LandingOrDashboard() {
   const { user, isLoading } = useAuthStore()
   if (isLoading) return null
-  return user ? <Navigate to="/dashboard" replace /> : <Landing />
+  if (user) return <Navigate to="/dashboard" replace />
+  // In PWA mode skip the marketing landing page — go straight to login
+  if (isPwa()) return <Navigate to="/login" replace />
+  return <Landing />
 }
 
 function SessionLoader({ children }) {
