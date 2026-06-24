@@ -39,6 +39,16 @@ function LandingOrDashboard() {
   return <Landing />
 }
 
+/** Dynamically update the theme-color meta tag so the status bar matches the page bg */
+function ThemeColorSync() {
+  const { user } = useAuthStore()
+  useEffect(() => {
+    const color = user ? '#f5f5f5' : '#ffffff'
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
+  }, [user])
+  return null
+}
+
 function SessionLoader({ children }) {
   const { setSession, clearSession } = useAuthStore()
   const { initGroup } = useGroupStore()
@@ -66,6 +76,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SessionLoader>
+          <ThemeColorSync />
           <InstallPrompt />
           <Toaster />
           <Routes>
