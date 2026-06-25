@@ -8,7 +8,15 @@ import BottomSheet from '../ui/BottomSheet'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
 
-const UNITS = ['kg', 'g', 'L', 'mL', 'pcs', 'pack', 'dozen', 'box']
+const UNITS = [
+  'pcs', 'pair', 'set', 'pack', 'box', 'carton', 'dozen', 'tray', 'roll', 'ream', 'bag', 'bundle', 'bunch', 'loaf', 'jar', 'tube', 'bottle', 'can', 'cylinder', 'sheet', 'pad',
+  'kg', 'g', 'mg', 'mt',
+  'ltr', 'mL',
+  'mtr', 'cm', 'ft', 'cft',
+  'hr', 'min', 'day', 'month', 'year',
+  'project', 'shipment', 'trip', 'night',
+  'unit',
+]
 
 export default function ProductForm({ open, onClose, editing }) {
   const formId = useId()

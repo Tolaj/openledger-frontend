@@ -198,7 +198,15 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
   // ── Mobile: expandable cards ───────────────────────────────────────────────
   const toggleExpand = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }))
 
-  const UNITS = ['kg', 'g', 'L', 'mL', 'pcs', 'pack', 'dozen', 'box']
+  const UNITS = [
+    'pcs', 'pair', 'set', 'pack', 'box', 'carton', 'dozen', 'tray', 'roll', 'ream', 'bag', 'bundle', 'bunch', 'loaf', 'jar', 'tube', 'bottle', 'can', 'cylinder', 'sheet', 'pad',
+    'kg', 'g', 'mg', 'mt',
+    'ltr', 'mL',
+    'mtr', 'cm', 'ft', 'cft',
+    'hr', 'min', 'day', 'month', 'year',
+    'project', 'shipment', 'trip', 'night',
+    'unit',
+  ]
   const getUnit = (p) => mobileUnits[p._id] ?? p.unit
   const cycleUnit = (p, dir) => {
     const cur = getUnit(p)
