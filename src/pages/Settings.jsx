@@ -1139,6 +1139,25 @@ function ConfigurationTab({ canEdit = true }) {
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoError, setLogoError] = useState('')
   const [previewTemplate, setPreviewTemplate] = useState(null)
+  const [docTypeTab, setDocTypeTab] = useState('invoice')
+  const templateGridRef = useRef(null)
+  const [thumbScale, setThumbScale] = useState(0.19)
+
+  useEffect(() => {
+    const el = templateGridRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.offsetWidth
+      if (!w) return
+      const cols = w >= 640 ? 3 : 2
+      const cardWidth = (w - (cols - 1) * 8) / cols
+      setThumbScale(cardWidth / 794)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     if (activeGroup) {
@@ -1146,6 +1165,7 @@ function ConfigurationTab({ canEdit = true }) {
       setBiz({
         legalName: d.legalName || '', logo: d.logo || '',
         template: d.template || 'classic', color: d.color || 'forest',
+        orderTemplate: d.orderTemplate || 'classic',
         gstin: d.gstin || '', pan: d.pan || '',
         email: d.email || '', phone: d.phone || '',
         website: d.website || '',
@@ -1418,41 +1438,67 @@ function ConfigurationTab({ canEdit = true }) {
               {/* Template grid */}
               <div>
                 <label className={labelCls}>Layout</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {/* Doc-type tabs */}
+                <div className="flex gap-1 mb-3 bg-zinc-100 p-1 rounded-xl">
                   {[
-                    { key: 'classic',   label: 'Prestige',  desc: 'Double-ruled authority'     },
-                    { key: 'modern',    label: 'Vantage',   desc: 'Left-rail, sharp lines'     },
-                    { key: 'minimal',   label: 'Lumina',    desc: 'Open space, premium white'  },
-                    { key: 'executive', label: 'Apex',      desc: 'Color header, C-suite feel' },
-                    { key: 'bold',      label: 'Titan',     desc: 'Heavy weight, commanding'   },
-                    { key: 'elegant',   label: 'Opulent',   desc: 'Warm tones, refined luxury' },
-                    { key: 'retro',     label: 'Cipher',    desc: 'Monospace, technical edge'  },
-                    { key: 'compact',   label: 'Meridian',  desc: 'Dense layout, high volume'  },
-                    { key: 'stripe',    label: 'Atlas',     desc: 'Split panel, global grade'  },
-                    { key: 'bureau',    label: 'Axiom',     desc: 'Centered, formal authority' },
-                  ].map((t) => {
-                    const active = (biz.template || 'classic') === t.key
-                    return (
-                      <div key={t.key} className={`rounded-xl border-2 overflow-hidden transition-all ${active ? 'border-zinc-900 shadow-sm' : 'border-zinc-100 hover:border-zinc-200'} ${!canEdit ? 'opacity-60' : ''}`}>
-                        <button disabled={!canEdit}
-                          onClick={() => { setBiz((b) => ({ ...b, template: t.key })); updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, template: t.key } } }) }}
-                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left disabled:cursor-not-allowed">
-                          <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${active ? 'border-zinc-900' : 'border-zinc-300'}`}>
-                            {active && <div className="w-2 h-2 rounded-full bg-zinc-900" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-zinc-900">{t.label}</p>
-                            <p className="text-[10px] text-zinc-400 truncate mt-0.5">{t.desc}</p>
-                          </div>
-                        </button>
-                        <button onClick={() => setPreviewTemplate(t.key)}
-                          className="w-full border-t border-zinc-100 text-[10px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-colors py-1.5">
-                          Preview →
-                        </button>
-                      </div>
-                    )
-                  })}
+                    { key: 'invoice', label: 'Invoice' },
+                    { key: 'order',   label: 'Order'   },
+                  ].map(({ key, label }) => (
+                    <button key={key} onClick={() => setDocTypeTab(key)}
+                      className={`flex-1 text-[11px] font-medium py-1.5 rounded-lg transition-colors ${docTypeTab === key ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
+                {(() => {
+                  const field = docTypeTab === 'order' ? 'orderTemplate' : 'template'
+                  const docLabel = docTypeTab === 'order' ? 'Sales Order' : 'Sales Invoice'
+                  return (
+                    <div ref={templateGridRef} className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {[
+                        { key: 'classic',   label: 'Prestige'  },
+                        { key: 'modern',    label: 'Vantage'   },
+                        { key: 'minimal',   label: 'Lumina'    },
+                        { key: 'executive', label: 'Apex'      },
+                        { key: 'bold',      label: 'Titan'     },
+                        { key: 'elegant',   label: 'Opulent'   },
+                        { key: 'retro',     label: 'Cipher'    },
+                        { key: 'compact',   label: 'Meridian'  },
+                        { key: 'stripe',    label: 'Atlas'     },
+                        { key: 'bureau',    label: 'Axiom'     },
+                      ].map((t) => {
+                        const active = (biz[field] || 'classic') === t.key
+                        return (
+                          <div key={t.key} onClick={() => {
+                            if (!canEdit) return
+                            setBiz((b) => ({ ...b, [field]: t.key }))
+                            updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, [field]: t.key } } })
+                          }} className={`rounded-xl border-2 overflow-hidden transition-all cursor-pointer ${active ? 'border-zinc-900 shadow-md' : 'border-zinc-100 hover:border-zinc-300'} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                            {/* Mini thumbnail */}
+                            <div style={{ width: '100%', aspectRatio: '794 / 1123', overflow: 'hidden', position: 'relative', background: '#fff' }}>
+                              <iframe
+                                srcDoc={buildTemplatePreview(t.key, biz, biz.color, docLabel)}
+                                style={{ position: 'absolute', top: 0, left: 0, width: '794px', height: '1123px', transform: `scale(${thumbScale})`, transformOrigin: 'top left', border: 'none', pointerEvents: 'none' }}
+                                title={t.label}
+                              />
+                            </div>
+                            {/* Label row */}
+                            <div className={`flex items-center justify-between px-2.5 py-2 border-t ${active ? 'border-zinc-200 bg-zinc-50' : 'border-zinc-100'}`}>
+                              <span className="text-[11px] font-semibold text-zinc-800">{t.label}</span>
+                              <div className="flex items-center gap-1.5">
+                                {active && <div className="w-2 h-2 rounded-full bg-zinc-900" />}
+                                <button onClick={(e) => { e.stopPropagation(); setPreviewTemplate(t.key) }}
+                                  className="text-[10px] text-zinc-400 hover:text-zinc-600 transition-colors">
+                                  Preview →
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           )}
@@ -1959,7 +2005,7 @@ function getPreviewCSS(t, c) {
   .footer { border-top: 1px solid #e5e7eb; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }`
 }
 
-function buildTemplatePreview(template, biz = {}, colorKey = 'forest') {
+function buildTemplatePreview(template, biz = {}, colorKey = 'forest', docLabel = 'Sales Invoice') {
   const t   = template || 'classic'
   const c   = PREVIEW_COLOR_THEMES[colorKey] || PREVIEW_COLOR_THEMES.forest
   const css = getPreviewCSS(t, c)
@@ -2009,7 +2055,7 @@ function buildTemplatePreview(template, biz = {}, colorKey = 'forest') {
   <div class="doc-header">
     <div class="brand" style="display:flex;align-items:center;gap:16px;">
       ${logoHtml}
-      <div>${co}<span>Sales Invoice</span></div>
+      <div>${co}<span>${docLabel}</span></div>
     </div>
     <div class="doc-meta">
       <div class="doc-number">INV-2024-0892</div>
