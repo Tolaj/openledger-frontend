@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   LogOut, Users, UserPlus, Check, X, Trash2, Plus,
   Filter, ChevronDown, Pencil, LayoutTemplate, Home, Briefcase,
-  ShieldCheck, Eye, PencilLine, PlusCircle, Trash,
+  ShieldCheck, Eye, PencilLine, PlusCircle, Trash, User,
 } from 'lucide-react'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import Tabs from '../components/ui/Tabs'
@@ -1613,30 +1613,12 @@ function ConfigurationTab({ canEdit = true }) {
 
       {/* Template preview modal */}
       {previewTemplate && createPortal(
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm">
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 text-white flex-shrink-0">
-            <button onClick={() => setPreviewTemplate(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-base leading-none">✕</button>
-            <div className="flex-1 overflow-x-auto scrollbar-none">
-              <div className="flex gap-1 pr-1" style={{ width: 'max-content' }}>
-                {[
-                  {key:'classic',label:'Prestige'},{key:'modern',label:'Vantage'},{key:'minimal',label:'Lumina'},
-                  {key:'executive',label:'Apex'},{key:'bold',label:'Titan'},{key:'elegant',label:'Opulent'},
-                  {key:'retro',label:'Cipher'},{key:'compact',label:'Meridian'},{key:'stripe',label:'Atlas'},{key:'bureau',label:'Axiom'},
-                ].map(({key,label}) => (
-                  <button key={key} onClick={() => setPreviewTemplate(key)}
-                    className={`text-xs px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${previewTemplate === key ? 'bg-white text-zinc-900 font-semibold' : 'text-zinc-400 hover:text-white'}`}>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="flex-1 overflow-hidden p-3 flex justify-center" onClick={() => setPreviewTemplate(null)}>
-            <iframe key={previewTemplate} srcDoc={buildTemplatePreview(previewTemplate, biz, biz.color)}
-              className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-zinc-200"
-              style={{ height: '100%' }} title="Invoice preview" onClick={(e) => e.stopPropagation()} />
-          </div>
-        </div>,
+        <PreviewModal
+          template={previewTemplate}
+          biz={biz}
+          onClose={() => setPreviewTemplate(null)}
+          onSelect={setPreviewTemplate}
+        />,
         document.body
       )}
     </div>
@@ -1653,565 +1635,498 @@ const PREVIEW_COLOR_THEMES = {
   slate:  { accent: '#1e293b', mid: '#334155', light: '#f8fafc', border: '#cbd5e1', badge: '#f1f5f9', badgeText: '#334155' },
 }
 
+// Returns the same CSS as the backend getTemplateStyles — keeps preview and PDF in sync
+function getPreviewCSS(t, c) {
+  const base = `
+  @page { margin: 0; size: A4 portrait; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { width: 794px; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; color: #18181b; background: #fff; width: 794px; }
+  .center { text-align: center; }
+  .right { text-align: right; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  thead th.center { text-align: center; }
+  thead th.right { text-align: right; }
+  tbody td { padding: 10px 12px; font-size: 13px; }
+  tbody td.center { text-align: center; }
+  tbody td.right { text-align: right; font-variant-numeric: tabular-nums; }
+  .totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
+  .totals-box { width: 280px; }
+  .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #f4f4f5; }
+  .notes-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .notes-text { font-size: 13px; line-height: 1.6; }
+  .party-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .party-name { font-size: 15px; font-weight: 600; color: #09090b; margin-bottom: 4px; }
+  .party-detail { font-size: 12px; color: #52525b; line-height: 1.6; }
+  .date-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .date-value { font-size: 13px; font-weight: 600; color: #09090b; }
+  .footer-note { font-size: 11px; color: #a1a1aa; }
+  .brand > div { display: flex; flex-direction: column; }
+  .brand-contact { display: block; font-size: 11px; color: #a1a1aa; margin-top: 3px; font-weight: 400; line-height: 1.5; }`
+
+  if (t === 'modern') return base + `
+  .page { padding: 40px 40px 40px 36px; border-left: 5px solid ${c.mid}; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; }
+  .brand { font-size: 18px; font-weight: 700; color: #09090b; }
+  .brand span { display: block; font-size: 11px; font-weight: 400; color: #a1a1aa; margin-top: 2px; }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 32px; font-weight: 700; color: ${c.mid}; letter-spacing: -1.5px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: #a1a1aa; margin-top: 8px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: ${c.badge}; color: ${c.badgeText}; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 3px 8px; border-radius: 4px; }
+  .divider { height: 1px; background: #f4f4f5; margin-bottom: 32px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 28px; }
+  .party-card { padding-left: 14px; border-left: 2px solid ${c.border}; }
+  .party-label { color: ${c.mid}; }
+  .dates { display: flex; gap: 32px; margin-bottom: 28px; }
+  .date-item { padding-left: 14px; border-left: 2px solid ${c.border}; }
+  .date-label { color: ${c.mid}; }
+  thead tr { background: transparent; border-bottom: 2px solid #09090b; }
+  thead th { color: #09090b; }
+  tbody tr { border-bottom: 1px solid #f4f4f5; }
+  tbody td { color: #3f3f46; }
+  .totals-row { color: #71717a; border-bottom: 1px solid #f4f4f5; }
+  .totals-row.grand { font-size: 15px; font-weight: 700; color: ${c.mid}; border-bottom: none; border-top: 2px solid #09090b; padding-top: 10px; }
+  .notes-section { border-left: 2px solid ${c.border}; padding-left: 16px; margin-bottom: 28px; }
+  .notes-label { color: ${c.mid}; }
+  .notes-text { color: #52525b; }
+  .footer { border-top: 1px solid #f4f4f5; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }`
+
+  if (t === 'minimal') return base + `
+  .page { padding: 48px; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+  .brand { font-size: 18px; font-weight: 600; color: #09090b; letter-spacing: -0.3px; }
+  .brand span { display: block; font-size: 11px; font-weight: 400; color: #a1a1aa; letter-spacing: 0; margin-top: 2px; }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 24px; font-weight: 300; color: #09090b; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: #a1a1aa; margin-top: 6px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: ${c.badge}; color: ${c.badgeText}; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 100px; }
+  .divider { height: 1px; background: #f4f4f5; margin-bottom: 36px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; }
+  .party-card { padding: 0; }
+  .party-label { color: #a1a1aa; }
+  .dates { display: flex; gap: 32px; margin-bottom: 32px; }
+  .date-item { padding: 0; }
+  .date-label { color: #a1a1aa; }
+  thead tr { background: transparent; border-bottom: 2px solid #09090b; }
+  thead th { color: #09090b; padding: 8px 12px; }
+  tbody tr { border-bottom: 1px solid #f4f4f5; }
+  tbody td { color: #3f3f46; }
+  .totals-row { color: #71717a; border-bottom: 1px solid #f4f4f5; }
+  .totals-row.grand { font-size: 15px; font-weight: 600; color: ${c.accent}; border-bottom: none; border-top: 1px solid #e4e4e7; padding-top: 12px; }
+  .notes-section { padding: 0; margin-bottom: 28px; }
+  .notes-label { color: #a1a1aa; }
+  .notes-text { color: #52525b; }
+  .footer { border-top: 1px solid #f4f4f5; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }`
+
+  if (t === 'executive') return base + `
+  .page { padding: 0; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 40px; background: ${c.accent}; }
+  .brand { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+  .brand span { display: block; font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.55); margin-top: 2px; }
+  .brand-contact { color: rgba(255,255,255,0.6); }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 24px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 4px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: rgba(255,255,255,0.18); color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 4px; }
+  .body { padding: 32px 40px 40px; }
+  .divider { display: none; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+  .party-card { background: ${c.light}; border: 1px solid ${c.border}; border-radius: 8px; padding: 16px; }
+  .party-label { color: ${c.mid}; }
+  .dates { display: flex; gap: 16px; margin-bottom: 28px; }
+  .date-item { padding: 10px 14px; background: ${c.light}; border: 1px solid ${c.border}; border-radius: 6px; }
+  .date-label { color: ${c.mid}; }
+  thead tr { background: ${c.accent}; color: #fff; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr.even { background: #f9fafb; }
+  tbody td { color: #374151; }
+  .totals-row { color: #6b7280; border-bottom: 1px solid #f4f4f5; }
+  .totals-row.grand { font-size: 15px; font-weight: 700; color: ${c.accent}; border-top: 2px solid ${c.border}; border-bottom: none; padding-top: 10px; }
+  .notes-section { background: ${c.light}; border: 1px solid ${c.border}; border-radius: 8px; padding: 16px; margin-bottom: 32px; }
+  .notes-label { color: ${c.mid}; }
+  .notes-text { color: #4b5563; }
+  .footer { border-top: 1px solid #e5e7eb; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }`
+
+  if (t === 'bold') return base + `
+  .page { padding: 48px; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 20px; border-bottom: 5px solid ${c.accent}; margin-bottom: 32px; }
+  .brand { font-size: 28px; font-weight: 800; color: ${c.accent}; letter-spacing: -1.5px; }
+  .brand span { display: block; font-size: 11px; font-weight: 600; color: #a1a1aa; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 4px; }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 28px; font-weight: 800; color: ${c.accent}; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: #a1a1aa; margin-top: 4px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: ${c.badge}; color: ${c.badgeText}; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 4px; }
+  .divider { display: none; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+  .party-card { padding: 14px 16px; border-left: 4px solid ${c.accent}; background: ${c.light}; }
+  .party-label { color: ${c.mid}; }
+  .dates { display: flex; gap: 20px; margin-bottom: 28px; }
+  .date-item { padding: 10px 14px; border-left: 4px solid ${c.border}; }
+  .date-label { color: #71717a; }
+  thead tr { background: ${c.accent}; color: #fff; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr.even { background: ${c.light}; }
+  tbody td { color: #374151; }
+  .totals-row { color: #6b7280; border-bottom: 1px solid #f4f4f5; }
+  .totals-row.grand { font-size: 15px; font-weight: 800; color: ${c.accent}; border-top: 5px solid ${c.accent}; border-bottom: none; padding-top: 10px; }
+  .notes-section { padding: 14px 16px; border-left: 4px solid ${c.accent}; background: ${c.light}; margin-bottom: 32px; }
+  .notes-label { color: ${c.mid}; }
+  .notes-text { color: #4b5563; }
+  .footer { border-top: 5px solid ${c.accent}; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; }`
+
+  if (t === 'elegant') return base + `
+  body { background: #fdfaf5; }
+  .page { padding: 52px; background: #fdfaf5; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 24px; border-bottom: 1px solid #d6cfc4; }
+  .brand { font-size: 20px; font-weight: 600; color: #1c1917; letter-spacing: -0.3px; }
+  .brand span { display: block; font-size: 11px; font-weight: 400; color: #78716c; margin-top: 3px; letter-spacing: 0.04em; }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 22px; font-weight: 600; color: ${c.accent}; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+  .doc-date { font-size: 11px; color: #78716c; margin-top: 4px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: ${c.badge}; color: ${c.badgeText}; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 100px; }
+  .divider { display: none; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 28px; }
+  .party-card { padding: 16px 18px; background: #fff; border: 1px solid #e7e0d5; border-radius: 6px; }
+  .party-label { color: #78716c; }
+  .dates { display: flex; gap: 20px; margin-bottom: 28px; }
+  .date-item { padding: 10px 14px; background: #fff; border: 1px solid #e7e0d5; border-radius: 6px; }
+  .date-label { color: #78716c; }
+  thead tr { background: #f5ede0; border-bottom: 1px solid #d6cfc4; }
+  thead th { color: #44403c; }
+  tbody tr { border-bottom: 1px solid #ede8e0; }
+  tbody tr.even { background: #faf7f2; }
+  tbody td { color: #44403c; }
+  .totals-row { color: #78716c; border-bottom: 1px solid #ede8e0; }
+  .totals-row.grand { font-size: 15px; font-weight: 600; color: ${c.accent}; border-top: 1px solid #d6cfc4; border-bottom: none; padding-top: 12px; }
+  .notes-section { background: #fff; border: 1px solid #e7e0d5; border-radius: 6px; padding: 16px 18px; margin-bottom: 32px; }
+  .notes-label { color: #78716c; }
+  .notes-text { color: #57534e; }
+  .footer { border-top: 1px solid #d6cfc4; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .footer-note { color: #a8a29e; }`
+
+  if (t === 'retro') return base + `
+  body { font-family: "Courier New", Courier, monospace; background: #fefce8; }
+  .page { padding: 40px; background: #fefce8; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 16px; border-bottom: 2px dashed #a16207; margin-bottom: 24px; }
+  .brand { font-size: 20px; font-weight: 700; color: #1c1917; }
+  .brand span { display: block; font-size: 11px; font-weight: 400; color: #78716c; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 20px; font-weight: 700; color: ${c.accent}; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: #78716c; margin-top: 4px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: transparent; color: ${c.accent}; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 2px 6px; border: 2px dashed ${c.accent}; }
+  .divider { display: none; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+  .party-card { padding: 14px; background: #fff; border: 2px dashed #d6d3d1; }
+  .party-label { color: #a16207; text-decoration: underline; text-underline-offset: 3px; }
+  .dates { display: flex; gap: 16px; margin-bottom: 24px; }
+  .date-item { padding: 10px 12px; background: #fff; border: 2px dashed #d6d3d1; }
+  .date-label { color: #a16207; }
+  thead tr { background: #1c1917; color: #fefce8; }
+  thead th { letter-spacing: 0.1em; }
+  tbody tr { border-bottom: 1px dashed #d6d3d1; }
+  tbody tr.even { background: #fef9c3; }
+  tbody td { color: #292524; }
+  .totals-row { color: #78716c; border-bottom: 1px dashed #d6d3d1; }
+  .totals-row.grand { font-size: 14px; font-weight: 700; color: ${c.accent}; border-top: 2px dashed #a16207; border-bottom: none; padding-top: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .notes-section { background: #fff; border: 2px dashed #d6d3d1; padding: 14px; margin-bottom: 28px; }
+  .notes-label { color: #a16207; text-decoration: underline; text-underline-offset: 3px; }
+  .notes-text { color: #44403c; }
+  .footer { border-top: 2px dashed #a16207; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .footer-note { color: #a8a29e; font-size: 10px; }`
+
+  if (t === 'compact') return base + `
+  body { font-size: 11px; }
+  .page { padding: 28px; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+  .brand { font-size: 16px; font-weight: 700; color: ${c.accent}; letter-spacing: -0.3px; }
+  .brand span { display: block; font-size: 10px; font-weight: 400; color: #9ca3af; margin-top: 1px; }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 16px; font-weight: 700; color: ${c.accent}; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+  .status-badge { display: inline-block; margin-top: 3px; background: ${c.badge}; color: ${c.badgeText}; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 3px; }
+  .divider { display: none; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .party-card { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 4px; }
+  .party-label { font-size: 9px; margin-bottom: 4px; color: #9ca3af; }
+  .party-name { font-size: 12px; margin-bottom: 2px; }
+  .party-detail { font-size: 10px; }
+  .dates { display: flex; gap: 10px; margin-bottom: 14px; }
+  .date-item { padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 4px; }
+  .date-label { font-size: 9px; margin-bottom: 2px; color: #9ca3af; }
+  .date-value { font-size: 11px; }
+  thead th { padding: 7px 10px; font-size: 9px; background: ${c.accent}; color: #fff; }
+  tbody td { padding: 7px 10px; font-size: 11px; color: #374151; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr.even { background: #f9fafb; }
+  .totals { margin-bottom: 16px; }
+  .totals-box { width: 220px; }
+  .totals-row { padding: 4px 0; font-size: 11px; color: #6b7280; border-bottom: 1px solid #f4f4f5; }
+  .totals-row.grand { font-size: 13px; font-weight: 700; color: ${c.accent}; border-top: 1px solid #e5e7eb; border-bottom: none; padding-top: 6px; }
+  .notes-section { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 4px; margin-bottom: 16px; }
+  .notes-label { font-size: 9px; color: #9ca3af; margin-bottom: 4px; }
+  .notes-text { font-size: 11px; color: #4b5563; }
+  .footer { border-top: 1px solid #e5e7eb; padding-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .footer-note { font-size: 10px; }`
+
+  if (t === 'stripe') return base + `
+  .page { padding: 0; }
+  .doc-header { display: flex; justify-content: space-between; align-items: stretch; margin-bottom: 0; }
+  .brand { flex: 1; padding: 36px 40px; background: ${c.accent}; color: #fff; font-size: 22px; font-weight: 700; }
+  .brand > div { flex-direction: column; }
+  .brand span { display: block; font-size: 11px; font-weight: 400; color: rgba(255,255,255,0.55); margin-top: 2px; }
+  .brand-contact { color: rgba(255,255,255,0.6); }
+  .doc-meta { padding: 36px 40px; background: ${c.light}; text-align: right; min-width: 200px; border-bottom: 4px solid ${c.accent}; }
+  .doc-number { font-size: 22px; font-weight: 700; color: ${c.accent}; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: #71717a; margin-top: 4px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: ${c.badge}; color: ${c.badgeText}; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 4px; }
+  .divider { display: none; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px; padding: 0 40px; margin-top: 32px; }
+  .party-card { padding: 16px; border: 1px solid #e5e7eb; border-top: 3px solid ${c.accent}; border-radius: 0 0 8px 8px; }
+  .party-label { color: ${c.mid}; }
+  .dates { display: flex; gap: 16px; margin-bottom: 28px; padding: 0 40px; }
+  .date-item { padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 6px; }
+  .date-label { color: #71717a; }
+  table { margin: 0 40px 24px; width: calc(100% - 80px); }
+  .totals { padding: 0 40px; margin-bottom: 32px; }
+  .totals-row { color: #6b7280; border-bottom: 1px solid #f4f4f5; }
+  .totals-row.grand { font-size: 15px; font-weight: 700; color: ${c.accent}; border-top: 2px solid ${c.accent}; border-bottom: none; padding-top: 10px; }
+  thead tr { background: ${c.accent}; color: #fff; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr.even { background: #f9fafb; }
+  tbody td { color: #374151; }
+  .notes-section { margin: 0 40px 28px; padding: 14px; border: 1px solid #e5e7eb; border-top: 3px solid ${c.accent}; }
+  .notes-label { color: ${c.mid}; }
+  .notes-text { color: #4b5563; }
+  .footer { border-top: 1px solid #e5e7eb; padding: 14px 40px; display: flex; justify-content: space-between; align-items: center; }`
+
+  if (t === 'bureau') return base + `
+  .page { padding: 40px 48px; }
+  .doc-header { display: flex; flex-direction: column; align-items: center; text-align: center; padding-bottom: 20px; border-top: 4px double ${c.accent}; border-bottom: 4px double ${c.accent}; padding-top: 20px; margin-bottom: 28px; }
+  .brand { font-size: 22px; font-weight: 700; color: ${c.accent}; letter-spacing: -0.5px; text-align: center; display: flex !important; flex-direction: column !important; align-items: center; gap: 8px; }
+  .brand > div { align-items: center; }
+  .brand span { display: block; font-size: 12px; font-weight: 600; color: #6b7280; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+  .doc-meta { text-align: center; margin-top: 12px; }
+  .doc-number { font-size: 18px; font-weight: 700; color: #1c1917; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: ${c.badge}; color: ${c.badgeText}; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; }
+  .divider { display: none; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 24px; border-bottom: 1px solid #e5e7eb; padding-bottom: 24px; }
+  .party-card { padding: 0; }
+  .party-label { color: ${c.mid}; border-bottom: 1px solid ${c.border}; padding-bottom: 4px; margin-bottom: 10px; }
+  .dates { display: flex; gap: 0; margin-bottom: 28px; border-bottom: 1px solid #e5e7eb; padding-bottom: 20px; }
+  .date-item { flex: 1; padding: 0 16px 0 0; border-right: 1px solid #e5e7eb; margin-right: 16px; }
+  .date-item:last-child { border-right: none; margin-right: 0; }
+  .date-label { color: ${c.mid}; }
+  thead tr { background: transparent; border-top: 2px solid ${c.accent}; border-bottom: 2px solid ${c.accent}; }
+  thead th { color: ${c.accent}; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr.even { background: ${c.light}; }
+  tbody td { color: #374151; }
+  .totals-row { color: #6b7280; border-bottom: 1px solid #f4f4f5; }
+  .totals-row.grand { font-size: 15px; font-weight: 700; color: ${c.accent}; border-top: 2px solid ${c.accent}; border-bottom: 2px solid ${c.accent}; padding-top: 8px; padding-bottom: 8px; }
+  .notes-section { padding: 14px; border: 1px solid #e5e7eb; margin-bottom: 28px; }
+  .notes-label { color: ${c.mid}; }
+  .notes-text { color: #4b5563; }
+  .footer { border-top: 4px double ${c.accent}; padding-top: 14px; display: flex; justify-content: space-between; align-items: center; }`
+
+  // classic (default)
+  return base + `
+  .page { padding: 40px; }
+  .doc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }
+  .brand { font-size: 22px; font-weight: 700; color: ${c.accent}; letter-spacing: -0.5px; }
+  .brand span { display: block; font-size: 11px; font-weight: 500; color: #a1a1aa; letter-spacing: 0; margin-top: 2px; }
+  .doc-meta { text-align: right; }
+  .doc-number { font-size: 20px; font-weight: 700; color: ${c.accent}; font-variant-numeric: tabular-nums; }
+  .doc-date { font-size: 11px; color: #a1a1aa; margin-top: 4px; }
+  .status-badge { display: inline-block; margin-top: 6px; background: ${c.badge}; color: ${c.badgeText}; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 4px; }
+  .divider { margin-bottom: 28px; border: none; border-top: 3px double ${c.border}; padding-top: 3px; border-bottom: 1px solid ${c.border}; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px; }
+  .party-card { background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 16px; }
+  .party-label { color: #6b7280; }
+  .dates { display: flex; gap: 20px; margin-bottom: 28px; }
+  .date-item { background: #fff; border: 1px solid #d1d5db; border-radius: 8px; padding: 12px 16px; }
+  .date-label { color: #6b7280; }
+  thead tr { background: ${c.accent}; color: #fff; }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr.even { background: #f9fafb; }
+  tbody td { color: #374151; }
+  .totals-row { color: #6b7280; }
+  .totals-row.grand { font-size: 15px; font-weight: 700; color: ${c.accent}; border-bottom: none; border-top: 1px solid #d1d5db; padding-top: 10px; }
+  .notes-section { background: #f9fafb; border: 1px solid #d1d5db; border-radius: 8px; padding: 16px; margin-bottom: 32px; }
+  .notes-label { color: #6b7280; }
+  .notes-text { color: #4b5563; }
+  .footer { border-top: 1px solid #e5e7eb; padding-top: 16px; display: flex; justify-content: space-between; align-items: center; }`
+}
+
 function buildTemplatePreview(template, biz = {}, colorKey = 'forest') {
   const t   = template || 'classic'
-  const col = PREVIEW_COLOR_THEMES[colorKey] || PREVIEW_COLOR_THEMES.forest
+  const c   = PREVIEW_COLOR_THEMES[colorKey] || PREVIEW_COLOR_THEMES.forest
+  const css = getPreviewCSS(t, c)
+
   const co  = biz.legalName || 'Meridian Capital Group'
   const em  = biz.email    || 'finance@meridian.com'
   const gst = biz.gstin    || '29AABCM1234F1Z3'
-  const ad  = [biz.addressLine1, biz.city].filter(Boolean).join(', ') || '14 Financial District, Mumbai 400 051'
-  const lg  = biz.logo ? `<img src="${biz.logo}" style="height:34px;object-fit:contain;display:block;margin-bottom:5px;">` : ''
+  const ad  = [biz.addressLine1, biz.city, biz.state].filter(Boolean).join(', ') || '14 Financial District, Mumbai 400 051'
 
-  const ff  = `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`
-  const S = '₹19,75,000', TAX = '₹3,55,500', TOT = '₹23,30,500'
+  const needsBody = t === 'modern' || t === 'executive'
+  const bodyOpen  = needsBody ? '<div class="body">' : ''
+  const bodyClose = needsBody ? '</div>' : ''
+  const divider   = needsBody ? '' : '<div class="divider"></div>'
 
-  const rows3 = (bd, alt) => `
-    <tr style="border-bottom:1px solid ${bd};">
-      <td style="padding:11px 14px;font-size:13px;color:#1e293b;">Enterprise Software License<br><span style="font-size:11px;color:#94a3b8;">Annual · FY 2024–25 · 5 users</span></td>
-      <td style="padding:11px 14px;font-size:13px;text-align:center;color:#374151;">5</td>
-      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹2,40,000</td>
-      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹12,00,000</td>
-    </tr>
-    <tr style="border-bottom:1px solid ${bd};${alt ? `background:${alt}` : ''}">
-      <td style="padding:11px 14px;font-size:13px;color:#1e293b;">Implementation &amp; Integration<br><span style="font-size:11px;color:#94a3b8;">Professional Services · 80 hrs</span></td>
-      <td style="padding:11px 14px;font-size:13px;text-align:center;color:#374151;">80 hrs</td>
-      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹8,500</td>
-      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹6,80,000</td>
+  const logoHtml = biz.logo
+    ? `<img src="${biz.logo}" style="height:64px;width:64px;object-fit:contain;border-radius:8px;flex-shrink:0;">`
+    : ''
+
+  const rows = `
+    <tr class="even">
+      <td>Enterprise Software License</td>
+      <td class="center">5 units</td>
+      <td class="right">₹2,40,000</td>
+      <td class="center">18%</td>
+      <td class="right">₹12,00,000</td>
     </tr>
     <tr>
-      <td style="padding:11px 14px;font-size:13px;color:#1e293b;">Priority Support &amp; SLA<br><span style="font-size:11px;color:#94a3b8;">Q3–Q4 2024 · Enterprise Tier</span></td>
-      <td style="padding:11px 14px;font-size:13px;text-align:center;color:#374151;">1</td>
-      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹95,000</td>
-      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹95,000</td>
+      <td>Implementation &amp; Integration</td>
+      <td class="center">80 hrs</td>
+      <td class="right">₹8,500</td>
+      <td class="center">18%</td>
+      <td class="right">₹6,80,000</td>
+    </tr>
+    <tr class="even">
+      <td>Priority Support &amp; SLA</td>
+      <td class="center">1</td>
+      <td class="right">₹95,000</td>
+      <td class="center">18%</td>
+      <td class="right">₹95,000</td>
     </tr>`
 
-  const totalsBlock = (tc, lc, gs) => `
-    <div style="display:flex;justify-content:flex-end;">
-      <div style="width:260px;">
-        <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:${tc};border-bottom:1px solid ${lc}"><span>Subtotal</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:${tc};border-bottom:1px solid ${lc}"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
-        <div style="display:flex;justify-content:space-between;padding:9px 0;${gs}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><style>${css}</style></head>
+<body>
+<div class="page">
+  <div class="doc-header">
+    <div class="brand" style="display:flex;align-items:center;gap:16px;">
+      ${logoHtml}
+      <div>${co}<span>Sales Invoice</span></div>
+    </div>
+    <div class="doc-meta">
+      <div class="doc-number">INV-2024-0892</div>
+      <div class="doc-date">Issued 15 Nov 2024</div>
+      <span class="status-badge">paid</span>
+    </div>
+  </div>
+  ${bodyOpen}
+  ${divider}
+  <div class="parties">
+    <div class="party-card">
+      <div class="party-label">From</div>
+      <div class="party-name">${co}</div>
+      ${gst ? `<div class="party-detail">GSTIN: ${gst}</div>` : ''}
+      ${em  ? `<div class="party-detail">${em}</div>` : ''}
+      ${ad  ? `<div class="party-detail">${ad}</div>` : ''}
+    </div>
+    <div class="party-card">
+      <div class="party-label">Bill To (Customer)</div>
+      <div class="party-name">Apex Industries Limited</div>
+      <div class="party-detail">procurement@apex.in</div>
+      <div class="party-detail">Corporate Tower, Gurugram 122003</div>
+    </div>
+  </div>
+  <div class="dates">
+    <div class="date-item">
+      <div class="date-label">Invoice Date</div>
+      <div class="date-value">15 Nov 2024</div>
+    </div>
+    <div class="date-item">
+      <div class="date-label">Due Date</div>
+      <div class="date-value">15 Dec 2024</div>
+    </div>
+    <div class="date-item">
+      <div class="date-label">Sales Order</div>
+      <div class="date-value">SO-2024-0231</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Product / Description</th>
+      <th class="center">Qty</th>
+      <th class="right">Unit Price</th>
+      <th class="center">Tax</th>
+      <th class="right">Amount</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="totals">
+    <div class="totals-box">
+      <div class="totals-row"><span>Subtotal</span><span>₹19,75,000</span></div>
+      <div class="totals-row"><span>Tax</span><span>₹3,55,500</span></div>
+      <div class="totals-row grand"><span>Grand Total</span><span>₹23,30,500</span></div>
+    </div>
+  </div>
+  <div class="footer">
+    <span class="footer-note">Generated by OpenLedger · 15 Nov 2024</span>
+    <span class="footer-note">This is a computer-generated document.</span>
+  </div>
+  ${bodyClose}
+</div>
+</body>
+</html>`
+
+  return html
+}
+
+// ── Template Preview Modal ────────────────────────────────────────────────────
+const TEMPLATE_TABS = [
+  {key:'classic',label:'Prestige'},{key:'modern',label:'Vantage'},{key:'minimal',label:'Lumina'},
+  {key:'executive',label:'Apex'},{key:'bold',label:'Titan'},{key:'elegant',label:'Opulent'},
+  {key:'retro',label:'Cipher'},{key:'compact',label:'Meridian'},{key:'stripe',label:'Atlas'},{key:'bureau',label:'Axiom'},
+]
+
+function PreviewModal({ template, biz, onClose, onSelect }) {
+  const containerRef = useRef(null)
+  const [scale, setScale] = useState(1)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => {
+      setScale(entry.contentRect.width / 794)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm">
+      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 text-white flex-shrink-0">
+        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-base leading-none">✕</button>
+        <div className="flex-1 overflow-x-auto scrollbar-none">
+          <div className="flex gap-1 pr-1" style={{ width: 'max-content' }}>
+            {TEMPLATE_TABS.map(({key, label}) => (
+              <button key={key} onClick={() => onSelect(key)}
+                className={`text-xs px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${template === key ? 'bg-white text-zinc-900 font-semibold' : 'text-zinc-400 hover:text-white'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
-    </div>`
-
-  const wrap = (body, bg = '#ffffff', extra = '') =>
-    `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{${ff};background:${bg};-webkit-print-color-adjust:exact;${extra}}</style></head><body>${body}</body></html>`
-
-  const bizBlock = (i) => i === 0
-    ? `<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">${co}</div><div style="font-size:11px;color:#64748b;line-height:1.8;">${ad}<br>GSTIN: ${gst}</div>`
-    : `<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">Apex Industries Limited</div><div style="font-size:11px;color:#64748b;line-height:1.8;">Corporate Tower, Gurugram 122003<br>GSTIN: 06AABCA1234F1Z7</div>`
-
-  switch (t) {
-
-    /* ── PRESTIGE (classic) ───────────────────────────────────────────────── */
-    case 'classic': return wrap(`
-      <div style="padding:48px 52px;position:relative;min-height:100%;">
-        <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${col.accent}"></div>
-        <div style="position:absolute;top:26px;right:40px;font-size:96px;font-weight:900;color:${col.accent};opacity:0.04;letter-spacing:-4px;line-height:1;pointer-events:none;user-select:none">INVOICE</div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px;padding-top:18px;">
-          <div style="display:flex;align-items:center;gap:18px">
-            ${lg ? `<img src="${biz.logo}" style="height:64px;width:64px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
-            <div>
-              <div style="font-size:19px;font-weight:700;color:${col.accent};letter-spacing:0.07em;text-transform:uppercase">${co}</div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:4px;line-height:1.8">${ad}<br>${em}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Tax Invoice</div>
-            <div style="font-size:30px;font-weight:800;color:#0f172a;letter-spacing:-1.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
-            <div style="font-size:11px;color:#94a3b8;margin-top:5px">15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
-            <div style="display:inline-block;margin-top:8px;background:${col.badge};color:${col.badgeText};font-size:10px;font-weight:700;padding:3px 12px;border-radius:100px;letter-spacing:0.06em;text-transform:uppercase">PAID</div>
+      <div className="flex-1 overflow-y-auto p-3 flex justify-center items-start" onClick={onClose}>
+        <div ref={containerRef} className="w-full max-w-3xl" onClick={e => e.stopPropagation()}>
+          <div style={{ width: '100%', height: `${1123 * scale}px`, position: 'relative', overflow: 'hidden', borderRadius: '12px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' }}>
+            <iframe
+              key={template}
+              srcDoc={buildTemplatePreview(template, biz, biz.color)}
+              style={{ width: '794px', height: '1123px', transform: `scale(${scale})`, transformOrigin: 'top left', border: 'none', display: 'block' }}
+              title="Invoice preview"
+            />
           </div>
         </div>
-        <div style="height:1px;background:#e2e8f0;margin-bottom:32px"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:28px">
-          ${[0,1].map(i=>`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#94a3b8;margin-bottom:10px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-          <thead><tr style="border-bottom:2px solid ${col.accent}">
-            <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#64748b">Description</th>
-            <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b">Qty</th>
-            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b">Rate</th>
-            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b">Amount</th>
-          </tr></thead>
-          <tbody>${rows3('#f1f5f9')}</tbody>
-        </table>
-        ${totalsBlock('#64748b','#f1f5f9',`font-size:15px;font-weight:800;color:${col.accent};border-top:2px solid ${col.accent};margin-top:4px`)}
-        <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:16px;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:11px;color:#94a3b8">HDFC Bank &nbsp;&middot;&nbsp; A/C 5020XXXX1234 &nbsp;&middot;&nbsp; IFSC HDFC0001234</span>
-          <span style="font-size:11px;color:#94a3b8">OpenLedger &middot; Computer Generated</span>
-        </div>
-      </div>`)
-
-    /* ── VANTAGE (modern) ─────────────────────────────────────────────────── */
-    case 'modern': return wrap(`
-      <div style="min-height:100%;padding:44px 44px 44px 52px;border-left:5px solid ${col.accent}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px">
-          <div style="display:flex;align-items:center;gap:16px">
-            ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
-            <div><div style="font-size:18px;font-weight:700;color:#0f172a">${co}</div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:3px">${em}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:36px;font-weight:800;color:${col.accent};letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1">0892</div>
-            <div style="font-size:11px;color:#94a3b8;margin-top:6px">INV-2024-0892 &nbsp;&middot;&nbsp; 15 Nov 2024</div>
-            <div style="font-size:11px;color:#ef4444;font-weight:600;margin-top:2px">Due 15 Dec 2024</div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
-          ${[0,1].map(i=>`<div style="padding:14px 16px;border-left:3px solid ${i===0?col.accent:col.border};background:${col.light}"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.mid};margin-bottom:8px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-          <thead><tr style="border-top:2px solid #0f172a;border-bottom:2px solid #0f172a">
-            <th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0f172a">Description</th>
-            <th style="padding:9px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#0f172a">Qty</th>
-            <th style="padding:9px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#0f172a">Rate</th>
-            <th style="padding:9px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#0f172a">Amount</th>
-          </tr></thead>
-          <tbody>${rows3('#f1f5f9')}</tbody>
-        </table>
-        ${totalsBlock('#64748b','#e2e8f0',`font-size:14px;font-weight:700;color:${col.mid};border-top:2px solid ${col.mid};margin-top:2px`)}
-        <div style="margin-top:24px;padding-top:14px;border-top:1px solid #f1f5f9;display:flex;justify-content:space-between">
-          <span style="font-size:11px;color:#94a3b8">30-day payment terms</span>
-          <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
-        </div>
-      </div>`)
-
-    /* ── LUMINA (minimal) ─────────────────────────────────────────────────── */
-    case 'minimal': return wrap(`
-      <div style="padding:56px 60px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px">
-          <div style="display:flex;align-items:center;gap:16px">
-            ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
-            <div><div style="font-size:17px;font-weight:300;color:#0f172a;letter-spacing:-0.3px">${co}</div>
-              <div style="font-size:11px;color:#cbd5e1;margin-top:4px">${em}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1;margin-bottom:8px">Invoice</div>
-            <div style="font-size:22px;font-weight:300;color:#0f172a;letter-spacing:-0.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
-            <div style="font-size:11px;color:#cbd5e1;margin-top:5px">15 Nov 2024</div>
-          </div>
-        </div>
-        <div style="height:1px;background:#f1f5f9;margin-bottom:40px"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:40px">
-          ${[0,1].map(i=>`<div><div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1;margin-bottom:12px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
-          <thead><tr style="border-bottom:1px solid #e2e8f0">
-            <th style="padding:8px 0;text-align:left;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Description</th>
-            <th style="padding:8px 0;text-align:center;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Qty</th>
-            <th style="padding:8px 0;text-align:right;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Rate</th>
-            <th style="padding:8px 0;text-align:right;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Amount</th>
-          </tr></thead>
-          <tbody>
-            <tr style="border-bottom:1px solid #f8fafc">
-              <td style="padding:13px 0;font-size:13px;color:#1e293b">Enterprise Software License<br><span style="font-size:11px;color:#94a3b8">Annual &middot; FY 2024&ndash;25</span></td>
-              <td style="padding:13px 0;text-align:center;font-size:13px;color:#64748b">5</td>
-              <td style="padding:13px 0;text-align:right;font-size:13px;color:#64748b;font-variant-numeric:tabular-nums">&yen;2,40,000</td>
-              <td style="padding:13px 0;text-align:right;font-size:13px;color:#1e293b;font-variant-numeric:tabular-nums">₹12,00,000</td>
-            </tr>
-            <tr style="border-bottom:1px solid #f8fafc">
-              <td style="padding:13px 0;font-size:13px;color:#1e293b">Implementation &amp; Integration<br><span style="font-size:11px;color:#94a3b8">Professional Services</span></td>
-              <td style="padding:13px 0;text-align:center;font-size:13px;color:#64748b">80 hrs</td>
-              <td style="padding:13px 0;text-align:right;font-size:13px;color:#64748b;font-variant-numeric:tabular-nums">₹8,500</td>
-              <td style="padding:13px 0;text-align:right;font-size:13px;color:#1e293b;font-variant-numeric:tabular-nums">₹6,80,000</td>
-            </tr>
-            <tr>
-              <td style="padding:13px 0;font-size:13px;color:#1e293b">Priority Support &amp; SLA<br><span style="font-size:11px;color:#94a3b8">Enterprise Tier</span></td>
-              <td style="padding:13px 0;text-align:center;font-size:13px;color:#64748b">1</td>
-              <td style="padding:13px 0;text-align:right;font-size:13px;color:#64748b;font-variant-numeric:tabular-nums">₹95,000</td>
-              <td style="padding:13px 0;text-align:right;font-size:13px;color:#1e293b;font-variant-numeric:tabular-nums">₹95,000</td>
-            </tr>
-          </tbody>
-        </table>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:36px">
-          <div style="width:240px">
-            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#94a3b8"><span>Subtotal</span><span>${S}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#94a3b8"><span>GST @ 18%</span><span>${TAX}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${col.accent};border-top:1px solid #e2e8f0;margin-top:4px"><span>Total</span><span>${TOT}</span></div>
-          </div>
-        </div>
-        <div style="border-top:1px solid #f1f5f9;padding-top:14px;display:flex;justify-content:space-between">
-          <span style="font-size:10px;color:#cbd5e1">Due 15 Dec 2024</span>
-          <span style="font-size:10px;color:#cbd5e1">OpenLedger</span>
-        </div>
-      </div>`)
-
-    /* ── APEX (executive) ─────────────────────────────────────────────────── */
-    case 'executive': return wrap(`
-      <div style="min-height:100%">
-        <div style="background:${col.accent};padding:36px 44px 30px;position:relative;overflow:hidden">
-          <div style="position:absolute;right:-30px;top:-30px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,0.06)"></div>
-          <div style="position:absolute;right:60px;bottom:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,0.04)"></div>
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative">
-            <div style="display:flex;align-items:center;gap:16px">
-              ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,0.1);padding:4px;">` : ''}
-              <div><div style="font-size:20px;font-weight:700;color:#fff">${co}</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:4px">${ad}</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px">GSTIN: ${gst}</div>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:6px">Tax Invoice</div>
-              <div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
-              <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:5px">15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
-              <div style="display:inline-block;margin-top:8px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:10px;font-weight:700;padding:3px 12px;border-radius:100px;letter-spacing:0.06em;text-transform:uppercase">PAID</div>
-            </div>
-          </div>
-        </div>
-        <div style="padding:30px 44px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:26px">
-            ${[0,1].map(i=>`<div style="padding:14px 16px;background:${col.light};border:1px solid ${col.border};border-radius:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.mid};margin-bottom:8px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
-          </div>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:22px">
-            <thead><tr style="background:${col.accent}">
-              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
-              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Qty</th>
-              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Rate</th>
-              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Amount</th>
-            </tr></thead>
-            <tbody>${rows3('#f1f5f9', col.light)}</tbody>
-          </table>
-          ${totalsBlock('#64748b','#f1f5f9',`font-size:14px;font-weight:700;color:${col.accent};border-top:2px solid ${col.accent};margin-top:2px`)}
-          <div style="margin-top:22px;border-top:1px solid ${col.border};padding-top:14px;display:flex;justify-content:space-between">
-            <span style="font-size:11px;color:#94a3b8">HDFC Bank &middot; A/C 5020XXXX1234</span>
-            <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
-          </div>
-        </div>
-      </div>`)
-
-    /* ── TITAN (bold) ─────────────────────────────────────────────────────── */
-    case 'bold': return wrap(`
-      <div style="min-height:100%">
-        <div style="padding:36px 44px 26px;border-bottom:5px solid ${col.accent}">
-          <div style="display:flex;justify-content:space-between;align-items:flex-end">
-            <div style="display:flex;align-items:center;gap:16px">
-              ${biz.logo ? `<img src="${biz.logo}" style="height:64px;width:64px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
-              <div><div style="font-size:26px;font-weight:900;color:#0f172a;letter-spacing:-1px;line-height:1">${co}</div>
-                <div style="font-size:11px;color:#94a3b8;margin-top:4px">${em}</div>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:48px;font-weight:900;color:${col.accent};letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums">0892</div>
-              <div style="font-size:11px;color:#94a3b8;margin-top:4px">INV-2024 &nbsp;&middot;&nbsp; 15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
-            </div>
-          </div>
-        </div>
-        <div style="padding:26px 44px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:26px">
-            ${[0,1].map(i=>`<div style="padding:14px 16px;border-left:4px solid ${i===0?col.accent:col.border};background:${col.light}"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:${col.mid};margin-bottom:8px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
-          </div>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:22px">
-            <thead><tr style="background:${col.accent}">
-              <th style="padding:11px 14px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
-              <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#fff">Qty</th>
-              <th style="padding:11px 14px;text-align:right;font-size:10px;font-weight:800;text-transform:uppercase;color:#fff">Rate</th>
-              <th style="padding:11px 14px;text-align:right;font-size:10px;font-weight:800;text-transform:uppercase;color:#fff">Amount</th>
-            </tr></thead>
-            <tbody>${rows3('#e2e8f0', col.light)}</tbody>
-          </table>
-          <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-            <div style="width:280px;background:${col.light};border:2px solid ${col.accent};border-radius:8px;overflow:hidden">
-              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:1px solid ${col.border}"><span>Subtotal</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
-              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:2px solid ${col.accent}"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
-              <div style="display:flex;justify-content:space-between;padding:12px 14px;font-size:16px;font-weight:900;color:${col.accent}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
-            </div>
-          </div>
-        </div>
-        <div style="margin:0 44px;border-top:5px solid ${col.accent};padding-top:12px;display:flex;justify-content:space-between">
-          <span style="font-size:11px;color:#94a3b8;font-weight:600">30-day net payment terms</span>
-          <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
-        </div>
-      </div>`)
-
-    /* ── OPULENT (elegant) ────────────────────────────────────────────────── */
-    case 'elegant': return wrap(`
-      <div style="padding:52px 56px;min-height:100%">
-        <div style="text-align:center;margin-bottom:30px;padding:22px 0;border-top:1px solid #d6cfc4;border-bottom:1px solid #d6cfc4">
-          ${lg?`<div style="display:flex;justify-content:center;margin-bottom:10px">${lg}</div>`:''}
-          <div style="font-size:20px;font-weight:600;color:#1c1917;letter-spacing:0.02em">${co}</div>
-          <div style="font-size:11px;color:#a8a29e;margin-top:5px;line-height:1.7">${ad} &nbsp;&middot;&nbsp; ${em} &nbsp;&middot;&nbsp; ${gst}</div>
-          <div style="width:40px;height:2px;background:${col.accent};margin:14px auto 0"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:26px">
-          <div>
-            <div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#a8a29e;margin-bottom:8px">Bill To</div>
-            <div style="font-size:14px;font-weight:600;color:#1c1917;margin-bottom:4px">Apex Industries Limited</div>
-            <div style="font-size:11px;color:#78716c;line-height:1.8">Corporate Tower, Gurugram 122003<br>GSTIN: 06AABCA1234F1Z7</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#a8a29e;margin-bottom:8px">Invoice Details</div>
-            <div style="font-size:15px;font-weight:600;color:#1c1917;font-variant-numeric:tabular-nums">INV-2024-0892</div>
-            <div style="font-size:11px;color:#78716c;margin-top:4px;line-height:1.8">Issued: 15 Nov 2024<br>Due: 15 Dec 2024</div>
-            <div style="display:inline-block;margin-top:8px;border:1px solid ${col.accent};color:${col.accent};font-size:9px;font-weight:600;padding:3px 12px;letter-spacing:0.1em;text-transform:uppercase">PAID</div>
-          </div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-          <thead><tr style="border-top:1px solid #d6cfc4;border-bottom:1px solid #d6cfc4;background:#f5ede0">
-            <th style="padding:10px 14px;text-align:left;font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#78716c">Description</th>
-            <th style="padding:10px 14px;text-align:center;font-size:9px;font-weight:600;text-transform:uppercase;color:#78716c">Qty</th>
-            <th style="padding:10px 14px;text-align:right;font-size:9px;font-weight:600;text-transform:uppercase;color:#78716c">Rate</th>
-            <th style="padding:10px 14px;text-align:right;font-size:9px;font-weight:600;text-transform:uppercase;color:#78716c">Amount</th>
-          </tr></thead>
-          <tbody>
-            <tr style="border-bottom:1px solid #e7e0d5">
-              <td style="padding:12px 14px;font-size:13px;color:#1c1917">Enterprise Software License<br><span style="font-size:11px;color:#a8a29e">Annual &middot; FY 2024&ndash;25</span></td>
-              <td style="padding:12px 14px;text-align:center;font-size:13px;color:#44403c">5</td>
-              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#44403c;font-variant-numeric:tabular-nums">₹2,40,000</td>
-              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#1c1917;font-variant-numeric:tabular-nums">₹12,00,000</td>
-            </tr>
-            <tr style="border-bottom:1px solid #e7e0d5;background:#faf7f2">
-              <td style="padding:12px 14px;font-size:13px;color:#1c1917">Implementation &amp; Integration<br><span style="font-size:11px;color:#a8a29e">Professional Services</span></td>
-              <td style="padding:12px 14px;text-align:center;font-size:13px;color:#44403c">80 hrs</td>
-              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#44403c;font-variant-numeric:tabular-nums">₹8,500</td>
-              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#1c1917;font-variant-numeric:tabular-nums">₹6,80,000</td>
-            </tr>
-            <tr>
-              <td style="padding:12px 14px;font-size:13px;color:#1c1917">Priority Support &amp; SLA<br><span style="font-size:11px;color:#a8a29e">Enterprise Tier</span></td>
-              <td style="padding:12px 14px;text-align:center;font-size:13px;color:#44403c">1</td>
-              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#44403c;font-variant-numeric:tabular-nums">₹95,000</td>
-              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#1c1917;font-variant-numeric:tabular-nums">₹95,000</td>
-            </tr>
-          </tbody>
-        </table>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:26px">
-          <div style="width:250px">
-            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#78716c;border-bottom:1px solid #e7e0d5"><span>Subtotal</span><span>${S}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#78716c;border-bottom:1px solid #d6cfc4"><span>GST @ 18%</span><span>${TAX}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:14px;font-weight:600;color:${col.accent}"><span>Total Due</span><span>${TOT}</span></div>
-          </div>
-        </div>
-        <div style="border-top:1px solid #d6cfc4;padding-top:14px;display:flex;justify-content:space-between">
-          <span style="font-size:10px;color:#a8a29e;font-style:italic">Payment within 30 days. Thank you.</span>
-          <span style="font-size:10px;color:#a8a29e">OpenLedger</span>
-        </div>
-      </div>`, '#fdfaf5')
-
-    /* ── CIPHER (retro) ───────────────────────────────────────────────────── */
-    case 'retro': return wrap(`
-      <div style="padding:36px 40px;min-height:100%;font-family:'Courier New',Courier,monospace">
-        <div style="border:1px solid ${col.accent};padding:3px;margin-bottom:26px">
-          <div style="border:1px solid ${col.border};padding:18px 20px;display:flex;justify-content:space-between;align-items:flex-start">
-            <div style="display:flex;align-items:center;gap:14px">
-              ${biz.logo ? `<img src="${biz.logo}" style="height:56px;width:56px;object-fit:contain;border-radius:6px;flex-shrink:0;border:1px solid ${col.border};">` : ''}
-              <div>
-                <div style="font-size:10px;color:${col.mid};letter-spacing:0.1em;margin-bottom:5px">// VENDOR</div>
-                <div style="font-size:15px;font-weight:700;color:${col.accent}">${co}</div>
-                <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.7">${em}<br>GST: ${gst}</div>
-              </div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:10px;color:${col.mid};letter-spacing:0.1em;margin-bottom:5px">// DOCUMENT</div>
-              <div style="font-size:18px;font-weight:700;color:${col.accent};font-variant-numeric:tabular-nums">INV-2024-0892</div>
-              <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.7">DATE: 15-NOV-2024<br>DUE:&nbsp; 15-DEC-2024</div>
-            </div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px">
-          ${[0,1].map(i=>`<div style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px 14px"><div style="font-size:10px;color:${col.mid};letter-spacing:0.1em;margin-bottom:7px">// ${i===0?'FROM':'BILL TO'}</div>${bizBlock(i)}</div>`).join('')}
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
-          <thead><tr style="background:${col.accent};color:#fff">
-            <th style="padding:9px 12px;text-align:left;font-size:10px;letter-spacing:0.06em">DESCRIPTION</th>
-            <th style="padding:9px 12px;text-align:center;font-size:10px;letter-spacing:0.06em">QTY</th>
-            <th style="padding:9px 12px;text-align:right;font-size:10px;letter-spacing:0.06em">RATE</th>
-            <th style="padding:9px 12px;text-align:right;font-size:10px;letter-spacing:0.06em">AMOUNT</th>
-          </tr></thead>
-          <tbody>
-            <tr style="border-bottom:1px solid #e2e8f0">
-              <td style="padding:10px 12px;font-size:12px;color:#1e293b">Enterprise Software License<br><span style="font-size:10px;color:#94a3b8">Annual FY 2024-25</span></td>
-              <td style="padding:10px 12px;text-align:center;font-size:12px;color:#374151">5</td>
-              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹2,40,000</td>
-              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹12,00,000</td>
-            </tr>
-            <tr style="border-bottom:1px solid #e2e8f0;background:#f8fafc">
-              <td style="padding:10px 12px;font-size:12px;color:#1e293b">Implementation &amp; Integration<br><span style="font-size:10px;color:#94a3b8">Professional Services</span></td>
-              <td style="padding:10px 12px;text-align:center;font-size:12px;color:#374151">80 HRS</td>
-              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹8,500</td>
-              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹6,80,000</td>
-            </tr>
-            <tr>
-              <td style="padding:10px 12px;font-size:12px;color:#1e293b">Priority Support &amp; SLA<br><span style="font-size:10px;color:#94a3b8">Enterprise Tier</span></td>
-              <td style="padding:10px 12px;text-align:center;font-size:12px;color:#374151">1</td>
-              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹95,000</td>
-              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹95,000</td>
-            </tr>
-          </tbody>
-        </table>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:18px">
-          <div style="width:240px;border:1px solid #e2e8f0;font-size:12px;font-family:'Courier New',Courier,monospace">
-            <div style="display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #e2e8f0;color:#64748b"><span>SUB-TOTAL</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid ${col.accent};color:#64748b"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:9px 12px;background:${col.accent};color:#fff;font-weight:700;font-size:13px"><span>TOTAL DUE</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
-          </div>
-        </div>
-        <div style="border-top:1px solid ${col.accent};padding-top:12px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;font-family:'Courier New',Courier,monospace">
-          <span>// PAYMENT: NEFT &middot; HDFC &middot; 5020XXXX1234</span>
-          <span>// OpenLedger</span>
-        </div>
-      </div>`)
-
-    /* ── MERIDIAN (compact) ───────────────────────────────────────────────── */
-    case 'compact': return wrap(`
-      <div style="min-height:100%">
-        <div style="background:#0f172a;padding:18px 28px;display:flex;justify-content:space-between;align-items:center">
-          <div style="display:flex;align-items:center;gap:14px">
-            ${biz.logo ? `<img src="${biz.logo}" style="height:52px;width:52px;object-fit:contain;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,0.08);padding:4px;">` : ''}
-            <div><div style="font-size:14px;font-weight:700;color:#fff">${co}</div>
-              <div style="font-size:10px;color:#64748b;margin-top:1px">${em}</div>
-            </div>
-          </div>
-          <div style="text-align:right">
-            <div style="display:inline-flex;align-items:center;background:${col.accent};padding:4px 14px;border-radius:100px">
-              <span style="font-size:12px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">INV-2024-0892</span>
-            </div>
-            <div style="font-size:10px;color:#64748b;margin-top:6px">15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
-          </div>
-        </div>
-        <div style="background:${col.accent};height:3px"></div>
-        <div style="padding:18px 28px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
-            ${[0,1].map(i=>`<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:11px 13px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;margin-bottom:6px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
-          </div>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
-            <thead><tr style="background:${col.accent}">
-              <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
-              <th style="padding:8px 12px;text-align:center;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff">Qty</th>
-              <th style="padding:8px 12px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff">Rate</th>
-              <th style="padding:8px 12px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff">Amount</th>
-            </tr></thead>
-            <tbody>
-              <tr style="border-bottom:1px solid #e2e8f0">
-                <td style="padding:9px 12px;font-size:12px;color:#1e293b">Enterprise Software License<br><span style="font-size:10px;color:#94a3b8">Annual &middot; FY 2024&ndash;25</span></td>
-                <td style="padding:9px 12px;text-align:center;font-size:12px;color:#374151">5</td>
-                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹2,40,000</td>
-                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹12,00,000</td>
-              </tr>
-              <tr style="border-bottom:1px solid #e2e8f0;background:#f8fafc">
-                <td style="padding:9px 12px;font-size:12px;color:#1e293b">Implementation &amp; Integration<br><span style="font-size:10px;color:#94a3b8">Professional Services</span></td>
-                <td style="padding:9px 12px;text-align:center;font-size:12px;color:#374151">80 hrs</td>
-                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹8,500</td>
-                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹6,80,000</td>
-              </tr>
-              <tr>
-                <td style="padding:9px 12px;font-size:12px;color:#1e293b">Priority Support &amp; SLA<br><span style="font-size:10px;color:#94a3b8">Enterprise Tier</span></td>
-                <td style="padding:9px 12px;text-align:center;font-size:12px;color:#374151">1</td>
-                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹95,000</td>
-                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹95,000</td>
-              </tr>
-            </tbody>
-          </table>
-          <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-            <div style="display:flex;gap:24px">
-              <div><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em">Subtotal</div><div style="font-size:13px;font-weight:600;color:#94a3b8;font-variant-numeric:tabular-nums">${S}</div></div>
-              <div><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em">GST 18%</div><div style="font-size:13px;font-weight:600;color:#94a3b8;font-variant-numeric:tabular-nums">${TAX}</div></div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em">Total Due</div>
-              <div style="font-size:20px;font-weight:800;color:${col.accent};font-variant-numeric:tabular-nums">${TOT}</div>
-            </div>
-          </div>
-        </div>
-      </div>`)
-
-    /* ── ATLAS (stripe) ───────────────────────────────────────────────────── */
-    case 'stripe': return wrap(`
-      <div style="min-height:100%">
-        <div style="display:flex;min-height:140px">
-          <div style="flex:1;background:${col.accent};padding:34px 36px 26px;display:flex;flex-direction:column;justify-content:space-between">
-            <div style="display:flex;align-items:center;gap:16px">
-              ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,0.1);padding:4px;">` : ''}
-              <div><div style="font-size:18px;font-weight:700;color:#fff;letter-spacing:-0.3px">${co}</div>
-                <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:3px">${em}</div>
-              </div>
-            </div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:10px">GSTIN: ${gst}</div>
-          </div>
-          <div style="width:220px;flex-shrink:0;background:${col.light};border-bottom:4px solid ${col.accent};padding:26px 26px 18px;display:flex;flex-direction:column;justify-content:space-between">
-            <div>
-              <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:${col.mid};margin-bottom:5px">Invoice</div>
-              <div style="font-size:17px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
-            </div>
-            <div>
-              <div style="font-size:10px;color:${col.mid};margin-bottom:2px">15 Nov 2024</div>
-              <div style="font-size:10px;color:#ef4444;font-weight:600">Due: 15 Dec 2024</div>
-              <div style="display:inline-block;margin-top:7px;background:${col.badge};color:${col.badgeText};font-size:9px;font-weight:700;padding:2px 10px;border-radius:100px;letter-spacing:0.06em;text-transform:uppercase">PAID</div>
-            </div>
-          </div>
-        </div>
-        <div style="padding:26px 36px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px">
-            ${[0,1].map(i=>`<div style="border:1px solid #e2e8f0;border-top:3px solid ${i===0?col.accent:col.border};border-radius:0 0 8px 8px;padding:13px 15px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${col.mid};margin-bottom:7px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
-          </div>
-          <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
-            <thead><tr style="background:${col.accent}">
-              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
-              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Qty</th>
-              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Rate</th>
-              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Amount</th>
-            </tr></thead>
-            <tbody>${rows3('#e2e8f0', '#f8fafc')}</tbody>
-          </table>
-          <div style="display:flex;justify-content:flex-end;margin-bottom:18px">
-            <div style="width:260px;border:1px solid #e2e8f0;border-top:3px solid ${col.accent};border-radius:0 0 8px 8px;overflow:hidden">
-              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0"><span>Subtotal</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
-              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:2px solid ${col.accent}"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
-              <div style="display:flex;justify-content:space-between;padding:10px 14px;font-size:14px;font-weight:800;color:${col.accent}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
-            </div>
-          </div>
-          <div style="border-top:1px solid #e2e8f0;padding-top:12px;display:flex;justify-content:space-between">
-            <span style="font-size:11px;color:#94a3b8">30-day terms &middot; NEFT/RTGS</span>
-            <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
-          </div>
-        </div>
-      </div>`)
-
-    /* ── AXIOM (bureau) ───────────────────────────────────────────────────── */
-    case 'bureau': return wrap(`
-      <div style="padding:44px 52px;min-height:100%">
-        <div style="text-align:center;border-top:3px double ${col.accent};border-bottom:3px double ${col.accent};padding:20px 0;margin-bottom:30px">
-          ${lg?`<div style="display:flex;justify-content:center;margin-bottom:8px">${lg}</div>`:''}
-          <div style="font-size:20px;font-weight:700;color:${col.accent};letter-spacing:0.04em;text-transform:uppercase">${co}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:6px;line-height:1.8">${ad} &nbsp;|&nbsp; ${em} &nbsp;|&nbsp; GSTIN: ${gst}</div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:26px">
-          <div>
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${col.mid};margin-bottom:8px">Bill To</div>
-            <div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px">Apex Industries Limited</div>
-            <div style="font-size:11px;color:#64748b;line-height:1.8">Corporate Tower, Sector 44<br>Gurugram 122003 &nbsp;&middot;&nbsp; GSTIN: 06AABCA1234F1Z7</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${col.mid};margin-bottom:8px">Invoice</div>
-            <div style="font-size:18px;font-weight:700;color:#1e293b;font-variant-numeric:tabular-nums">INV-2024-0892</div>
-            <div style="font-size:11px;color:#64748b;margin-top:4px;line-height:1.8">Date: 15 November 2024<br>Due: 15 December 2024</div>
-          </div>
-        </div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-          <thead><tr style="border-top:2px solid ${col.accent};border-bottom:2px solid ${col.accent}">
-            <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Description</th>
-            <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Qty</th>
-            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Rate</th>
-            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Amount</th>
-          </tr></thead>
-          <tbody>${rows3('#f1f5f9', col.light)}</tbody>
-        </table>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:26px">
-          <div style="width:260px">
-            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0"><span>Subtotal</span><span>${S}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#64748b;border-bottom:2px solid ${col.accent}"><span>GST @ 18%</span><span>${TAX}</span></div>
-            <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:700;color:${col.accent};border-bottom:2px solid ${col.accent}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
-          </div>
-        </div>
-        <div style="border-top:3px double ${col.accent};padding-top:14px;display:flex;justify-content:space-between">
-          <span style="font-size:11px;color:#94a3b8">Kindly remit within the stipulated period. Thank you.</span>
-          <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
-        </div>
-      </div>`)
-
-    default: return buildTemplatePreview('classic', biz, colorKey)
-  }
+      </div>
+    </div>
+  )
 }
 
 // ── Roles Tab ─────────────────────────────────────────────────────────────────
@@ -2826,7 +2741,7 @@ export default function Settings() {
   const canEditConfig = usePermission('settings', 'configuration', 'edit')
 
   const TABS = [
-    { key: 'profile', label: 'My Profile', mobileLabel: 'Profile' },
+    { key: 'profile', label: 'My Profile', mobileLabel: 'Profile', icon: User },
     ...(!isBusiness || canViewTeam
       ? [{ key: 'friends', label: isBusiness ? 'Team' : 'Friends', mobileLabel: isBusiness ? 'Team' : 'Friends' }]
       : []),

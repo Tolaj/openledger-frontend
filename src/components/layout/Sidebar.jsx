@@ -1,7 +1,7 @@
 import { NavLink, Link } from 'react-router-dom'
 import {
   Home, Tag, CreditCard, Settings,
-  ShoppingCart, TrendingUp, Layers, Boxes,
+  ShoppingCart, TrendingUp, Layers, Boxes, User,
 } from 'lucide-react'
 import AppLogo from '../ui/AppLogo'
 import useAuthStore from '../../store/authStore'
@@ -103,7 +103,7 @@ export default function Sidebar() {
         <div className="px-4 py-4 border-t border-zinc-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
-              {user.name?.[0]?.toUpperCase()}
+              {user.name?.[0] ? user.name[0].toUpperCase() : <User size={14} className="text-zinc-500" />}
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold text-zinc-900 truncate">{user.name}</p>
