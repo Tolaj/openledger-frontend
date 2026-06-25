@@ -1140,23 +1140,20 @@ function ConfigurationTab({ canEdit = true }) {
   const [logoError, setLogoError] = useState('')
   const [previewTemplate, setPreviewTemplate] = useState(null)
   const [docTypeTab, setDocTypeTab] = useState('invoice')
-  const templateGridRef = useRef(null)
   const [thumbScale, setThumbScale] = useState(0.19)
-
-  useEffect(() => {
-    const el = templateGridRef.current
-    if (!el) return
+  const thumbRoRef = useRef(null)
+  const templateGridRef = useCallback((node) => {
+    if (thumbRoRef.current) { thumbRoRef.current.disconnect(); thumbRoRef.current = null }
+    if (!node) return
     const measure = () => {
-      const w = el.offsetWidth
+      const w = node.offsetWidth
       if (!w) return
       const cols = w >= 640 ? 3 : 2
-      const cardWidth = (w - (cols - 1) * 8) / cols
-      setThumbScale(cardWidth / 794)
+      setThumbScale((w - (cols - 1) * 8) / cols / 794)
     }
     measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(el)
-    return () => ro.disconnect()
+    thumbRoRef.current = new ResizeObserver(measure)
+    thumbRoRef.current.observe(node)
   }, [])
 
   useEffect(() => {
