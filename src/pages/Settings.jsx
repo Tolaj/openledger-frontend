@@ -1125,83 +1125,95 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
 // ── Configuration Tab ─────────────────────────────────────────────────────────
 function ConfigurationTab({ canEdit = true }) {
   const { data: me, isLoading } = useMe()
-  const { data: groups = [], isLoading: groupsLoading } = useGroups()
+  const { data: groups = [] } = useGroups()
   const { activeGroupId } = useGroupStore()
-  const { mutate: updateUser, isPending: saving } = useUpdateUser()
   const { mutate: updateGroup, isPending: savingBiz } = useUpdateGroup()
   const queryClient = useQueryClient()
 
   const activeGroup = groups.find((g) => g._id === activeGroupId)
+  const isBusiness = activeGroup?.type === 'business'
 
-  // Business details form state (synced from activeGroup)
-  const bd = activeGroup?.businessDetails || {}
+  // Business details state
   const [biz, setBiz] = useState({})
   const [bizSaved, setBizSaved] = useState(false)
   const [logoUploading, setLogoUploading] = useState(false)
   const [logoError, setLogoError] = useState('')
+  const [previewTemplate, setPreviewTemplate] = useState(null)
 
-  // Sync biz state when activeGroup loads/changes
   useEffect(() => {
     if (activeGroup) {
       const d = activeGroup.businessDetails || {}
       setBiz({
-        legalName:    d.legalName    || '',
-        logo:         d.logo         || '',
-        template:     d.template     || 'classic',
-        color:        d.color        || 'forest',
-        gstin:        d.gstin        || '',
-        pan:          d.pan          || '',
-        email:        d.email        || '',
-        phone:        d.phone        || '',
-        website:      d.website      || '',
-        addressLine1: d.addressLine1 || '',
-        addressLine2: d.addressLine2 || '',
-        city:         d.city         || '',
-        state:        d.state        || '',
-        pincode:      d.pincode      || '',
-        country:      d.country      || 'India',
+        legalName: d.legalName || '', logo: d.logo || '',
+        template: d.template || 'classic', color: d.color || 'forest',
+        gstin: d.gstin || '', pan: d.pan || '',
+        email: d.email || '', phone: d.phone || '',
+        website: d.website || '',
+        addressLine1: d.addressLine1 || '', addressLine2: d.addressLine2 || '',
+        city: d.city || '', state: d.state || '',
+        pincode: d.pincode || '', country: d.country || 'India',
       })
     }
   }, [activeGroup?._id])
 
   const handleBizSave = () => {
     updateGroup({ id: activeGroupId, data: { businessDetails: biz } }, {
-      onSuccess: () => { setBizSaved(true); setTimeout(() => setBizSaved(false), 2000) },
+      onSuccess: () => { setBizSaved(true); setTimeout(() => setBizSaved(false), 2500) },
     })
   }
 
-  // Currency conversion state
-  const [pendingCurrency, setPendingCurrency] = useState(null) // { code, label }
-  const [converting, setConverting] = useState(false)
-  const [convertError, setConvertError] = useState(null)
+  // SMTP state
+  const [smtp, setSmtp] = useState({ smtpUser: '', smtpPass: '', emailEnabled: false })
+  const [smtpSaved, setSmtpSaved] = useState(false)
+  const [smtpSaving, setSmtpSaving] = useState(false)
+  const [smtpRemoving, setSmtpRemoving] = useState(false)
 
-  // Active group's currency (group-level, shared by all members)
-  const groupCurrency = activeGroup?.currency || me?.currency || 'INR'
+  const smtpConfigured = !!activeGroup?.businessDetails?.smtpConfigured
+  // Enable toggle is only interactive when credentials are saved in DB
+  const canToggleEmail = canEdit && smtpConfigured
 
-  const handleCurrencySelect = (newCode) => {
-    if (newCode === groupCurrency) return
-    setPendingCurrency(newCode)
-    setConvertError(null)
+  useEffect(() => {
+    if (activeGroup) {
+      const d = activeGroup.businessDetails || {}
+      setSmtp({ smtpUser: d.smtpUser || '', smtpPass: '', emailEnabled: !!d.emailEnabled })
+    }
+  }, [activeGroup?._id])
+
+  const handleSmtpSave = () => {
+    setSmtpSaving(true)
+    const payload = { emailEnabled: smtp.emailEnabled, smtpUser: smtp.smtpUser }
+    if (smtp.smtpPass) payload.smtpPass = smtp.smtpPass
+    updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, ...payload } } }, {
+      onSuccess: () => { setSmtpSaved(true); setSmtp((s) => ({ ...s, smtpPass: '' })); setTimeout(() => setSmtpSaved(false), 2500) },
+      onSettled: () => setSmtpSaving(false),
+    })
   }
 
+  const handleSmtpRemove = () => {
+    if (!confirm('Remove saved SMTP credentials? Email sending will be disabled.')) return
+    setSmtpRemoving(true)
+    updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, smtpUser: '', smtpPass: '__CLEAR__', emailEnabled: false } } }, {
+      onSuccess: () => { setSmtp({ smtpUser: '', smtpPass: '', emailEnabled: false }); queryClient.invalidateQueries({ queryKey: ['groups'] }) },
+      onSettled: () => setSmtpRemoving(false),
+    })
+  }
+
+  // Currency
+  const [pendingCurrency, setPendingCurrency] = useState(null)
+  const [converting, setConverting] = useState(false)
+  const [convertError, setConvertError] = useState(null)
+  const groupCurrency = activeGroup?.currency || me?.currency || 'INR'
+
   const confirmCurrencyChange = async (convertPrices) => {
-    const fromCode = groupCurrency
-    const toCode = pendingCurrency
-    setConverting(true)
-    setConvertError(null)
+    setConverting(true); setConvertError(null)
     try {
       if (convertPrices) {
-        const rate = await getRate(fromCode, toCode)
-        await convertCurrencyApi(rate, activeGroupId, toCode)
-        queryClient.invalidateQueries({ queryKey: ['products'] })
-        queryClient.invalidateQueries({ queryKey: ['inventory'] })
-        queryClient.invalidateQueries({ queryKey: ['wishlists'] })
-        queryClient.invalidateQueries({ queryKey: ['orders'] })
-        queryClient.invalidateQueries({ queryKey: ['finance'] })
-        queryClient.invalidateQueries({ queryKey: ['budgets'] })
+        const rate = await getRate(groupCurrency, pendingCurrency)
+        await convertCurrencyApi(rate, activeGroupId, pendingCurrency)
+        ;['products','inventory','wishlists','orders','finance','budgets'].forEach((k) =>
+          queryClient.invalidateQueries({ queryKey: [k] }))
       } else {
-        // No price conversion — just update the group currency
-        updateGroup({ id: activeGroupId, data: { currency: toCode } })
+        updateGroup({ id: activeGroupId, data: { currency: pendingCurrency } })
       }
       queryClient.invalidateQueries({ queryKey: ['groups'] })
       setPendingCurrency(null)
@@ -1212,329 +1224,421 @@ function ConfigurationTab({ canEdit = true }) {
     }
   }
 
+  const fieldCls = (disabled) => `w-full h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm text-zinc-900 outline-none transition-colors focus:border-zinc-900 placeholder:text-zinc-400 ${disabled ? 'opacity-50 cursor-not-allowed bg-zinc-50' : ''}`
+  const labelCls = 'block text-xs font-medium text-zinc-500 mb-1.5'
+
+  const [activeSection, setActiveSection] = useState(isBusiness ? 'business' : 'preferences')
+  useEffect(() => { setActiveSection(isBusiness ? 'business' : 'preferences') }, [activeGroupId])
+
+  const navSections = [
+    isBusiness && { id: 'business',     emoji: '🏢', label: 'Business Info' },
+    isBusiness && { id: 'appearance',   emoji: '🎨', label: 'Invoice Template' },
+                  { id: 'preferences',  emoji: '⚙️',  label: 'Preferences'  },
+                  { id: 'email',        emoji: '✉️',  label: 'Email'         },
+  ].filter(Boolean)
+
   if (isLoading) return <Spinner className="py-12" />
 
-  const [previewTemplate, setPreviewTemplate] = useState(null)
-
   return (
-    <div className="flex flex-col gap-4 pb-10">
-      {/* Top row: business form | account+currency | template */}
-      <div className="flex flex-col md:flex-row gap-4 items-start">
+    <div className="flex flex-col gap-0">
 
-        {/* Business Details — left column (only for business groups) */}
-        {activeGroup?.type === 'business' && (
-          <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden md:max-w-md flex-1">
-            <div className="p-3 border-b border-zinc-100">
-              <p className="text-sm font-semibold text-zinc-900">Business Details</p>
-              <p className="text-xs text-zinc-400 mt-0.5">Shown on invoices, purchase orders, and documents.</p>
-            </div>
-            <div className="p-3 flex flex-col gap-2">
-              {/* Logo upload */}
-              <div className="flex items-center gap-2">
-                {biz.logo ? (
-                  <img src={biz.logo} alt="logo" className="h-9 w-9 rounded-lg object-contain border border-zinc-200 bg-zinc-50 p-0.5 flex-shrink-0" />
-                ) : (
-                  <div className="h-9 w-9 rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 flex items-center justify-center text-zinc-400 text-[9px] text-center leading-tight flex-shrink-0">Logo</div>
-                )}
-                <label className={`flex-1 h-8 px-3 rounded-lg border border-zinc-300 bg-white text-xs text-zinc-700 flex items-center justify-center gap-1.5 transition-colors ${canEdit ? 'cursor-pointer hover:bg-zinc-50' : 'opacity-50 cursor-not-allowed'} ${logoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" disabled={!canEdit} onChange={async (e) => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    setLogoUploading(true)
-                    setLogoError('')
-                    try {
-                      const fd = new FormData()
-                      fd.append('file', file)
-                      fd.append('upload_preset', 'openledger')
-                      const res = await fetch('https://api.cloudinary.com/v1_1/dwicc7oxu/image/upload', { method: 'POST', body: fd })
-                      if (!res.ok) throw new Error('Upload failed')
-                      const data = await res.json()
-                      setBiz((b) => ({ ...b, logo: data.secure_url }))
-                    } catch (err) {
-                      setLogoError('Upload failed. Please try again.')
-                    } finally {
-                      setLogoUploading(false)
-                      e.target.value = ''
-                    }
-                  }} />
-                  {logoUploading ? <><span className="h-3 w-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> Uploading…</> : 'Upload logo'}
-                </label>
-                {biz.logo && canEdit && (
-                  <button onClick={() => setBiz((b) => ({ ...b, logo: '' }))}
-                    className="h-8 px-2.5 rounded-lg border border-zinc-200 text-xs text-red-500 hover:bg-red-50 transition-colors flex-shrink-0">
-                    Remove
-                  </button>
-                )}
-                {logoError && <p className="text-xs text-red-500">{logoError}</p>}
+      {/* ── Unified settings card ──────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden flex flex-col md:flex-row" style={{ height: 'calc(100vh - 116px)', minHeight: 520 }}>
+
+        {/* Mobile: horizontal pill tabs */}
+        <div className="md:hidden flex gap-1.5 overflow-x-auto px-4 py-3 border-b border-zinc-100 scrollbar-none flex-shrink-0">
+          {navSections.map((s) => (
+            <button key={s.id} onClick={() => setActiveSection(s.id)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition-all ${
+                activeSection === s.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
+              }`}>
+              <span>{s.emoji}</span>{s.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Desktop: sidebar */}
+        <nav className="hidden md:flex flex-col w-52 flex-shrink-0 border-r border-zinc-100 bg-zinc-50/60 p-3 gap-0.5 overflow-y-auto">
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest px-3 pt-2 pb-3">Configuration</p>
+          {navSections.map((s) => (
+            <button key={s.id} onClick={() => setActiveSection(s.id)}
+              className={`flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm text-left transition-all ${
+                activeSection === s.id
+                  ? 'bg-zinc-900 text-white font-medium shadow-sm'
+                  : 'text-zinc-500 hover:text-zinc-800 hover:bg-white/80'
+              }`}>
+              <span className="text-base leading-none">{s.emoji}</span>
+              {s.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Content panel */}
+        <div className="flex-1 min-w-0 overflow-y-auto">
+
+          {/* ── Business Info ─────────────────────────────── */}
+          {activeSection === 'business' && isBusiness && (
+            <div className="p-6 flex flex-col gap-5 max-w-lg">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">Business Information</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Shown on invoices, purchase orders, and all documents.</p>
               </div>
 
-              {/* Fields */}
-              {[
-                { label: 'Legal / Trading Name', key: 'legalName', placeholder: 'e.g. Acme Pvt. Ltd.', full: true },
-              ].map(({ label, key, placeholder }) => (
-                <div key={key} className="flex flex-col gap-1">
-                  <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">{label}</label>
-                  <input value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
-                    readOnly={!canEdit} placeholder={placeholder} className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
+              {/* Logo */}
+              <div>
+                <label className={labelCls}>Logo</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-16 h-16 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {biz.logo
+                      ? <img src={biz.logo} alt="" className="w-full h-full object-contain p-1.5" />
+                      : <span className="text-[9px] text-zinc-400 text-center leading-snug px-1">No logo</span>}
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                    <label className={`h-9 px-4 rounded-xl border border-zinc-200 text-xs font-medium text-zinc-600 flex items-center justify-center gap-1.5 transition-colors ${canEdit ? 'cursor-pointer hover:bg-zinc-50 hover:border-zinc-300' : 'opacity-50 cursor-not-allowed'} ${logoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" disabled={!canEdit}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]; if (!file) return
+                          setLogoUploading(true); setLogoError('')
+                          try {
+                            const fd = new FormData(); fd.append('file', file); fd.append('upload_preset', 'openledger')
+                            const res = await fetch('https://api.cloudinary.com/v1_1/dwicc7oxu/image/upload', { method: 'POST', body: fd })
+                            if (!res.ok) throw new Error()
+                            const data = await res.json()
+                            setBiz((b) => ({ ...b, logo: data.secure_url }))
+                            updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, logo: data.secure_url } } })
+                          } catch { setLogoError('Upload failed. Try again.') }
+                          finally { setLogoUploading(false); e.target.value = '' }
+                        }}
+                      />
+                      {logoUploading ? <><span className="h-3 w-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> Uploading…</> : 'Upload image'}
+                    </label>
+                    {biz.logo && canEdit && (
+                      <button onClick={() => { setBiz((b) => ({ ...b, logo: '' })); updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, logo: '' } } }) }}
+                        className="h-9 px-4 rounded-xl border border-red-100 text-xs text-red-500 hover:bg-red-50 transition-colors">
+                        Remove logo
+                      </button>
+                    )}
+                  </div>
                 </div>
-              ))}
+                {logoError && <p className="text-xs text-red-500 mt-1.5">{logoError}</p>}
+              </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {[['GSTIN', 'gstin', '22AAAAA0000A1Z5'], ['PAN', 'pan', 'AAAAA0000A'], ['Email', 'email', 'billing@company.com'], ['Phone', 'phone', '+91 98765 43210']].map(([label, key, placeholder]) => (
-                  <div key={key} className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">{label}</label>
-                    <input type={key === 'email' ? 'email' : 'text'} value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
-                      readOnly={!canEdit} placeholder={placeholder} className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
+              <div>
+                <label className={labelCls}>Legal / Trading Name</label>
+                <input value={biz.legalName || ''} onChange={(e) => setBiz((b) => ({ ...b, legalName: e.target.value }))}
+                  readOnly={!canEdit} placeholder="e.g. Acme Pvt. Ltd." className={fieldCls(!canEdit)} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[['GSTIN', 'gstin', '22AAAAA0000A1Z5', 'text'], ['PAN', 'pan', 'AAAAA0000A', 'text'],
+                  ['Email', 'email', 'billing@co.com', 'email'], ['Phone', 'phone', '+91 98765 43210', 'tel']].map(([lbl, key, ph, type]) => (
+                  <div key={key}>
+                    <label className={labelCls}>{lbl}</label>
+                    <input type={type} value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
+                      readOnly={!canEdit} placeholder={ph} className={fieldCls(!canEdit)} />
                   </div>
                 ))}
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">Website</label>
+              <div>
+                <label className={labelCls}>Website</label>
                 <input value={biz.website || ''} onChange={(e) => setBiz((b) => ({ ...b, website: e.target.value }))}
-                  readOnly={!canEdit} placeholder="https://yourcompany.com" className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
+                  readOnly={!canEdit} placeholder="https://yourcompany.com" className={fieldCls(!canEdit)} />
               </div>
 
-              <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium text-zinc-400 uppercase tracking-wide">Address</label>
-                <div className="flex flex-col gap-1.5">
+              <div>
+                <label className={labelCls}>Address</label>
+                <div className="flex flex-col gap-2">
                   <input value={biz.addressLine1 || ''} onChange={(e) => setBiz((b) => ({ ...b, addressLine1: e.target.value }))}
-                    readOnly={!canEdit} placeholder="Street / Building" className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
+                    readOnly={!canEdit} placeholder="Street / Building" className={fieldCls(!canEdit)} />
                   <input value={biz.addressLine2 || ''} onChange={(e) => setBiz((b) => ({ ...b, addressLine2: e.target.value }))}
-                    readOnly={!canEdit} placeholder="Area / Locality (optional)" className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
-                  <div className="grid grid-cols-2 gap-1.5">
+                    readOnly={!canEdit} placeholder="Area / Locality (optional)" className={fieldCls(!canEdit)} />
+                  <div className="grid grid-cols-2 gap-2">
                     {[['City', 'city'], ['State', 'state'], ['Pincode', 'pincode'], ['Country', 'country']].map(([ph, key]) => (
                       <input key={key} value={biz[key] || ''} onChange={(e) => setBiz((b) => ({ ...b, [key]: e.target.value }))}
-                        readOnly={!canEdit} placeholder={ph} className={`h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`} />
+                        readOnly={!canEdit} placeholder={ph} className={fieldCls(!canEdit)} />
                     ))}
                   </div>
                 </div>
               </div>
-              <button onClick={handleBizSave} disabled={savingBiz || !canEdit}
-                className="h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {savingBiz ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : null}
-                {bizSaved ? '✓ Saved' : savingBiz ? 'Saving…' : 'Save Business Details'}
-              </button>
-            </div>
-          </div>
-        )}
 
-        {/* Middle column: account type + currency */}
-        <div className={`flex flex-col gap-4 ${activeGroup?.type === 'business' ? 'md:w-72' : 'max-w-lg'} w-full`}>
-          {/* Account type */}
-          <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
-            <div className="p-4">
-              <p className="text-sm font-semibold text-zinc-900 mb-1">Account type</p>
-              <p className="text-xs text-zinc-400 mb-3">Set when your first group was created. Each group has its own type.</p>
-              <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200">
-                <span className="text-xl">{activeGroup?.type === 'business' ? '🏢' : '🏠'}</span>
-                <div>
-                  <p className="text-sm font-semibold text-zinc-900 capitalize">{activeGroup?.type || 'Personal'}</p>
-                  {activeGroup?.name && <p className="text-xs text-zinc-500">{activeGroup.name}</p>}
-                </div>
-                <span className="ml-auto text-[10px] text-zinc-400 bg-zinc-200 px-2 py-0.5 rounded-full">Locked</span>
+              {canEdit && (
+                <button onClick={handleBizSave} disabled={savingBiz}
+                  className="h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  {savingBiz && <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                  {bizSaved ? '✓ Saved' : savingBiz ? 'Saving…' : 'Save Business Details'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── Appearance ────────────────────────────────── */}
+          {activeSection === 'appearance' && isBusiness && (
+            <div className="p-6 flex flex-col gap-6">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">Invoice Template</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Color theme and layout applied to all PDFs for this workspace.</p>
               </div>
-            </div>
-          </div>
 
-          {/* Currency */}
-          <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
-            <div className="p-4">
-              <p className="text-sm font-semibold text-zinc-900 mb-1">Currency</p>
-              <p className="text-xs text-zinc-400 mb-3">
-                Changing currency can also convert all your product prices using live exchange rates.
-              </p>
-              <div className="flex items-center gap-3 px-3 py-2.5 bg-zinc-50 rounded-xl border border-zinc-200 mb-3">
-                <span className="text-2xl font-bold text-zinc-900">{currencySymbol(groupCurrency)}</span>
-                <div>
-                  <p className="text-sm font-semibold text-zinc-900">{groupCurrency}</p>
-                  <p className="text-xs text-zinc-400">{CURRENCY_LIST.find(c => c.code === groupCurrency)?.name || ''}</p>
-                </div>
-              </div>
-              <select
-                key={groupCurrency}
-                defaultValue={groupCurrency}
-                onChange={(e) => canEdit && handleCurrencySelect(e.target.value)}
-                disabled={!canEdit}
-                className={`w-full h-10 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
-              >
-                {[...CURRENCY_LIST].sort((a, b) => {
-                  if (a.code === groupCurrency) return -1
-                  if (b.code === groupCurrency) return 1
-                  return a.code.localeCompare(b.code)
-                }).map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.symbol} {c.code} — {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Right column: invoice template (business only) */}
-        {activeGroup?.type === 'business' && (
-          <div className="flex flex-col gap-4 md:w-96 w-full">
-            <div className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
-              <div className="p-4">
-                <p className="text-sm font-semibold text-zinc-900 mb-1">Invoice template</p>
-                <p className="text-xs text-zinc-400 mb-3">Applies to all PDFs generated for this group.</p>
-                <div className="grid grid-cols-2 gap-1.5">
+              {/* Color Theme — 3-color palette cards */}
+              <div>
+                <label className={labelCls}>Color Theme</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {[
-                    { key: 'classic',   label: 'Classic',   desc: 'Traditional letterhead' },
-                    { key: 'modern',    label: 'Modern',    desc: 'Left rail, big number' },
-                    { key: 'minimal',   label: 'Minimal',   desc: 'Clean, no borders' },
-                    { key: 'executive', label: 'Executive', desc: 'Accent header band' },
-                    { key: 'bold',      label: 'Bold',      desc: 'Strong typography' },
-                    { key: 'elegant',   label: 'Elegant',   desc: 'Warm cream paper' },
-                    { key: 'retro',     label: 'Retro',     desc: 'Monospace, dashed' },
-                    { key: 'compact',   label: 'Compact',   desc: 'Dense, data-heavy' },
-                    { key: 'stripe',    label: 'Stripe',    desc: 'Split-panel header' },
-                    { key: 'bureau',    label: 'Bureau',    desc: 'Centered, formal' },
+                    { key: 'forest',  label: 'Forest',  colors: ['#14532d', '#166534', '#f0fdf4'] },
+                    { key: 'rose',    label: 'Rose',    colors: ['#be123c', '#e11d48', '#fff1f2'] },
+                    { key: 'indigo',  label: 'Indigo',  colors: ['#4338ca', '#4f46e5', '#eef2ff'] },
+                    { key: 'amber',   label: 'Amber',   colors: ['#b45309', '#d97706', '#fffbeb'] },
+                    { key: 'teal',    label: 'Teal',    colors: ['#0f766e', '#0d9488', '#f0fdfa'] },
+                    { key: 'purple',  label: 'Purple',  colors: ['#6d28d9', '#7c3aed', '#f5f3ff'] },
+                    { key: 'slate',   label: 'Slate',   colors: ['#1e293b', '#334155', '#f8fafc'] },
+                  ].map((c) => {
+                    const active = (biz.color || 'forest') === c.key
+                    return (
+                      <button key={c.key} disabled={!canEdit}
+                        onClick={() => { setBiz((b) => ({ ...b, color: c.key })); updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, color: c.key } } }) }}
+                        className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all disabled:cursor-not-allowed ${!canEdit ? 'opacity-50' : ''} ${active ? 'border-zinc-900 bg-zinc-50 shadow-sm' : 'border-zinc-100 hover:border-zinc-200'}`}>
+                        {/* 3-color swatch strip */}
+                        <div className="flex gap-0.5 flex-shrink-0">
+                          {c.colors.map((hex, i) => (
+                            <div key={i} style={{ backgroundColor: hex }}
+                              className={`w-4 h-7 ${i === 0 ? 'rounded-l-md' : ''} ${i === 2 ? 'rounded-r-md' : ''}`} />
+                          ))}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-zinc-900">{c.label}</p>
+                        </div>
+                        {active && <Check size={13} className="text-zinc-900 flex-shrink-0" strokeWidth={2.5} />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Template grid */}
+              <div>
+                <label className={labelCls}>Layout</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { key: 'classic',   label: 'Prestige',  desc: 'Double-ruled authority'     },
+                    { key: 'modern',    label: 'Vantage',   desc: 'Left-rail, sharp lines'     },
+                    { key: 'minimal',   label: 'Lumina',    desc: 'Open space, premium white'  },
+                    { key: 'executive', label: 'Apex',      desc: 'Color header, C-suite feel' },
+                    { key: 'bold',      label: 'Titan',     desc: 'Heavy weight, commanding'   },
+                    { key: 'elegant',   label: 'Opulent',   desc: 'Warm tones, refined luxury' },
+                    { key: 'retro',     label: 'Cipher',    desc: 'Monospace, technical edge'  },
+                    { key: 'compact',   label: 'Meridian',  desc: 'Dense layout, high volume'  },
+                    { key: 'stripe',    label: 'Atlas',     desc: 'Split panel, global grade'  },
+                    { key: 'bureau',    label: 'Axiom',     desc: 'Centered, formal authority' },
                   ].map((t) => {
                     const active = (biz.template || 'classic') === t.key
                     return (
-                      <div key={t.key} className={`rounded-lg border transition-all ${active ? 'border-zinc-900 bg-zinc-50' : 'border-zinc-200 hover:border-zinc-300'} ${!canEdit ? 'opacity-60' : ''}`}>
-                        <button
-                          disabled={!canEdit}
-                          onClick={() => {
-                            setBiz((b) => ({ ...b, template: t.key }))
-                            updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, template: t.key } } })
-                          }}
-                          className="flex items-start gap-2 px-2.5 py-2 w-full text-left disabled:cursor-not-allowed"
-                        >
-                          <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${active ? 'border-zinc-900' : 'border-zinc-300'}`}>
-                            {active && <div className="w-1.5 h-1.5 rounded-full bg-zinc-900" />}
+                      <div key={t.key} className={`rounded-xl border-2 overflow-hidden transition-all ${active ? 'border-zinc-900 shadow-sm' : 'border-zinc-100 hover:border-zinc-200'} ${!canEdit ? 'opacity-60' : ''}`}>
+                        <button disabled={!canEdit}
+                          onClick={() => { setBiz((b) => ({ ...b, template: t.key })); updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, template: t.key } } }) }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left disabled:cursor-not-allowed">
+                          <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${active ? 'border-zinc-900' : 'border-zinc-300'}`}>
+                            {active && <div className="w-2 h-2 rounded-full bg-zinc-900" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-zinc-900 leading-tight">{t.label}</p>
-                            <p className="text-[10px] text-zinc-400 leading-tight mt-0.5 truncate">{t.desc}</p>
+                            <p className="text-xs font-semibold text-zinc-900">{t.label}</p>
+                            <p className="text-[10px] text-zinc-400 truncate mt-0.5">{t.desc}</p>
                           </div>
                         </button>
-                        <button
-                          onClick={() => setPreviewTemplate(t.key)}
-                          className="w-full text-[10px] text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors pb-1.5 rounded-b-lg"
-                        >
-                          Preview
+                        <button onClick={() => setPreviewTemplate(t.key)}
+                          className="w-full border-t border-zinc-100 text-[10px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50 transition-colors py-1.5">
+                          Preview →
                         </button>
                       </div>
                     )
                   })}
                 </div>
-
-                {/* Color theme picker */}
-                <div className="mt-3 pt-3 border-t border-zinc-100">
-                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wide mb-2">Color theme</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {[
-                      { key: 'forest', color: '#14532d', label: 'Forest' },
-                      { key: 'rose',   color: '#be123c', label: 'Rose' },
-                      { key: 'indigo', color: '#4338ca', label: 'Indigo' },
-                      { key: 'amber',  color: '#b45309', label: 'Amber' },
-                      { key: 'teal',   color: '#0f766e', label: 'Teal' },
-                      { key: 'purple', color: '#6d28d9', label: 'Purple' },
-                      { key: 'slate',  color: '#1e293b', label: 'Slate' },
-                    ].map((c) => {
-                      const active = (biz.color || 'forest') === c.key
-                      return (
-                        <button
-                          key={c.key}
-                          title={c.label}
-                          disabled={!canEdit}
-                          onClick={() => {
-                            setBiz((b) => ({ ...b, color: c.key }))
-                            updateGroup({ id: activeGroupId, data: { businessDetails: { ...biz, color: c.key } } })
-                          }}
-                          className={`w-6 h-6 rounded-full transition-all disabled:cursor-not-allowed ${active ? 'ring-2 ring-offset-2 ring-zinc-900 scale-110' : 'hover:scale-110'} ${!canEdit ? 'opacity-60' : ''}`}
-                          style={{ backgroundColor: c.color }}
-                        />
-                      )
-                    })}
-                  </div>
-                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Currency conversion confirmation sheet */}
-      <BottomSheet
-        open={!!pendingCurrency}
-        onClose={() => !converting && setPendingCurrency(null)}
-        title="Change currency"
-      >
-        <div className="flex flex-col gap-4 px-1">
-          {/* From → To */}
-          <div className="flex items-center justify-center gap-4 py-2">
-            <div className="text-center">
-              <p className="text-2xl font-bold text-zinc-900">{currencySymbol(groupCurrency)}</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{groupCurrency}</p>
-            </div>
-            <div className="text-zinc-300 text-xl">→</div>
-            <div className="text-center">
-              <p className="text-2xl font-bold text-zinc-900">{currencySymbol(pendingCurrency)}</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{pendingCurrency}</p>
-            </div>
-          </div>
-
-          <p className="text-sm text-zinc-600 text-center leading-relaxed">
-            Do you also want to convert all your <strong>product prices</strong> from{' '}
-            <strong>{groupCurrency}</strong> to <strong>{pendingCurrency}</strong> using live exchange rates?
-          </p>
-
-          {convertError && (
-            <p className="text-xs text-red-500 bg-red-50 rounded-xl px-3 py-2 text-center">{convertError}</p>
           )}
 
-          <Button
-            fullWidth
-            loading={converting}
-            onClick={() => confirmCurrencyChange(true)}
-          >
-            Yes, convert prices too
-          </Button>
-          <Button
-            fullWidth
-            variant="secondary"
-            disabled={converting}
-            onClick={() => confirmCurrencyChange(false)}
-          >
-            Just change the symbol
-          </Button>
+          {/* ── Preferences ───────────────────────────────── */}
+          {activeSection === 'preferences' && (
+            <div className="p-6 flex flex-col gap-5 max-w-sm">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">Preferences</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Workspace settings shared across all members.</p>
+              </div>
+
+              <div>
+                <label className={labelCls}>Workspace Type</label>
+                <div className="flex items-center gap-3 h-12 px-4 bg-zinc-50 rounded-xl border border-zinc-200">
+                  <span className="text-xl">{isBusiness ? '🏢' : '🏠'}</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-zinc-900 capitalize">{activeGroup?.type || 'Personal'}</p>
+                    {activeGroup?.name && <p className="text-[11px] text-zinc-400">{activeGroup.name}</p>}
+                  </div>
+                  <span className="text-[10px] text-zinc-400 bg-zinc-200 px-2.5 py-1 rounded-full font-medium">Locked</span>
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Currency</label>
+                <p className="text-xs text-zinc-400 mb-2.5">Affects all members. Changing it can also convert your product prices.</p>
+                <div className="flex items-center gap-3 h-12 px-4 bg-zinc-50 rounded-xl border border-zinc-200 mb-2">
+                  <span className="text-xl font-bold text-zinc-900 w-6 text-center flex-shrink-0">{currencySymbol(groupCurrency)}</span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-zinc-900">{groupCurrency}</p>
+                    <p className="text-[11px] text-zinc-400">{CURRENCY_LIST.find(c => c.code === groupCurrency)?.name || ''}</p>
+                  </div>
+                </div>
+                {canEdit ? (
+                  <select key={groupCurrency} defaultValue={groupCurrency}
+                    onChange={(e) => { if (e.target.value !== groupCurrency) { setPendingCurrency(e.target.value); setConvertError(null) } }}
+                    className="w-full h-10 px-3 rounded-xl border border-zinc-200 bg-white text-sm text-zinc-900 outline-none focus:border-zinc-900 transition-colors">
+                    {[...CURRENCY_LIST]
+                      .sort((a, b) => a.code === groupCurrency ? -1 : b.code === groupCurrency ? 1 : a.code.localeCompare(b.code))
+                      .map((c) => <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>)}
+                  </select>
+                ) : (
+                  <div className={fieldCls(true) + ' flex items-center'}>{currencySymbol(groupCurrency)} {groupCurrency}</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Email ─────────────────────────────────────── */}
+          {activeSection === 'email' && (
+            <div className="p-6 flex flex-col gap-4 max-w-md">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">Email Sending</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Configure SMTP to send invoices and orders by email.</p>
+              </div>
+
+              {/* Status card + toggle */}
+              <div className={`rounded-xl border-2 p-4 flex items-center gap-4 transition-colors ${smtpConfigured && smtp.emailEnabled ? 'border-emerald-200 bg-emerald-50' : smtpConfigured ? 'border-zinc-200 bg-zinc-50' : 'border-amber-200 bg-amber-50'}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl ${smtpConfigured && smtp.emailEnabled ? 'bg-emerald-100' : smtpConfigured ? 'bg-zinc-200' : 'bg-amber-100'}`}>
+                  {smtpConfigured && smtp.emailEnabled ? '✉️' : smtpConfigured ? '📭' : '⚠️'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${smtpConfigured && smtp.emailEnabled ? 'text-emerald-800' : smtpConfigured ? 'text-zinc-700' : 'text-amber-800'}`}>
+                    {smtpConfigured && smtp.emailEnabled ? 'Email sending is active' : smtpConfigured ? 'Configured but disabled' : 'Not configured'}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${smtpConfigured && smtp.emailEnabled ? 'text-emerald-600' : smtpConfigured ? 'text-zinc-500' : 'text-amber-600'}`}>
+                    {smtpConfigured && smtp.emailEnabled
+                      ? `Sending as ${smtp.smtpUser || '…'}`
+                      : smtpConfigured ? 'Toggle on to enable' : 'Add credentials below to enable'}
+                  </p>
+                </div>
+                <button
+                  disabled={!canToggleEmail}
+                  title={!smtpConfigured ? 'Save credentials first' : ''}
+                  onClick={() => {
+                    const next = !smtp.emailEnabled
+                    setSmtp((s) => ({ ...s, emailEnabled: next }))
+                    updateGroup({ id: activeGroupId, data: { 'businessDetails.emailEnabled': next } }, {
+                      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] })
+                    })
+                  }}
+                  className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${smtp.emailEnabled && smtpConfigured ? 'bg-emerald-500' : 'bg-zinc-300'} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${smtp.emailEnabled && smtpConfigured ? 'translate-x-6' : ''}`} />
+                </button>
+              </div>
+
+              {/* Fields */}
+              <div>
+                <label className={labelCls}>SMTP Email Address</label>
+                <input type="email" value={smtp.smtpUser}
+                  onChange={(e) => setSmtp((s) => ({ ...s, smtpUser: e.target.value }))}
+                  readOnly={!canEdit} placeholder="you@gmail.com" className={fieldCls(!canEdit)} />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-zinc-500">{smtpConfigured ? 'New Password' : 'App Password / SMTP Password'}</label>
+                  {smtpConfigured && <span className="text-[11px] text-zinc-400">Leave blank to keep existing</span>}
+                </div>
+                <input type="password" value={smtp.smtpPass}
+                  onChange={(e) => setSmtp((s) => ({ ...s, smtpPass: e.target.value }))}
+                  readOnly={!canEdit}
+                  placeholder={smtpConfigured ? '••••••••' : 'App password or SMTP password'}
+                  className={fieldCls(!canEdit)} />
+              </div>
+
+              <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-50 rounded-xl px-3 py-2.5">
+                For Gmail: Google Account → Security → 2-Step Verification → <strong className="text-zinc-600">App passwords</strong>.
+                &nbsp;Host: <code className="bg-zinc-200 px-1 rounded text-zinc-700 text-[11px]">smtp.gmail.com:587</code>
+              </p>
+
+              {canEdit && (
+                <div className="flex gap-2">
+                  <button onClick={handleSmtpSave} disabled={smtpSaving || smtpRemoving || !smtp.smtpUser}
+                    className="flex-1 h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                    {smtpSaving && <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                    {smtpSaved ? '✓ Saved' : smtpSaving ? 'Saving…' : 'Save Credentials'}
+                  </button>
+                  {smtpConfigured && (
+                    <button onClick={handleSmtpRemove} disabled={smtpSaving || smtpRemoving}
+                      className="h-10 px-4 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-40 flex items-center gap-1.5">
+                      {smtpRemoving && <span className="h-3.5 w-3.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />}
+                      {smtpRemoving ? '…' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* Currency conversion sheet */}
+      <BottomSheet open={!!pendingCurrency} onClose={() => !converting && setPendingCurrency(null)} title="Change currency">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-center gap-6 py-4 bg-zinc-50 rounded-2xl">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-zinc-900">{currencySymbol(groupCurrency)}</p>
+              <p className="text-xs text-zinc-500 mt-1 font-medium">{groupCurrency}</p>
+            </div>
+            <div className="text-zinc-300 text-2xl">→</div>
+            <div className="text-center">
+              <p className="text-3xl font-bold text-zinc-900">{currencySymbol(pendingCurrency)}</p>
+              <p className="text-xs text-zinc-500 mt-1 font-medium">{pendingCurrency}</p>
+            </div>
+          </div>
+          <p className="text-sm text-zinc-600 text-center leading-relaxed">
+            Do you also want to convert all <strong>product prices</strong> from <strong>{groupCurrency}</strong> to <strong>{pendingCurrency}</strong> using live exchange rates?
+          </p>
+          {convertError && <p className="text-xs text-red-500 bg-red-50 rounded-xl px-4 py-2.5 text-center">{convertError}</p>}
+          <Button fullWidth loading={converting} onClick={() => confirmCurrencyChange(true)}>Yes, convert prices too</Button>
+          <Button fullWidth variant="secondary" disabled={converting} onClick={() => confirmCurrencyChange(false)}>Just change the symbol</Button>
         </div>
       </BottomSheet>
 
       {/* Template preview modal */}
       {previewTemplate && createPortal(
         <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm">
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 text-white flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setPreviewTemplate(null)} className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-white text-base leading-none">✕</button>
+          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 text-white flex-shrink-0">
+            <button onClick={() => setPreviewTemplate(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-base leading-none">✕</button>
             <div className="flex-1 overflow-x-auto scrollbar-none">
               <div className="flex gap-1 pr-1" style={{ width: 'max-content' }}>
-                {['classic','modern','minimal','executive','bold','elegant','retro','compact','stripe','bureau'].map((k) => (
-                  <button key={k} onClick={() => setPreviewTemplate(k)}
-                    className={`text-xs px-2.5 py-1 rounded-full capitalize transition-colors whitespace-nowrap ${previewTemplate === k ? 'bg-white text-zinc-900 font-semibold' : 'text-zinc-400 hover:text-white'}`}>
-                    {k}
+                {[
+                  {key:'classic',label:'Prestige'},{key:'modern',label:'Vantage'},{key:'minimal',label:'Lumina'},
+                  {key:'executive',label:'Apex'},{key:'bold',label:'Titan'},{key:'elegant',label:'Opulent'},
+                  {key:'retro',label:'Cipher'},{key:'compact',label:'Meridian'},{key:'stripe',label:'Atlas'},{key:'bureau',label:'Axiom'},
+                ].map(({key,label}) => (
+                  <button key={key} onClick={() => setPreviewTemplate(key)}
+                    className={`text-xs px-2.5 py-1 rounded-full transition-colors whitespace-nowrap ${previewTemplate === key ? 'bg-white text-zinc-900 font-semibold' : 'text-zinc-400 hover:text-white'}`}>
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
           </div>
           <div className="flex-1 overflow-hidden p-3 flex justify-center" onClick={() => setPreviewTemplate(null)}>
-            <iframe
-              key={previewTemplate}
-              srcDoc={buildTemplatePreview(previewTemplate, biz, biz.color)}
+            <iframe key={previewTemplate} srcDoc={buildTemplatePreview(previewTemplate, biz, biz.color)}
               className="w-full max-w-3xl bg-white rounded-xl shadow-2xl border border-zinc-200"
-              style={{ height: '100%' }}
-              title="Invoice preview"
-              onClick={(e) => e.stopPropagation()}
-            />
+              style={{ height: '100%' }} title="Invoice preview" onClick={(e) => e.stopPropagation()} />
           </div>
         </div>,
         document.body
       )}
-
     </div>
   )
 }
@@ -1550,366 +1654,564 @@ const PREVIEW_COLOR_THEMES = {
 }
 
 function buildTemplatePreview(template, biz = {}, colorKey = 'forest') {
-  const t = template || 'classic'
-  const modern  = t === 'modern'
-  const minimal = t === 'minimal'
+  const t   = template || 'classic'
   const col = PREVIEW_COLOR_THEMES[colorKey] || PREVIEW_COLOR_THEMES.forest
+  const co  = biz.legalName || 'Meridian Capital Group'
+  const em  = biz.email    || 'finance@meridian.com'
+  const gst = biz.gstin    || '29AABCM1234F1Z3'
+  const ad  = [biz.addressLine1, biz.city].filter(Boolean).join(', ') || '14 Financial District, Mumbai 400 051'
+  const lg  = biz.logo ? `<img src="${biz.logo}" style="height:34px;object-fit:contain;display:block;margin-bottom:5px;">` : ''
 
-  const bizName  = biz.legalName || 'Your Company'
-  const gstin    = biz.gstin  || '22AAAAA0000A1Z5'
-  const email    = biz.email  || 'billing@yourcompany.com'
-  const logoHtml = biz.logo
-    ? `<img src="${biz.logo}" style="max-height:40px;max-width:100px;object-fit:contain;margin-bottom:4px;display:block;"/>`
-    : ''
+  const ff  = `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`
+  const S = '₹19,75,000', TAX = '₹3,55,500', TOT = '₹23,30,500'
 
-  const cfg = {
-    modern: {
-      pageStyle:   `padding:40px 40px 40px 36px;border-left:5px solid ${col.mid};`,
-      brandSize:   '18px', brandWeight: '700', brandColor: '#09090b',
-      subColor:    '#a1a1aa',
-      numSize:     '32px', numWeight: '700', numColor: col.mid, numSpacing: '-1.5px',
-      numMarginBottom: '8px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
-      divider:     '<div style="height:1px;background:#f4f4f5;margin-bottom:32px;"></div>',
-      headerMb:    '36px',
-      cardGap:     '32px',
-      card:        `padding-left:14px;border-left:2px solid ${col.border};`,
-      lbl:         col.mid,
-      dateGap:     '32px',
-      dateCard:    `padding-left:14px;border-left:2px solid ${col.border};`,
-      dateLbl:     col.mid,
-      theadBg:     'transparent', theadColor: '#09090b', theadBorder: 'border-bottom:2px solid #09090b;',
-      rowEven:     null, tdColor: '#3f3f46', rowGap: '#f4f4f5',
-      totalsColor: '#71717a',
-      grand:       `font-size:15px;font-weight:700;color:${col.mid};border-top:2px solid #09090b;border-bottom:none;padding-top:10px;`,
-      noteBox:     `border-left:2px solid ${col.border};padding-left:16px;margin-bottom:28px;`,
-      noteLbl:     col.mid, noteText: '#52525b',
-      footer:      'border-top:1px solid #f4f4f5;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a1a1aa',
-    },
-    minimal: {
-      pageStyle:   'padding:48px;',
-      brandSize:   '18px', brandWeight: '600', brandColor: '#09090b',
-      subColor:    '#a1a1aa',
-      numSize:     '24px', numWeight: '300', numColor: '#09090b', numSpacing: '-1px',
-      numMarginBottom: '6px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:100px;font-weight:600;`,
-      divider:     '<div style="height:1px;background:#f4f4f5;margin-bottom:36px;"></div>',
-      headerMb:    '40px',
-      cardGap:     '32px',
-      card:        'padding:0;',
-      lbl:         '#a1a1aa',
-      dateGap:     '32px',
-      dateCard:    'padding:0;',
-      dateLbl:     '#a1a1aa',
-      theadBg:     'transparent', theadColor: '#09090b', theadBorder: 'border-bottom:2px solid #09090b;',
-      rowEven:     null, tdColor: '#3f3f46', rowGap: '#f4f4f5',
-      totalsColor: '#71717a',
-      grand:       `font-size:15px;font-weight:600;color:${col.accent};border-top:1px solid #e4e4e7;border-bottom:none;padding-top:12px;`,
-      noteBox:     'padding:0;margin-bottom:28px;',
-      noteLbl:     '#a1a1aa', noteText: '#52525b',
-      footer:      'border-top:1px solid #f4f4f5;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a1a1aa',
-    },
-    classic: {
-      pageStyle:   'padding:40px;',
-      brandSize:   '22px', brandWeight: '700', brandColor: col.accent,
-      subColor:    '#a1a1aa',
-      numSize:     '20px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
-      numMarginBottom: '4px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
-      divider:     '<div style="margin-bottom:28px;border-top:3px double #d1d5db;padding-top:3px;border-bottom:1px solid #d1d5db;"></div>',
-      headerMb:    '24px',
-      cardGap:     '24px',
-      card:        'background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:16px;',
-      lbl:         '#6b7280',
-      dateGap:     '20px',
-      dateCard:    'background:#fff;border:1px solid #d1d5db;border-radius:8px;padding:12px 16px;',
-      dateLbl:     '#6b7280',
-      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
-      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
-      totalsColor: '#6b7280',
-      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:1px solid #d1d5db;border-bottom:none;padding-top:10px;`,
-      noteBox:     'background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;padding:16px;margin-bottom:32px;',
-      noteLbl:     '#6b7280', noteText: '#4b5563',
-      footer:      'border-top:1px solid #e5e7eb;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a1a1aa',
-    },
-    executive: {
-      pageStyle:   `padding:0;`,
-      headerWrap:  `display:flex;justify-content:space-between;align-items:flex-start;padding:40px;background:${col.accent};`,
-      brandSize:   '22px', brandWeight: '700', brandColor: '#fff',
-      subColor:    'rgba(255,255,255,0.55)',
-      numSize:     '24px', numWeight: '700', numColor: '#fff', numSpacing: 'normal',
-      numMarginBottom: '4px',
-      badge:       'background:rgba(255,255,255,0.18);color:#fff;border-radius:4px;font-weight:700;',
-      bodyStyle:   'padding:32px 40px 40px;',
-      divider:     '',
-      headerMb:    '0',
-      cardGap:     '20px',
-      card:        `background:${col.light};border:1px solid ${col.border};border-radius:8px;padding:16px;`,
-      lbl:         col.mid,
-      dateGap:     '16px',
-      dateCard:    `background:${col.light};border:1px solid ${col.border};border-radius:6px;padding:10px 14px;`,
-      dateLbl:     col.mid,
-      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
-      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
-      totalsColor: '#6b7280',
-      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:2px solid ${col.border};border-bottom:none;padding-top:10px;`,
-      noteBox:     `background:${col.light};border:1px solid ${col.border};border-radius:8px;padding:16px;margin-bottom:32px;`,
-      noteLbl:     col.mid, noteText: '#4b5563',
-      footer:      'border-top:1px solid #e5e7eb;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a1a1aa',
-    },
-    bold: {
-      pageStyle:   'padding:48px;',
-      brandSize:   '28px', brandWeight: '800', brandColor: col.accent,
-      subColor:    '#a1a1aa',
-      numSize:     '28px', numWeight: '800', numColor: col.accent, numSpacing: '-1px',
-      numMarginBottom: '4px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
-      divider:     '',
-      headerMb:    '0',
-      headerExtra: `padding-bottom:20px;border-bottom:5px solid ${col.accent};margin-bottom:32px;align-items:flex-end;`,
-      cardGap:     '20px',
-      card:        `padding:14px 16px;border-left:4px solid ${col.accent};background:${col.light};`,
-      lbl:         col.mid,
-      dateGap:     '20px',
-      dateCard:    `padding:10px 14px;border-left:4px solid ${col.border};`,
-      dateLbl:     '#71717a',
-      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
-      rowEven:     col.light, tdColor: '#374151', rowGap: '#f3f4f6',
-      totalsColor: '#6b7280',
-      grand:       `font-size:15px;font-weight:800;color:${col.accent};border-top:5px solid ${col.accent};border-bottom:none;padding-top:10px;`,
-      noteBox:     `padding:14px 16px;border-left:4px solid ${col.accent};background:${col.light};margin-bottom:32px;`,
-      noteLbl:     col.mid, noteText: '#4b5563',
-      footer:      `border-top:5px solid ${col.accent};padding-top:14px;display:flex;justify-content:space-between;align-items:center;`,
-      footerNote:  '#a1a1aa',
-    },
-    elegant: {
-      pageStyle:   'padding:52px;background:#fdfaf5;',
-      brandSize:   '20px', brandWeight: '600', brandColor: '#1c1917',
-      subColor:    '#78716c',
-      numSize:     '22px', numWeight: '600', numColor: col.accent, numSpacing: '-0.5px',
-      numMarginBottom: '4px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:100px;font-weight:600;`,
-      divider:     '',
-      headerMb:    '0',
-      headerExtra: 'padding-bottom:24px;border-bottom:1px solid #d6cfc4;margin-bottom:28px;',
-      cardGap:     '28px',
-      card:        'background:#fff;border:1px solid #e7e0d5;border-radius:6px;padding:16px 18px;',
-      lbl:         '#78716c',
-      dateGap:     '20px',
-      dateCard:    'background:#fff;border:1px solid #e7e0d5;border-radius:6px;padding:10px 14px;',
-      dateLbl:     '#78716c',
-      theadBg:     '#f5ede0', theadColor: '#44403c', theadBorder: 'border-bottom:1px solid #d6cfc4;',
-      rowEven:     '#faf7f2', tdColor: '#44403c', rowGap: '#ede8e0',
-      totalsColor: '#78716c',
-      grand:       `font-size:15px;font-weight:600;color:${col.accent};border-top:1px solid #d6cfc4;border-bottom:none;padding-top:12px;`,
-      noteBox:     'background:#fff;border:1px solid #e7e0d5;border-radius:6px;padding:16px 18px;margin-bottom:32px;',
-      noteLbl:     '#78716c', noteText: '#57534e',
-      footer:      'border-top:1px solid #d6cfc4;padding-top:16px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a8a29e',
-    },
-    retro: {
-      pageStyle:   'padding:40px;background:#fefce8;font-family:"Courier New",Courier,monospace;',
-      brandSize:   '20px', brandWeight: '700', brandColor: '#1c1917',
-      subColor:    '#78716c',
-      numSize:     '20px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
-      numMarginBottom: '4px',
-      badge:       `background:transparent;color:${col.accent};border:2px dashed ${col.accent};border-radius:0;font-weight:700;`,
-      divider:     '',
-      headerMb:    '0',
-      headerExtra: 'padding-bottom:16px;border-bottom:2px dashed #a16207;margin-bottom:24px;',
-      cardGap:     '20px',
-      card:        'background:#fff;border:2px dashed #d6d3d1;padding:14px;',
-      lbl:         '#a16207',
-      dateGap:     '16px',
-      dateCard:    'background:#fff;border:2px dashed #d6d3d1;padding:10px 12px;',
-      dateLbl:     '#a16207',
-      theadBg:     '#1c1917', theadColor: '#fefce8', theadBorder: '',
-      rowEven:     '#fef9c3', tdColor: '#292524', rowGap: '#d6d3d1',
-      totalsColor: '#78716c',
-      grand:       `font-size:14px;font-weight:700;color:${col.accent};border-top:2px dashed #a16207;border-bottom:none;padding-top:10px;`,
-      noteBox:     'background:#fff;border:2px dashed #d6d3d1;padding:14px;margin-bottom:28px;',
-      noteLbl:     '#a16207', noteText: '#44403c',
-      footer:      'border-top:2px dashed #a16207;padding-top:14px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a8a29e',
-    },
-    compact: {
-      pageStyle:   'padding:28px;',
-      brandSize:   '16px', brandWeight: '700', brandColor: col.accent,
-      subColor:    '#9ca3af',
-      numSize:     '16px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
-      numMarginBottom: '2px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:3px;font-size:9px;padding:2px 6px;font-weight:700;`,
-      divider:     '',
-      headerMb:    '0',
-      headerExtra: 'padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:16px;',
-      cardGap:     '12px',
-      card:        'border:1px solid #e5e7eb;border-radius:4px;padding:10px 12px;',
-      lbl:         '#9ca3af',
-      dateGap:     '10px',
-      dateCard:    'border:1px solid #e5e7eb;border-radius:4px;padding:8px 10px;',
-      dateLbl:     '#9ca3af',
-      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
-      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
-      totalsColor: '#6b7280',
-      grand:       `font-size:13px;font-weight:700;color:${col.accent};border-top:1px solid #e5e7eb;border-bottom:none;padding-top:6px;`,
-      noteBox:     'border:1px solid #e5e7eb;border-radius:4px;padding:10px 12px;margin-bottom:16px;',
-      noteLbl:     '#9ca3af', noteText: '#4b5563',
-      footer:      'border-top:1px solid #e5e7eb;padding-top:10px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a1a1aa',
-    },
-    stripe: {
-      pageStyle:   'padding:0;',
-      headerWrap:  'display:flex;align-items:stretch;margin-bottom:0;',
-      brandStyle:  `flex:1;padding:36px 40px;background:${col.accent};color:#fff;font-size:22px;font-weight:700;`,
-      metaStyle:   `padding:36px 40px;background:${col.light};text-align:right;min-width:200px;border-bottom:4px solid ${col.accent};`,
-      brandSize:   '22px', brandWeight: '700', brandColor: '#fff',
-      subColor:    'rgba(255,255,255,0.55)',
-      numSize:     '22px', numWeight: '700', numColor: col.accent, numSpacing: 'normal',
-      numMarginBottom: '4px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:4px;font-weight:700;`,
-      bodyStyle:   'padding:0 40px 40px;',
-      divider:     '',
-      headerMb:    '0',
-      cardGap:     '24px',
-      card:        `border:1px solid #e5e7eb;border-top:3px solid ${col.accent};border-radius:0 0 8px 8px;padding:16px;`,
-      lbl:         col.mid,
-      dateGap:     '16px',
-      dateCard:    'border:1px solid #e5e7eb;border-radius:6px;padding:10px 14px;',
-      dateLbl:     '#71717a',
-      theadBg:     col.accent, theadColor: '#fff', theadBorder: '',
-      rowEven:     '#f9fafb', tdColor: '#374151', rowGap: '#f3f4f6',
-      totalsColor: '#6b7280',
-      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:2px solid ${col.accent};border-bottom:none;padding-top:10px;`,
-      noteBox:     `border:1px solid #e5e7eb;border-top:3px solid ${col.accent};padding:14px;margin-bottom:28px;`,
-      noteLbl:     col.mid, noteText: '#4b5563',
-      footer:      'border-top:1px solid #e5e7eb;padding-top:14px;display:flex;justify-content:space-between;align-items:center;',
-      footerNote:  '#a1a1aa',
-    },
-    bureau: {
-      pageStyle:   'padding:40px 48px;',
-      brandSize:   '22px', brandWeight: '700', brandColor: col.accent,
-      subColor:    '#6b7280',
-      numSize:     '18px', numWeight: '700', numColor: '#1c1917', numSpacing: 'normal',
-      numMarginBottom: '4px',
-      badge:       `background:${col.badge};color:${col.badgeText};border-radius:0;font-weight:700;letter-spacing:0.08em;`,
-      divider:     '',
-      headerMb:    '0',
-      headerExtra: `flex-direction:column;align-items:center;text-align:center;border-top:4px double ${col.accent};border-bottom:4px double ${col.accent};padding:20px 0;margin-bottom:28px;`,
-      cardGap:     '28px',
-      card:        'padding:0;',
-      lbl:         col.mid,
-      dateGap:     '0',
-      dateCard:    'flex:1;padding:0 16px 0 0;border-right:1px solid #e5e7eb;margin-right:16px;',
-      dateLbl:     col.mid,
-      theadBg:     'transparent', theadColor: col.accent, theadBorder: `border-top:2px solid ${col.accent};border-bottom:2px solid ${col.accent};`,
-      rowEven:     col.light, tdColor: '#374151', rowGap: '#f3f4f6',
-      totalsColor: '#6b7280',
-      grand:       `font-size:15px;font-weight:700;color:${col.accent};border-top:2px solid ${col.accent};border-bottom:2px solid ${col.accent};padding-top:8px;padding-bottom:8px;`,
-      noteBox:     'border:1px solid #e5e7eb;padding:14px;margin-bottom:28px;',
-      noteLbl:     col.mid, noteText: '#4b5563',
-      footer:      `border-top:4px double ${col.accent};padding-top:14px;display:flex;justify-content:space-between;align-items:center;`,
-      footerNote:  '#a1a1aa',
-    },
-  }[t] || {}
+  const rows3 = (bd, alt) => `
+    <tr style="border-bottom:1px solid ${bd};">
+      <td style="padding:11px 14px;font-size:13px;color:#1e293b;">Enterprise Software License<br><span style="font-size:11px;color:#94a3b8;">Annual · FY 2024–25 · 5 users</span></td>
+      <td style="padding:11px 14px;font-size:13px;text-align:center;color:#374151;">5</td>
+      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹2,40,000</td>
+      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹12,00,000</td>
+    </tr>
+    <tr style="border-bottom:1px solid ${bd};${alt ? `background:${alt}` : ''}">
+      <td style="padding:11px 14px;font-size:13px;color:#1e293b;">Implementation &amp; Integration<br><span style="font-size:11px;color:#94a3b8;">Professional Services · 80 hrs</span></td>
+      <td style="padding:11px 14px;font-size:13px;text-align:center;color:#374151;">80 hrs</td>
+      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹8,500</td>
+      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹6,80,000</td>
+    </tr>
+    <tr>
+      <td style="padding:11px 14px;font-size:13px;color:#1e293b;">Priority Support &amp; SLA<br><span style="font-size:11px;color:#94a3b8;">Q3–Q4 2024 · Enterprise Tier</span></td>
+      <td style="padding:11px 14px;font-size:13px;text-align:center;color:#374151;">1</td>
+      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹95,000</td>
+      <td style="padding:11px 14px;font-size:13px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;">₹95,000</td>
+    </tr>`
 
-  const rows = [
-    ['Website Redesign',  '1',        '₹45,000', '18%', '₹45,000'],
-    ['SEO Optimization',  '3 months', '₹12,000', '18%', '₹36,000'],
-    ['Brand Identity Kit','1',        '₹25,000', '18%', '₹25,000'],
-  ].map((r, i) => `
-    <tr style="border-bottom:1px solid ${cfg.rowGap};${cfg.rowEven && i % 2 === 0 ? `background:${cfg.rowEven};` : ''}">
-      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};">${r[0]}</td>
-      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:center;">${r[1]}</td>
-      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:right;font-variant-numeric:tabular-nums;">${r[2]}</td>
-      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:center;">${r[3]}</td>
-      <td style="padding:10px 12px;font-size:13px;color:${cfg.tdColor};text-align:right;font-variant-numeric:tabular-nums;">${r[4]}</td>
-    </tr>`).join('')
+  const totalsBlock = (tc, lc, gs) => `
+    <div style="display:flex;justify-content:flex-end;">
+      <div style="width:260px;">
+        <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:${tc};border-bottom:1px solid ${lc}"><span>Subtotal</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:7px 0;font-size:13px;color:${tc};border-bottom:1px solid ${lc}"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:9px 0;${gs}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
+      </div>
+    </div>`
 
-  const headerHtml = cfg.headerWrap
-    ? `<div style="${cfg.headerWrap}">
-        <div style="${cfg.brandStyle}">${logoHtml}${bizName}<div style="font-size:11px;margin-top:2px;">Sales Invoice</div></div>
-        <div style="${cfg.metaStyle}">
-          <div style="font-size:${cfg.numSize};font-weight:${cfg.numWeight};color:${cfg.numColor};font-variant-numeric:tabular-nums;margin-bottom:${cfg.numMarginBottom || '4px'};">INV-2025-001</div>
-          <div style="font-size:11px;color:#71717a;margin-top:4px;">Issued 22 Jun 2025</div>
-          <span style="display:inline-block;margin-top:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;${cfg.badge}">Paid</span>
+  const wrap = (body, bg = '#ffffff', extra = '') =>
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{${ff};background:${bg};-webkit-print-color-adjust:exact;${extra}}</style></head><body>${body}</body></html>`
+
+  const bizBlock = (i) => i === 0
+    ? `<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">${co}</div><div style="font-size:11px;color:#64748b;line-height:1.8;">${ad}<br>GSTIN: ${gst}</div>`
+    : `<div style="font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px;">Apex Industries Limited</div><div style="font-size:11px;color:#64748b;line-height:1.8;">Corporate Tower, Gurugram 122003<br>GSTIN: 06AABCA1234F1Z7</div>`
+
+  switch (t) {
+
+    /* ── PRESTIGE (classic) ───────────────────────────────────────────────── */
+    case 'classic': return wrap(`
+      <div style="padding:48px 52px;position:relative;min-height:100%;">
+        <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${col.accent}"></div>
+        <div style="position:absolute;top:26px;right:40px;font-size:96px;font-weight:900;color:${col.accent};opacity:0.04;letter-spacing:-4px;line-height:1;pointer-events:none;user-select:none">INVOICE</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px;padding-top:18px;">
+          <div style="display:flex;align-items:center;gap:18px">
+            ${lg ? `<img src="${biz.logo}" style="height:64px;width:64px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
+            <div>
+              <div style="font-size:19px;font-weight:700;color:${col.accent};letter-spacing:0.07em;text-transform:uppercase">${co}</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:4px;line-height:1.8">${ad}<br>${em}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Tax Invoice</div>
+            <div style="font-size:30px;font-weight:800;color:#0f172a;letter-spacing:-1.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:5px">15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
+            <div style="display:inline-block;margin-top:8px;background:${col.badge};color:${col.badgeText};font-size:10px;font-weight:700;padding:3px 12px;border-radius:100px;letter-spacing:0.06em;text-transform:uppercase">PAID</div>
+          </div>
         </div>
-      </div>`
-    : `<div style="display:flex;justify-content:space-between;align-items:flex-start;${cfg.headerExtra || `margin-bottom:${cfg.headerMb};`}">
-        <div>${logoHtml}
-          <div style="font-size:${cfg.brandSize};font-weight:${cfg.brandWeight};color:${cfg.brandColor};letter-spacing:-0.5px;">${bizName}</div>
-          <div style="font-size:11px;color:${cfg.subColor};margin-top:2px;">Sales Invoice</div>
+        <div style="height:1px;background:#e2e8f0;margin-bottom:32px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-bottom:28px">
+          ${[0,1].map(i=>`<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#94a3b8;margin-bottom:10px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
         </div>
-        <div style="text-align:right;">
-          <div style="font-size:${cfg.numSize};font-weight:${cfg.numWeight};color:${cfg.numColor};letter-spacing:${cfg.numSpacing};line-height:1;font-variant-numeric:tabular-nums;margin-bottom:${cfg.numMarginBottom};">INV-2025-001</div>
-          <div style="font-size:11px;color:${cfg.subColor};margin-top:4px;">Issued 22 Jun 2025</div>
-          <span style="display:inline-block;margin-top:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;padding:3px 8px;${cfg.badge}">Paid</span>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+          <thead><tr style="border-bottom:2px solid ${col.accent}">
+            <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#64748b">Description</th>
+            <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b">Qty</th>
+            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b">Rate</th>
+            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#64748b">Amount</th>
+          </tr></thead>
+          <tbody>${rows3('#f1f5f9')}</tbody>
+        </table>
+        ${totalsBlock('#64748b','#f1f5f9',`font-size:15px;font-weight:800;color:${col.accent};border-top:2px solid ${col.accent};margin-top:4px`)}
+        <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:16px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:11px;color:#94a3b8">HDFC Bank &nbsp;&middot;&nbsp; A/C 5020XXXX1234 &nbsp;&middot;&nbsp; IFSC HDFC0001234</span>
+          <span style="font-size:11px;color:#94a3b8">OpenLedger &middot; Computer Generated</span>
         </div>
-      </div>`
+      </div>`)
 
-  const bodyContent = `
-  ${cfg.divider || ''}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:${cfg.cardGap};margin-bottom:28px;">
-    <div style="${cfg.card}">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.lbl};margin-bottom:8px;">From</div>
-      <div style="font-size:15px;font-weight:600;color:#09090b;margin-bottom:4px;">${bizName}</div>
-      <div style="font-size:12px;color:#52525b;">GSTIN: ${gstin}</div>
-      <div style="font-size:12px;color:#52525b;">${email}</div>
-    </div>
-    <div style="${cfg.card}">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.lbl};margin-bottom:8px;">Bill To</div>
-      <div style="font-size:15px;font-weight:600;color:#09090b;margin-bottom:4px;">Acme Corp Pvt. Ltd.</div>
-      <div style="font-size:12px;color:#52525b;">accounts@acme.co</div>
-      <div style="font-size:12px;color:#52525b;">+91 98765 43210</div>
-    </div>
-  </div>
-  <div style="display:flex;gap:${cfg.dateGap};margin-bottom:28px;">
-    <div style="${cfg.dateCard}">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.dateLbl};margin-bottom:4px;">Invoice Date</div>
-      <div style="font-size:13px;font-weight:600;color:#09090b;">22 Jun 2025</div>
-    </div>
-    <div style="${cfg.dateCard}">
-      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.dateLbl};margin-bottom:4px;">Due Date</div>
-      <div style="font-size:13px;font-weight:600;color:#09090b;">22 Jul 2025</div>
-    </div>
-  </div>
-  <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
-    <thead><tr style="background:${cfg.theadBg};color:${cfg.theadColor};${cfg.theadBorder}">
-      <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Product / Description</th>
-      <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;">Qty</th>
-      <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;">Unit Price</th>
-      <th style="padding:10px 12px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;">Tax</th>
-      <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;">Amount</th>
-    </tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  <div style="display:flex;justify-content:flex-end;margin-bottom:32px;">
-    <div style="width:280px;">
-      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:${cfg.totalsColor};border-bottom:1px solid #f4f4f5;"><span>Subtotal</span><span>₹1,06,000</span></div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;color:${cfg.totalsColor};border-bottom:1px solid #f4f4f5;"><span>Tax (18%)</span><span>₹19,080</span></div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;${cfg.grand}"><span>Grand Total</span><span>₹1,25,080</span></div>
-    </div>
-  </div>
-  <div style="${cfg.noteBox}">
-    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:${cfg.noteLbl};margin-bottom:6px;">Notes</div>
-    <div style="font-size:13px;color:${cfg.noteText};line-height:1.6;">Payment due within 30 days. Bank transfer preferred. Thank you for your business!</div>
-  </div>
-  <div style="${cfg.footer}">
-    <span style="font-size:11px;color:${cfg.footerNote};">Generated by OpenLedger · 22 Jun 2025</span>
-    <span style="font-size:11px;color:${cfg.footerNote};">This is a computer-generated document.</span>
-  </div>`
+    /* ── VANTAGE (modern) ─────────────────────────────────────────────────── */
+    case 'modern': return wrap(`
+      <div style="min-height:100%;padding:44px 44px 44px 52px;border-left:5px solid ${col.accent}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px">
+          <div style="display:flex;align-items:center;gap:16px">
+            ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
+            <div><div style="font-size:18px;font-weight:700;color:#0f172a">${co}</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:3px">${em}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:36px;font-weight:800;color:${col.accent};letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1">0892</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:6px">INV-2024-0892 &nbsp;&middot;&nbsp; 15 Nov 2024</div>
+            <div style="font-size:11px;color:#ef4444;font-weight:600;margin-top:2px">Due 15 Dec 2024</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px">
+          ${[0,1].map(i=>`<div style="padding:14px 16px;border-left:3px solid ${i===0?col.accent:col.border};background:${col.light}"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.mid};margin-bottom:8px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+          <thead><tr style="border-top:2px solid #0f172a;border-bottom:2px solid #0f172a">
+            <th style="padding:9px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#0f172a">Description</th>
+            <th style="padding:9px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#0f172a">Qty</th>
+            <th style="padding:9px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#0f172a">Rate</th>
+            <th style="padding:9px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#0f172a">Amount</th>
+          </tr></thead>
+          <tbody>${rows3('#f1f5f9')}</tbody>
+        </table>
+        ${totalsBlock('#64748b','#e2e8f0',`font-size:14px;font-weight:700;color:${col.mid};border-top:2px solid ${col.mid};margin-top:2px`)}
+        <div style="margin-top:24px;padding-top:14px;border-top:1px solid #f1f5f9;display:flex;justify-content:space-between">
+          <span style="font-size:11px;color:#94a3b8">30-day payment terms</span>
+          <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
+        </div>
+      </div>`)
 
-  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;color:#18181b;background:#fff;${t==='retro'?'font-family:"Courier New",Courier,monospace;background:#fefce8;':''}${t==='elegant'?'background:#fdfaf5;':''}}
-</style></head><body>
-<div style="${cfg.pageStyle}">
-  ${headerHtml}
-  ${cfg.bodyStyle ? `<div style="${cfg.bodyStyle}">${bodyContent}</div>` : bodyContent}
-</div>
-</body></html>`
+    /* ── LUMINA (minimal) ─────────────────────────────────────────────────── */
+    case 'minimal': return wrap(`
+      <div style="padding:56px 60px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px">
+          <div style="display:flex;align-items:center;gap:16px">
+            ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
+            <div><div style="font-size:17px;font-weight:300;color:#0f172a;letter-spacing:-0.3px">${co}</div>
+              <div style="font-size:11px;color:#cbd5e1;margin-top:4px">${em}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1;margin-bottom:8px">Invoice</div>
+            <div style="font-size:22px;font-weight:300;color:#0f172a;letter-spacing:-0.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
+            <div style="font-size:11px;color:#cbd5e1;margin-top:5px">15 Nov 2024</div>
+          </div>
+        </div>
+        <div style="height:1px;background:#f1f5f9;margin-bottom:40px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-bottom:40px">
+          ${[0,1].map(i=>`<div><div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1;margin-bottom:12px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
+          <thead><tr style="border-bottom:1px solid #e2e8f0">
+            <th style="padding:8px 0;text-align:left;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Description</th>
+            <th style="padding:8px 0;text-align:center;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Qty</th>
+            <th style="padding:8px 0;text-align:right;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Rate</th>
+            <th style="padding:8px 0;text-align:right;font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#cbd5e1">Amount</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #f8fafc">
+              <td style="padding:13px 0;font-size:13px;color:#1e293b">Enterprise Software License<br><span style="font-size:11px;color:#94a3b8">Annual &middot; FY 2024&ndash;25</span></td>
+              <td style="padding:13px 0;text-align:center;font-size:13px;color:#64748b">5</td>
+              <td style="padding:13px 0;text-align:right;font-size:13px;color:#64748b;font-variant-numeric:tabular-nums">&yen;2,40,000</td>
+              <td style="padding:13px 0;text-align:right;font-size:13px;color:#1e293b;font-variant-numeric:tabular-nums">₹12,00,000</td>
+            </tr>
+            <tr style="border-bottom:1px solid #f8fafc">
+              <td style="padding:13px 0;font-size:13px;color:#1e293b">Implementation &amp; Integration<br><span style="font-size:11px;color:#94a3b8">Professional Services</span></td>
+              <td style="padding:13px 0;text-align:center;font-size:13px;color:#64748b">80 hrs</td>
+              <td style="padding:13px 0;text-align:right;font-size:13px;color:#64748b;font-variant-numeric:tabular-nums">₹8,500</td>
+              <td style="padding:13px 0;text-align:right;font-size:13px;color:#1e293b;font-variant-numeric:tabular-nums">₹6,80,000</td>
+            </tr>
+            <tr>
+              <td style="padding:13px 0;font-size:13px;color:#1e293b">Priority Support &amp; SLA<br><span style="font-size:11px;color:#94a3b8">Enterprise Tier</span></td>
+              <td style="padding:13px 0;text-align:center;font-size:13px;color:#64748b">1</td>
+              <td style="padding:13px 0;text-align:right;font-size:13px;color:#64748b;font-variant-numeric:tabular-nums">₹95,000</td>
+              <td style="padding:13px 0;text-align:right;font-size:13px;color:#1e293b;font-variant-numeric:tabular-nums">₹95,000</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:36px">
+          <div style="width:240px">
+            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#94a3b8"><span>Subtotal</span><span>${S}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#94a3b8"><span>GST @ 18%</span><span>${TAX}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:15px;font-weight:600;color:${col.accent};border-top:1px solid #e2e8f0;margin-top:4px"><span>Total</span><span>${TOT}</span></div>
+          </div>
+        </div>
+        <div style="border-top:1px solid #f1f5f9;padding-top:14px;display:flex;justify-content:space-between">
+          <span style="font-size:10px;color:#cbd5e1">Due 15 Dec 2024</span>
+          <span style="font-size:10px;color:#cbd5e1">OpenLedger</span>
+        </div>
+      </div>`)
+
+    /* ── APEX (executive) ─────────────────────────────────────────────────── */
+    case 'executive': return wrap(`
+      <div style="min-height:100%">
+        <div style="background:${col.accent};padding:36px 44px 30px;position:relative;overflow:hidden">
+          <div style="position:absolute;right:-30px;top:-30px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,0.06)"></div>
+          <div style="position:absolute;right:60px;bottom:-60px;width:240px;height:240px;border-radius:50%;background:rgba(255,255,255,0.04)"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;position:relative">
+            <div style="display:flex;align-items:center;gap:16px">
+              ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,0.1);padding:4px;">` : ''}
+              <div><div style="font-size:20px;font-weight:700;color:#fff">${co}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.55);margin-top:4px">${ad}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:1px">GSTIN: ${gst}</div>
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:6px">Tax Invoice</div>
+              <div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-0.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:5px">15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
+              <div style="display:inline-block;margin-top:8px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);color:#fff;font-size:10px;font-weight:700;padding:3px 12px;border-radius:100px;letter-spacing:0.06em;text-transform:uppercase">PAID</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:30px 44px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:26px">
+            ${[0,1].map(i=>`<div style="padding:14px 16px;background:${col.light};border:1px solid ${col.border};border-radius:8px"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.mid};margin-bottom:8px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:22px">
+            <thead><tr style="background:${col.accent}">
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
+              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Qty</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Rate</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Amount</th>
+            </tr></thead>
+            <tbody>${rows3('#f1f5f9', col.light)}</tbody>
+          </table>
+          ${totalsBlock('#64748b','#f1f5f9',`font-size:14px;font-weight:700;color:${col.accent};border-top:2px solid ${col.accent};margin-top:2px`)}
+          <div style="margin-top:22px;border-top:1px solid ${col.border};padding-top:14px;display:flex;justify-content:space-between">
+            <span style="font-size:11px;color:#94a3b8">HDFC Bank &middot; A/C 5020XXXX1234</span>
+            <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
+          </div>
+        </div>
+      </div>`)
+
+    /* ── TITAN (bold) ─────────────────────────────────────────────────────── */
+    case 'bold': return wrap(`
+      <div style="min-height:100%">
+        <div style="padding:36px 44px 26px;border-bottom:5px solid ${col.accent}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end">
+            <div style="display:flex;align-items:center;gap:16px">
+              ${biz.logo ? `<img src="${biz.logo}" style="height:64px;width:64px;object-fit:contain;border-radius:8px;flex-shrink:0;">` : ''}
+              <div><div style="font-size:26px;font-weight:900;color:#0f172a;letter-spacing:-1px;line-height:1">${co}</div>
+                <div style="font-size:11px;color:#94a3b8;margin-top:4px">${em}</div>
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:48px;font-weight:900;color:${col.accent};letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums">0892</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:4px">INV-2024 &nbsp;&middot;&nbsp; 15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:26px 44px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:26px">
+            ${[0,1].map(i=>`<div style="padding:14px 16px;border-left:4px solid ${i===0?col.accent:col.border};background:${col.light}"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:${col.mid};margin-bottom:8px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:22px">
+            <thead><tr style="background:${col.accent}">
+              <th style="padding:11px 14px;text-align:left;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
+              <th style="padding:11px 14px;text-align:center;font-size:10px;font-weight:800;text-transform:uppercase;color:#fff">Qty</th>
+              <th style="padding:11px 14px;text-align:right;font-size:10px;font-weight:800;text-transform:uppercase;color:#fff">Rate</th>
+              <th style="padding:11px 14px;text-align:right;font-size:10px;font-weight:800;text-transform:uppercase;color:#fff">Amount</th>
+            </tr></thead>
+            <tbody>${rows3('#e2e8f0', col.light)}</tbody>
+          </table>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+            <div style="width:280px;background:${col.light};border:2px solid ${col.accent};border-radius:8px;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:1px solid ${col.border}"><span>Subtotal</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:2px solid ${col.accent}"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:12px 14px;font-size:16px;font-weight:900;color:${col.accent}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="margin:0 44px;border-top:5px solid ${col.accent};padding-top:12px;display:flex;justify-content:space-between">
+          <span style="font-size:11px;color:#94a3b8;font-weight:600">30-day net payment terms</span>
+          <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
+        </div>
+      </div>`)
+
+    /* ── OPULENT (elegant) ────────────────────────────────────────────────── */
+    case 'elegant': return wrap(`
+      <div style="padding:52px 56px;min-height:100%">
+        <div style="text-align:center;margin-bottom:30px;padding:22px 0;border-top:1px solid #d6cfc4;border-bottom:1px solid #d6cfc4">
+          ${lg?`<div style="display:flex;justify-content:center;margin-bottom:10px">${lg}</div>`:''}
+          <div style="font-size:20px;font-weight:600;color:#1c1917;letter-spacing:0.02em">${co}</div>
+          <div style="font-size:11px;color:#a8a29e;margin-top:5px;line-height:1.7">${ad} &nbsp;&middot;&nbsp; ${em} &nbsp;&middot;&nbsp; ${gst}</div>
+          <div style="width:40px;height:2px;background:${col.accent};margin:14px auto 0"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:26px">
+          <div>
+            <div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#a8a29e;margin-bottom:8px">Bill To</div>
+            <div style="font-size:14px;font-weight:600;color:#1c1917;margin-bottom:4px">Apex Industries Limited</div>
+            <div style="font-size:11px;color:#78716c;line-height:1.8">Corporate Tower, Gurugram 122003<br>GSTIN: 06AABCA1234F1Z7</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#a8a29e;margin-bottom:8px">Invoice Details</div>
+            <div style="font-size:15px;font-weight:600;color:#1c1917;font-variant-numeric:tabular-nums">INV-2024-0892</div>
+            <div style="font-size:11px;color:#78716c;margin-top:4px;line-height:1.8">Issued: 15 Nov 2024<br>Due: 15 Dec 2024</div>
+            <div style="display:inline-block;margin-top:8px;border:1px solid ${col.accent};color:${col.accent};font-size:9px;font-weight:600;padding:3px 12px;letter-spacing:0.1em;text-transform:uppercase">PAID</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+          <thead><tr style="border-top:1px solid #d6cfc4;border-bottom:1px solid #d6cfc4;background:#f5ede0">
+            <th style="padding:10px 14px;text-align:left;font-size:9px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:#78716c">Description</th>
+            <th style="padding:10px 14px;text-align:center;font-size:9px;font-weight:600;text-transform:uppercase;color:#78716c">Qty</th>
+            <th style="padding:10px 14px;text-align:right;font-size:9px;font-weight:600;text-transform:uppercase;color:#78716c">Rate</th>
+            <th style="padding:10px 14px;text-align:right;font-size:9px;font-weight:600;text-transform:uppercase;color:#78716c">Amount</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #e7e0d5">
+              <td style="padding:12px 14px;font-size:13px;color:#1c1917">Enterprise Software License<br><span style="font-size:11px;color:#a8a29e">Annual &middot; FY 2024&ndash;25</span></td>
+              <td style="padding:12px 14px;text-align:center;font-size:13px;color:#44403c">5</td>
+              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#44403c;font-variant-numeric:tabular-nums">₹2,40,000</td>
+              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#1c1917;font-variant-numeric:tabular-nums">₹12,00,000</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e7e0d5;background:#faf7f2">
+              <td style="padding:12px 14px;font-size:13px;color:#1c1917">Implementation &amp; Integration<br><span style="font-size:11px;color:#a8a29e">Professional Services</span></td>
+              <td style="padding:12px 14px;text-align:center;font-size:13px;color:#44403c">80 hrs</td>
+              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#44403c;font-variant-numeric:tabular-nums">₹8,500</td>
+              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#1c1917;font-variant-numeric:tabular-nums">₹6,80,000</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 14px;font-size:13px;color:#1c1917">Priority Support &amp; SLA<br><span style="font-size:11px;color:#a8a29e">Enterprise Tier</span></td>
+              <td style="padding:12px 14px;text-align:center;font-size:13px;color:#44403c">1</td>
+              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#44403c;font-variant-numeric:tabular-nums">₹95,000</td>
+              <td style="padding:12px 14px;text-align:right;font-size:13px;color:#1c1917;font-variant-numeric:tabular-nums">₹95,000</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:26px">
+          <div style="width:250px">
+            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#78716c;border-bottom:1px solid #e7e0d5"><span>Subtotal</span><span>${S}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#78716c;border-bottom:1px solid #d6cfc4"><span>GST @ 18%</span><span>${TAX}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:14px;font-weight:600;color:${col.accent}"><span>Total Due</span><span>${TOT}</span></div>
+          </div>
+        </div>
+        <div style="border-top:1px solid #d6cfc4;padding-top:14px;display:flex;justify-content:space-between">
+          <span style="font-size:10px;color:#a8a29e;font-style:italic">Payment within 30 days. Thank you.</span>
+          <span style="font-size:10px;color:#a8a29e">OpenLedger</span>
+        </div>
+      </div>`, '#fdfaf5')
+
+    /* ── CIPHER (retro) ───────────────────────────────────────────────────── */
+    case 'retro': return wrap(`
+      <div style="padding:36px 40px;min-height:100%;font-family:'Courier New',Courier,monospace">
+        <div style="border:1px solid ${col.accent};padding:3px;margin-bottom:26px">
+          <div style="border:1px solid ${col.border};padding:18px 20px;display:flex;justify-content:space-between;align-items:flex-start">
+            <div style="display:flex;align-items:center;gap:14px">
+              ${biz.logo ? `<img src="${biz.logo}" style="height:56px;width:56px;object-fit:contain;border-radius:6px;flex-shrink:0;border:1px solid ${col.border};">` : ''}
+              <div>
+                <div style="font-size:10px;color:${col.mid};letter-spacing:0.1em;margin-bottom:5px">// VENDOR</div>
+                <div style="font-size:15px;font-weight:700;color:${col.accent}">${co}</div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.7">${em}<br>GST: ${gst}</div>
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:${col.mid};letter-spacing:0.1em;margin-bottom:5px">// DOCUMENT</div>
+              <div style="font-size:18px;font-weight:700;color:${col.accent};font-variant-numeric:tabular-nums">INV-2024-0892</div>
+              <div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.7">DATE: 15-NOV-2024<br>DUE:&nbsp; 15-DEC-2024</div>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px">
+          ${[0,1].map(i=>`<div style="background:#f8fafc;border:1px solid #e2e8f0;padding:12px 14px"><div style="font-size:10px;color:${col.mid};letter-spacing:0.1em;margin-bottom:7px">// ${i===0?'FROM':'BILL TO'}</div>${bizBlock(i)}</div>`).join('')}
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
+          <thead><tr style="background:${col.accent};color:#fff">
+            <th style="padding:9px 12px;text-align:left;font-size:10px;letter-spacing:0.06em">DESCRIPTION</th>
+            <th style="padding:9px 12px;text-align:center;font-size:10px;letter-spacing:0.06em">QTY</th>
+            <th style="padding:9px 12px;text-align:right;font-size:10px;letter-spacing:0.06em">RATE</th>
+            <th style="padding:9px 12px;text-align:right;font-size:10px;letter-spacing:0.06em">AMOUNT</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #e2e8f0">
+              <td style="padding:10px 12px;font-size:12px;color:#1e293b">Enterprise Software License<br><span style="font-size:10px;color:#94a3b8">Annual FY 2024-25</span></td>
+              <td style="padding:10px 12px;text-align:center;font-size:12px;color:#374151">5</td>
+              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹2,40,000</td>
+              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹12,00,000</td>
+            </tr>
+            <tr style="border-bottom:1px solid #e2e8f0;background:#f8fafc">
+              <td style="padding:10px 12px;font-size:12px;color:#1e293b">Implementation &amp; Integration<br><span style="font-size:10px;color:#94a3b8">Professional Services</span></td>
+              <td style="padding:10px 12px;text-align:center;font-size:12px;color:#374151">80 HRS</td>
+              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹8,500</td>
+              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹6,80,000</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 12px;font-size:12px;color:#1e293b">Priority Support &amp; SLA<br><span style="font-size:10px;color:#94a3b8">Enterprise Tier</span></td>
+              <td style="padding:10px 12px;text-align:center;font-size:12px;color:#374151">1</td>
+              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹95,000</td>
+              <td style="padding:10px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹95,000</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:18px">
+          <div style="width:240px;border:1px solid #e2e8f0;font-size:12px;font-family:'Courier New',Courier,monospace">
+            <div style="display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #e2e8f0;color:#64748b"><span>SUB-TOTAL</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid ${col.accent};color:#64748b"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:9px 12px;background:${col.accent};color:#fff;font-weight:700;font-size:13px"><span>TOTAL DUE</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
+          </div>
+        </div>
+        <div style="border-top:1px solid ${col.accent};padding-top:12px;display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;font-family:'Courier New',Courier,monospace">
+          <span>// PAYMENT: NEFT &middot; HDFC &middot; 5020XXXX1234</span>
+          <span>// OpenLedger</span>
+        </div>
+      </div>`)
+
+    /* ── MERIDIAN (compact) ───────────────────────────────────────────────── */
+    case 'compact': return wrap(`
+      <div style="min-height:100%">
+        <div style="background:#0f172a;padding:18px 28px;display:flex;justify-content:space-between;align-items:center">
+          <div style="display:flex;align-items:center;gap:14px">
+            ${biz.logo ? `<img src="${biz.logo}" style="height:52px;width:52px;object-fit:contain;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,0.08);padding:4px;">` : ''}
+            <div><div style="font-size:14px;font-weight:700;color:#fff">${co}</div>
+              <div style="font-size:10px;color:#64748b;margin-top:1px">${em}</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="display:inline-flex;align-items:center;background:${col.accent};padding:4px 14px;border-radius:100px">
+              <span style="font-size:12px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">INV-2024-0892</span>
+            </div>
+            <div style="font-size:10px;color:#64748b;margin-top:6px">15 Nov 2024 &nbsp;&middot;&nbsp; Due 15 Dec 2024</div>
+          </div>
+        </div>
+        <div style="background:${col.accent};height:3px"></div>
+        <div style="padding:18px 28px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+            ${[0,1].map(i=>`<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:11px 13px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#94a3b8;margin-bottom:6px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:14px">
+            <thead><tr style="background:${col.accent}">
+              <th style="padding:8px 12px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
+              <th style="padding:8px 12px;text-align:center;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff">Qty</th>
+              <th style="padding:8px 12px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff">Rate</th>
+              <th style="padding:8px 12px;text-align:right;font-size:9px;font-weight:700;text-transform:uppercase;color:#fff">Amount</th>
+            </tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #e2e8f0">
+                <td style="padding:9px 12px;font-size:12px;color:#1e293b">Enterprise Software License<br><span style="font-size:10px;color:#94a3b8">Annual &middot; FY 2024&ndash;25</span></td>
+                <td style="padding:9px 12px;text-align:center;font-size:12px;color:#374151">5</td>
+                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹2,40,000</td>
+                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹12,00,000</td>
+              </tr>
+              <tr style="border-bottom:1px solid #e2e8f0;background:#f8fafc">
+                <td style="padding:9px 12px;font-size:12px;color:#1e293b">Implementation &amp; Integration<br><span style="font-size:10px;color:#94a3b8">Professional Services</span></td>
+                <td style="padding:9px 12px;text-align:center;font-size:12px;color:#374151">80 hrs</td>
+                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹8,500</td>
+                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹6,80,000</td>
+              </tr>
+              <tr>
+                <td style="padding:9px 12px;font-size:12px;color:#1e293b">Priority Support &amp; SLA<br><span style="font-size:10px;color:#94a3b8">Enterprise Tier</span></td>
+                <td style="padding:9px 12px;text-align:center;font-size:12px;color:#374151">1</td>
+                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#374151;font-variant-numeric:tabular-nums">₹95,000</td>
+                <td style="padding:9px 12px;text-align:right;font-size:12px;color:#1e293b;font-variant-numeric:tabular-nums">₹95,000</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="background:#0f172a;border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div style="display:flex;gap:24px">
+              <div><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em">Subtotal</div><div style="font-size:13px;font-weight:600;color:#94a3b8;font-variant-numeric:tabular-nums">${S}</div></div>
+              <div><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em">GST 18%</div><div style="font-size:13px;font-weight:600;color:#94a3b8;font-variant-numeric:tabular-nums">${TAX}</div></div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em">Total Due</div>
+              <div style="font-size:20px;font-weight:800;color:${col.accent};font-variant-numeric:tabular-nums">${TOT}</div>
+            </div>
+          </div>
+        </div>
+      </div>`)
+
+    /* ── ATLAS (stripe) ───────────────────────────────────────────────────── */
+    case 'stripe': return wrap(`
+      <div style="min-height:100%">
+        <div style="display:flex;min-height:140px">
+          <div style="flex:1;background:${col.accent};padding:34px 36px 26px;display:flex;flex-direction:column;justify-content:space-between">
+            <div style="display:flex;align-items:center;gap:16px">
+              ${biz.logo ? `<img src="${biz.logo}" style="height:60px;width:60px;object-fit:contain;border-radius:8px;flex-shrink:0;background:rgba(255,255,255,0.1);padding:4px;">` : ''}
+              <div><div style="font-size:18px;font-weight:700;color:#fff;letter-spacing:-0.3px">${co}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:3px">${em}</div>
+              </div>
+            </div>
+            <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:10px">GSTIN: ${gst}</div>
+          </div>
+          <div style="width:220px;flex-shrink:0;background:${col.light};border-bottom:4px solid ${col.accent};padding:26px 26px 18px;display:flex;flex-direction:column;justify-content:space-between">
+            <div>
+              <div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:${col.mid};margin-bottom:5px">Invoice</div>
+              <div style="font-size:17px;font-weight:800;color:#0f172a;letter-spacing:-0.5px;font-variant-numeric:tabular-nums">INV-2024-0892</div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:${col.mid};margin-bottom:2px">15 Nov 2024</div>
+              <div style="font-size:10px;color:#ef4444;font-weight:600">Due: 15 Dec 2024</div>
+              <div style="display:inline-block;margin-top:7px;background:${col.badge};color:${col.badgeText};font-size:9px;font-weight:700;padding:2px 10px;border-radius:100px;letter-spacing:0.06em;text-transform:uppercase">PAID</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:26px 36px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px">
+            ${[0,1].map(i=>`<div style="border:1px solid #e2e8f0;border-top:3px solid ${i===0?col.accent:col.border};border-radius:0 0 8px 8px;padding:13px 15px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${col.mid};margin-bottom:7px">${i===0?'From':'Bill To'}</div>${bizBlock(i)}</div>`).join('')}
+          </div>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
+            <thead><tr style="background:${col.accent}">
+              <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#fff">Description</th>
+              <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Qty</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Rate</th>
+              <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#fff">Amount</th>
+            </tr></thead>
+            <tbody>${rows3('#e2e8f0', '#f8fafc')}</tbody>
+          </table>
+          <div style="display:flex;justify-content:flex-end;margin-bottom:18px">
+            <div style="width:260px;border:1px solid #e2e8f0;border-top:3px solid ${col.accent};border-radius:0 0 8px 8px;overflow:hidden">
+              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0"><span>Subtotal</span><span style="font-variant-numeric:tabular-nums">${S}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:8px 14px;font-size:12px;color:#64748b;border-bottom:2px solid ${col.accent}"><span>GST @ 18%</span><span style="font-variant-numeric:tabular-nums">${TAX}</span></div>
+              <div style="display:flex;justify-content:space-between;padding:10px 14px;font-size:14px;font-weight:800;color:${col.accent}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
+            </div>
+          </div>
+          <div style="border-top:1px solid #e2e8f0;padding-top:12px;display:flex;justify-content:space-between">
+            <span style="font-size:11px;color:#94a3b8">30-day terms &middot; NEFT/RTGS</span>
+            <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
+          </div>
+        </div>
+      </div>`)
+
+    /* ── AXIOM (bureau) ───────────────────────────────────────────────────── */
+    case 'bureau': return wrap(`
+      <div style="padding:44px 52px;min-height:100%">
+        <div style="text-align:center;border-top:3px double ${col.accent};border-bottom:3px double ${col.accent};padding:20px 0;margin-bottom:30px">
+          ${lg?`<div style="display:flex;justify-content:center;margin-bottom:8px">${lg}</div>`:''}
+          <div style="font-size:20px;font-weight:700;color:${col.accent};letter-spacing:0.04em;text-transform:uppercase">${co}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:6px;line-height:1.8">${ad} &nbsp;|&nbsp; ${em} &nbsp;|&nbsp; GSTIN: ${gst}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:26px">
+          <div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${col.mid};margin-bottom:8px">Bill To</div>
+            <div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:4px">Apex Industries Limited</div>
+            <div style="font-size:11px;color:#64748b;line-height:1.8">Corporate Tower, Sector 44<br>Gurugram 122003 &nbsp;&middot;&nbsp; GSTIN: 06AABCA1234F1Z7</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:${col.mid};margin-bottom:8px">Invoice</div>
+            <div style="font-size:18px;font-weight:700;color:#1e293b;font-variant-numeric:tabular-nums">INV-2024-0892</div>
+            <div style="font-size:11px;color:#64748b;margin-top:4px;line-height:1.8">Date: 15 November 2024<br>Due: 15 December 2024</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+          <thead><tr style="border-top:2px solid ${col.accent};border-bottom:2px solid ${col.accent}">
+            <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Description</th>
+            <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Qty</th>
+            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Rate</th>
+            <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:${col.accent}">Amount</th>
+          </tr></thead>
+          <tbody>${rows3('#f1f5f9', col.light)}</tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:26px">
+          <div style="width:260px">
+            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0"><span>Subtotal</span><span>${S}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;color:#64748b;border-bottom:2px solid ${col.accent}"><span>GST @ 18%</span><span>${TAX}</span></div>
+            <div style="display:flex;justify-content:space-between;padding:9px 0;font-size:15px;font-weight:700;color:${col.accent};border-bottom:2px solid ${col.accent}"><span>Total Due</span><span style="font-variant-numeric:tabular-nums">${TOT}</span></div>
+          </div>
+        </div>
+        <div style="border-top:3px double ${col.accent};padding-top:14px;display:flex;justify-content:space-between">
+          <span style="font-size:11px;color:#94a3b8">Kindly remit within the stipulated period. Thank you.</span>
+          <span style="font-size:11px;color:#94a3b8">OpenLedger</span>
+        </div>
+      </div>`)
+
+    default: return buildTemplatePreview('classic', biz, colorKey)
+  }
 }
 
 // ── Roles Tab ─────────────────────────────────────────────────────────────────

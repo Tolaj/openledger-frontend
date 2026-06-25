@@ -22,6 +22,7 @@ import { useCurrencySymbol } from '../hooks/useCurrency'
 import ProductPicker from '../components/features/ProductPicker'
 import Tabs from '../components/ui/Tabs'
 import { usePermission } from '../hooks/usePermission'
+import { useEmailEnabled } from '../hooks/useEmailEnabled'
 
 const ALL_TABS = [
   { key: 'so',        label: 'Sales Orders', mobileLabel: 'Sales Order'       },
@@ -300,6 +301,7 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
   const sym = useCurrencySymbol()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   const canEmail = usePermission('sales_orders', 'so', 'email')
+  const { enabled: emailEnabled } = useEmailEnabled()
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -557,21 +559,29 @@ function SalesOrdersTab({ mobileFiltersOpen, onAdd }) {
         onClose={() => setSendSheet(null)}
         title={`Send ${sendSheet?.soNumber || 'SO'} to Customer`}
         footer={
-          <Button
-            fullWidth
-            loading={sendSO.isPending}
-            onClick={async () => {
-              setSendError('')
-              try {
-                await sendSO.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail })
-                setSendSheet(null)
-              } catch (e) {
-                setSendError(e?.response?.data?.error || e?.response?.data?.message || 'Failed to send')
-              }
-            }}
-          >
-            <Mail size={15} /> Send SO
-          </Button>
+          <div className="flex flex-col gap-2">
+            {!emailEnabled && (
+              <p className="text-xs text-center text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                Email sending is disabled. Enable it in <strong>Settings → Configuration → Email Sending</strong>.
+              </p>
+            )}
+            <Button
+              fullWidth
+              disabled={!emailEnabled}
+              loading={sendSO.isPending}
+              onClick={async () => {
+                setSendError('')
+                try {
+                  await sendSO.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail })
+                  setSendSheet(null)
+                } catch (e) {
+                  setSendError(e?.response?.data?.error || e?.response?.data?.message || 'Failed to send')
+                }
+              }}
+            >
+              <Mail size={15} /> Send SO
+            </Button>
+          </div>
         }
       >
         <div className="space-y-4">
@@ -1058,6 +1068,7 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
   const sym = useCurrencySymbol()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   const canEmail = usePermission('sales_orders', 'so_inv', 'email')
+  const { enabled: emailEnabled } = useEmailEnabled()
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -1464,8 +1475,13 @@ function SalesInvoicesTab({ mobileFiltersOpen, onAdd }) {
           </div>
           <p className="text-xs text-zinc-400">A PDF of the invoice will be attached and the invoice status will be updated to <strong>Sent</strong>.</p>
           {sendError && <p className="text-sm text-red-500">{sendError}</p>}
+          {!emailEnabled && (
+            <p className="text-xs text-center text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Email sending is disabled. Enable it in <strong>Settings → Configuration → Email Sending</strong>.
+            </p>
+          )}
           <button
-            disabled={!sendEmail || sendInvoice.isPending}
+            disabled={!sendEmail || sendInvoice.isPending || !emailEnabled}
             onClick={async () => {
               setSendError('')
               try {

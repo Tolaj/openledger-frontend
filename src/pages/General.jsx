@@ -23,6 +23,7 @@ import { useRecurring, useCreateRecurring, useUpdateRecurring, useDeleteRecurrin
 import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import { usePermission } from '../hooks/usePermission'
+import { useEmailEnabled } from '../hooks/useEmailEnabled'
 
 const ALL_TABS = [
   { key: 'orders',    label: 'Orders',     icon: FileText  },
@@ -181,6 +182,7 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
   const sendGO      = useSendGeneralOrder()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   const canEmail = usePermission('general_orders', 'gen_orders', 'email')
+  const { enabled: emailEnabled } = useEmailEnabled()
 
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [statusSheet, setStatusSheet] = useState(null)
@@ -476,8 +478,13 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
           </div>
           <p className="text-xs text-zinc-400">A PDF of the general order will be attached and the GO status will be updated to <strong>Sent</strong>.</p>
           {sendError && <p className="text-sm text-red-500">{sendError}</p>}
+          {!emailEnabled && (
+            <p className="text-xs text-center text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Email sending is disabled. Enable it in <strong>Settings → Configuration → Email Sending</strong>.
+            </p>
+          )}
           <button
-            disabled={!sendEmail || sendGO.isPending}
+            disabled={!sendEmail || sendGO.isPending || !emailEnabled}
             onClick={async () => {
               setSendError('')
               try {
@@ -515,6 +522,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
   const sendInvoice   = useSendGeneralInvoice()
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
   const canEmail = usePermission('general_orders', 'gen_invoices', 'email')
+  const { enabled: emailEnabled } = useEmailEnabled()
 
   const [sheetOpen, setSheetOpen]   = useState(false)
   const [editing, setEditing]       = useState(null)
@@ -878,8 +886,13 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
           </div>
           <p className="text-xs text-zinc-400">A PDF of the invoice will be attached and the status will be updated to <strong>Sent</strong>.</p>
           {sendError && <p className="text-sm text-red-500">{sendError}</p>}
+          {!emailEnabled && (
+            <p className="text-xs text-center text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Email sending is disabled. Enable it in <strong>Settings → Configuration → Email Sending</strong>.
+            </p>
+          )}
           <button
-            disabled={!sendEmail || sendInvoice.isPending}
+            disabled={!sendEmail || sendInvoice.isPending || !emailEnabled}
             onClick={async () => {
               setSendError('')
               try { await sendInvoice.mutateAsync({ id: sendSheet._id, recipientEmail: sendEmail }); setSendSheet(null) }
