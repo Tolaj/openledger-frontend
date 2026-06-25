@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
-export default function BottomSheet({ open, onClose, title, children, footer }) {
+export default function BottomSheet({ open, onClose, title, children, footer, locked = false }) {
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'
@@ -17,7 +17,7 @@ export default function BottomSheet({ open, onClose, title, children, footer }) 
     <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center md:p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
+        onClick={locked ? undefined : onClose}
       />
 
       <div className="relative bg-white w-full rounded-t-3xl md:rounded-2xl max-h-[92vh] flex flex-col shadow-2xl md:max-w-md animate-[slideUp_0.25s_ease-out] overflow-hidden">
@@ -33,12 +33,14 @@ export default function BottomSheet({ open, onClose, title, children, footer }) 
           ) : (
             <div />
           )}
-          <button
-            onClick={onClose}
-            className="ml-auto w-8 h-8 flex items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 active:bg-zinc-100 transition-colors"
-          >
-            <X size={16} />
-          </button>
+          {!locked && (
+            <button
+              onClick={onClose}
+              className="ml-auto w-8 h-8 flex items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 active:bg-zinc-100 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
 
         {/* Scrollable content */}

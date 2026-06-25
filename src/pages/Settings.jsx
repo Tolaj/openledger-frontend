@@ -277,10 +277,10 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
       await qc.invalidateQueries({ queryKey: ['products', groupId] })
       await qc.invalidateQueries({ queryKey: ['categories', groupId] })
 
+      setSubmitting(false)
       onClose()
     } catch (err) {
-      console.error('Group creation failed:', err)
-    } finally {
+      console.error('Group creation failed:', err, err?.response?.data)
       setSubmitting(false)
     }
   }
@@ -289,7 +289,8 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
     <BottomSheet
       open={open}
       onClose={onClose}
-      title={editing ? 'Edit Workspace' : 'New Group'}
+      locked={submitting}
+      title={editing ? 'Edit Workspace' : phase2 ? 'Setting up…' : 'New Group'}
       footer={
         <Button type="submit" form="group-form" fullWidth loading={submitting || updating}>
           {editing ? 'Save changes' : 'Create group'}
