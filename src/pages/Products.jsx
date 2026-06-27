@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { useForm, useFieldArray } from 'react-hook-form'
 import { createPortal } from 'react-dom'
-import { Plus, Tag, Heart, Package, ShoppingCart, Pencil, Trash2, ShoppingBasket, ChevronDown, Check, ClipboardList, Filter } from 'lucide-react'
+import { Plus, Tag, Heart, Package, ShoppingCart, Pencil, Trash2, ShoppingBasket, ChevronDown, Check, ClipboardList, Filter, RefreshCw, Minus, Repeat } from 'lucide-react'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import Tabs from '../components/ui/Tabs'
 import TopBar from '../components/layout/TopBar'
@@ -23,6 +24,8 @@ import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
 import { useSalesInvoices } from '../hooks/useSalesInvoices'
 import { useWishlists, useDeleteWishlist, useUpdateWishlist } from '../hooks/useWishlists'
 import { useInventory, useUpdateInventory, useDeleteInventory } from '../hooks/useInventory'
+import { useRecurring, useCreateRecurring, useUpdateRecurring, useDeleteRecurring } from '../hooks/useRecurring'
+import ProductPicker from '../components/features/ProductPicker'
 import useCartStore from '../store/cartStore'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import useAuthStore from '../store/authStore'
@@ -1514,6 +1517,301 @@ const PERSONAL_TABS = [
   { key: 'orders',    label: 'Orders',    mobileLabel: 'Orders'    },
 ]
 
+// ── Recurring Tab (personal groups) ──────────────────────────────────────────
+const REC_FREQ_LABELS = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' }
+const REC_STATUS_VARIANT = { active: 'success', paused: 'warning', cancelled: 'danger' }
+const fmtRecDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+
+const RECURRING_COLS = [
+  { key: 'name',        label: 'Name',      filterable: true  },
+  { key: 'frequency',   label: 'Frequency', filterable: true  },
+  { key: 'nextRunDate', label: 'Next Run',  filterable: false },
+  { key: 'status',      label: 'Status',    filterable: true  },
+  { key: 'items',       label: 'Items',     filterable: false },
+  { key: 'grandTotal',  label: 'Total',     filterable: false },
+  { key: 'action',      label: 'Action'                       },
+]
+
+function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFiltersOpenChange, onAdd }) {
+  const sym = useCurrencySymbol()
+  const { data: recurrings = [], isLoading } = useRecurring()
+  const createRecurring = useCreateRecurring()
+  const updateRecurring = useUpdateRecurring()
+  const { mutate: deleteRecurring } = useDeleteRecurring()
+
+  const [sheetOpen, setSheetOpen]     = useState(false)
+  const [editing, setEditing]         = useState(null)
+  const [statusSheet, setStatusSheet] = useState(null)
+  const [filters, setFilters]         = useState({ name: '', frequency: '', status: '' })
+  const [dropSel, setDropSel]         = useState({})
+
+  const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm({
+    defaultValues: { frequency: 'monthly', status: 'active', autoCreate: false, items: [] },
+  })
+  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+  const watchedItems = watch('items') || []
+  const calcAmount = (idx) => {
+    const it = watchedItems[idx] || {}
+    return (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0)
+  }
+  const grandTotal = watchedItems.reduce((s, _, i) => s + calcAmount(i), 0)
+
+  const handleProductSelect = (idx, productId) => {
+    const p = products.find((pr) => pr._id === productId)
+    setValue(`items.${idx}.product`, productId)
+    if (p) {
+      setValue(`items.${idx}.description`, p.name)
+      setValue(`items.${idx}.unitPrice`, p.price ?? 0)
+      setValue(`items.${idx}.unit`, p.unit || '')
+    }
+  }
+
+  const openCreate = () => {
+    setEditing(null)
+    reset({ frequency: 'monthly', status: 'active', autoCreate: false, items: [] })
+    setSheetOpen(true)
+  }
+  if (onAdd) onAdd.current = openCreate
+  const openEdit = (r) => {
+    setEditing(r)
+    reset({
+      ...r,
+      nextRunDate: r.nextRunDate ? new Date(r.nextRunDate).toISOString().slice(0, 10) : '',
+      items: r.items || [],
+    })
+    setSheetOpen(true)
+  }
+  const close = () => { setSheetOpen(false); setEditing(null) }
+
+  const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
+  const getDrop = (key) => dropSel[key] || []
+  const setDrop = (key, vals) => setDropSel((p) => ({ ...p, [key]: vals }))
+  const inDrop = (key, val) => getDrop(key).length === 0 || getDrop(key).includes(val)
+
+  const onSubmit = async (data) => {
+    try {
+      const items = (data.items || []).map((it) => ({
+        product:     it.product || undefined,
+        description: it.description || '',
+        qty:         parseFloat(it.qty) || 0,
+        unit:        it.unit || '',
+        unitPrice:   parseFloat(it.unitPrice) || 0,
+        taxRate:     parseFloat(it.taxRate) || 0,
+        amount:      (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0),
+      }))
+      const payload = { ...data, items, grandTotal: items.reduce((s, it) => s + it.amount, 0) }
+      delete payload.recipient
+      if (editing) await updateRecurring.mutateAsync({ id: editing._id, data: payload })
+      else         await createRecurring.mutateAsync(payload)
+      close()
+    } catch (e) { console.error(e) }
+  }
+
+  const dropOpts = {
+    frequency: Object.keys(REC_FREQ_LABELS),
+    status: ['active', 'paused', 'cancelled'],
+  }
+
+  const filtered = recurrings.filter((r) =>
+    (r.name || '').toLowerCase().includes(filters.name.toLowerCase()) &&
+    inDrop('frequency', r.frequency) &&
+    inDrop('status', r.status)
+  )
+
+  if (isLoading) return <Spinner className="py-12" />
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      <DataTableMobileFilters columns={RECURRING_COLS} filters={filters} onFilterChange={setFilter}
+        dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} open={mobileFiltersOpen} />
+
+      {/* Mobile cards */}
+      <div className="flex flex-col gap-2 md:hidden pb-6">
+        {recurrings.length === 0 ? (
+          <EmptyState icon={Repeat} title="No recurring entries" description="Set up subscriptions, memberships or regular purchases"
+            action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recurring</Button>} />
+        ) : filtered.map((r) => (
+          <div key={r._id} className="bg-white rounded-2xl border border-zinc-200 p-4">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="min-w-0">
+                <p className="font-semibold text-zinc-900 truncate">{r.name}</p>
+                <p className="text-xs text-zinc-400 mt-0.5">Next: {fmtRecDate(r.nextRunDate)}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <Badge variant={REC_STATUS_VARIANT[r.status] || 'default'}>{r.status}</Badge>
+                <Badge variant="default">{REC_FREQ_LABELS[r.frequency] || r.frequency}</Badge>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-zinc-900">₹{(r.grandTotal || 0).toFixed(2)}</p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setStatusSheet(r)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><RefreshCw size={14} /></button>
+                <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
+                <button onClick={() => { if (confirm('Delete this recurring entry?')) deleteRecurring(r._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        {recurrings.length === 0 ? (
+          <EmptyState icon={Repeat} title="No recurring entries" description="Set up subscriptions, memberships or regular purchases"
+            action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recurring</Button>} />
+        ) : (
+          <DataTable columns={RECURRING_COLS} data={filtered} filters={filters} onFilterChange={setFilter}
+            dropOpts={dropOpts} dropSel={dropSel} onDropChange={setDrop} emptyMessage="No recurring entries match filters"
+            renderRow={(r) => (
+              <tr key={r._id} className="border-b border-zinc-100 hover:bg-zinc-50 transition-colors">
+                <td className="px-4 py-3 font-medium text-zinc-900">{r.name}</td>
+                <td className="px-4 py-3"><Badge variant="default">{REC_FREQ_LABELS[r.frequency] || r.frequency}</Badge></td>
+                <td className="px-4 py-3 text-sm text-zinc-500">{fmtRecDate(r.nextRunDate)}</td>
+                <td className="px-4 py-3"><Badge variant={REC_STATUS_VARIANT[r.status] || 'default'}>{r.status}</Badge></td>
+                <td className="px-4 py-3 text-sm text-zinc-500">{(r.items || []).length || '—'}</td>
+                <td className="px-4 py-3 font-semibold text-zinc-900">{sym}{(r.grandTotal || 0).toFixed(2)}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => setStatusSheet(r)} title="Update status" className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><RefreshCw size={14} /></button>
+                    <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
+                    <button onClick={() => { if (confirm('Delete this recurring entry?')) deleteRecurring(r._id) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
+                  </div>
+                </td>
+              </tr>
+            )}
+          />
+        )}
+      </div>
+
+      {/* Status sheet */}
+      <BottomSheet open={!!statusSheet} onClose={() => setStatusSheet(null)} title="Update Status">
+        <div className="grid grid-cols-3 gap-2 pb-2">
+          {['active', 'paused', 'cancelled'].map((s) => (
+            <button key={s} onClick={async () => { await updateRecurring.mutateAsync({ id: statusSheet._id, data: { status: s } }); setStatusSheet(null) }}
+              className={['py-3 rounded-xl text-sm font-medium capitalize border transition-colors', statusSheet?.status === s ? 'bg-zinc-900 text-white border-zinc-900' : 'border-zinc-200 text-zinc-700 hover:bg-zinc-50'].join(' ')}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </BottomSheet>
+
+      {/* Create / Edit sheet */}
+      <BottomSheet open={sheetOpen} onClose={close} title={editing ? 'Edit Recurring' : 'New Recurring'}>
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Name *</label>
+            <input {...register('name', { required: true })} placeholder="e.g. Netflix subscription"
+              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700">Frequency</label>
+              <select {...register('frequency', { required: true })} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-zinc-700">Next Run Date *</label>
+              <input type="date" {...register('nextRunDate', { required: true })}
+                className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900" />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Status</label>
+            <select {...register('status')} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+
+          {/* Items */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-zinc-700">Items</label>
+              <button type="button" onClick={() => append({ product: '', description: '', qty: 1, unit: '', unitPrice: 0, taxRate: 0 })}
+                className="text-xs text-zinc-500 hover:text-zinc-900 flex items-center gap-1">
+                <Plus size={13} /> Add Item
+              </button>
+            </div>
+            {fields.length === 0 && (
+              <p className="text-xs text-zinc-400 text-center py-3 border border-dashed border-zinc-200 rounded-xl">No items — click Add Item</p>
+            )}
+            {fields.map((field, idx) => (
+              <div key={field.id} className="border border-zinc-200 rounded-xl p-3 space-y-2 relative">
+                <button type="button" onClick={() => remove(idx)} className="absolute top-2 right-2 p-1 rounded text-zinc-300 hover:text-red-500">
+                  <Minus size={13} />
+                </button>
+                <div className="pr-6">
+                  <ProductPicker
+                    products={products}
+                    value={watchedItems?.[idx]?.product || ''}
+                    onChange={(id) => handleProductSelect(idx, id)}
+                    sym={sym}
+                  />
+                </div>
+                <input type="hidden" {...register(`items.${idx}.product`)} />
+                <input {...register(`items.${idx}.description`)} placeholder="Description"
+                  className="w-full h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Qty</label>
+                    <input type="number" min="0" step="any" {...register(`items.${idx}.qty`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Unit</label>
+                    <input placeholder="pcs" {...register(`items.${idx}.unit`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Price</label>
+                    <input type="number" min="0" step="any" {...register(`items.${idx}.unitPrice`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-zinc-500">Tax %</label>
+                    <input type="number" min="0" step="any" {...register(`items.${idx}.taxRate`)}
+                      className="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900" />
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-400 text-right">Amount: <span className="font-semibold text-zinc-800">{sym}{calcAmount(idx).toFixed(2)}</span></p>
+              </div>
+            ))}
+            {fields.length > 0 && (
+              <p className="text-xs text-zinc-500 text-right pr-1">Total: <span className="font-semibold text-zinc-900">{sym}{grandTotal.toFixed(2)}</span></p>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 py-1">
+            <input type="checkbox" id="recAutoCreate" {...register('autoCreate')} className="w-4 h-4 rounded border-zinc-300 accent-zinc-900" />
+            <label htmlFor="recAutoCreate" className="text-sm text-zinc-700">Auto-create order on schedule</label>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-zinc-700">Notes</label>
+            <input {...register('notes')} placeholder="Optional notes"
+              className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900" />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={close}>Cancel</Button>
+            <Button type="submit" className="flex-1" loading={createRecurring.isPending || updateRecurring.isPending}>
+              {editing ? 'Save' : 'Create'}
+            </Button>
+          </div>
+        </form>
+      </BottomSheet>
+    </div>
+  )
+}
+
 // ── Stock tab (business only) ─────────────────────────────────────────────────
 const STOCK_COLS = [
   { key: 'product',  label: 'Product',   filterable: true },
@@ -1786,14 +2084,20 @@ export default function Products() {
   const openEditProduct = (p) => { setEditingProduct(p); setProductSheet(true) }
   const openAddCategory = useCallback(() => { setEditingCategory(null); setCategorySheet(true) }, [])
   const openEditCategory = (c) => { setEditingCategory(c); setCategorySheet(true) }
+  const recurringAddRef = useRef(null)
 
   const addBtn = tab === 'products' && canAddProduct
     ? <Button size="sm" onClick={openAddProduct}><Plus size={16} /> Add product</Button>
     : tab === 'category' && canAddCategory
       ? <Button size="sm" onClick={openAddCategory}><Plus size={16} /> Add category</Button>
-      : null
+      : tab === 'recurring' && !isBusiness
+        ? <Button size="sm" onClick={() => recurringAddRef.current?.()}><Plus size={16} /> Add Recurring</Button>
+        : null
 
-  const mobileAddFn = (tab === 'products' && canAddProduct) ? openAddProduct : (tab === 'category' && canAddCategory) ? openAddCategory : null
+  const mobileAddFn = (tab === 'products' && canAddProduct) ? openAddProduct
+    : (tab === 'category' && canAddCategory) ? openAddCategory
+    : (tab === 'recurring' && !isBusiness) ? () => recurringAddRef.current?.()
+    : null
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   return (
@@ -1870,7 +2174,12 @@ export default function Products() {
           )}
 
           {tab === 'recurring' && (
-            <EmptyState icon={ClipboardList} title="Recurring" description="Coming soon" />
+            <PersonalRecurringTab
+              products={products}
+              mobileFiltersOpen={mobileFiltersOpen}
+              onMobileFiltersOpenChange={setMobileFiltersOpen}
+              onAdd={recurringAddRef}
+            />
           )}
 
           {tab === 'orders' && (
