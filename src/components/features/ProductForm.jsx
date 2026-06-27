@@ -134,7 +134,7 @@ export default function ProductForm({ open, onClose, editing }) {
 
         <label className="flex items-center justify-between gap-3 cursor-pointer select-none">
           <div>
-            <p className="text-sm font-medium text-zinc-900">Track In Inventory</p>
+            <p className="text-sm font-medium text-zinc-900">Track In Stock</p>
             <p className="text-xs text-zinc-400">Quantity will be updated when orders are placed</p>
           </div>
           <div className="relative flex-shrink-0">

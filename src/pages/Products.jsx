@@ -463,7 +463,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
               { label: 'Unit',         value: detailProduct.unit || '—' },
               { label: 'Manufacturer', value: detailProduct.manufacturer || '—' },
               { label: 'Description',  value: detailProduct.description || '—' },
-              { label: 'Inventory',    value: detailProduct.inventory ? 'Tracked' : 'Not tracked' },
+              { label: 'Stock',        value: detailProduct.inventory ? 'Tracked' : 'Not tracked' },
             ].map(({ label, value }) => (
               <div key={label} className="flex items-start justify-between gap-4 py-3">
                 <span className="text-sm text-zinc-400 flex-shrink-0 w-28">{label}</span>
@@ -1859,12 +1859,11 @@ export default function Products() {
             />
           )}
 
-          {tab === 'inventory' && (
-            <InventoryTab
+          {tab === 'stock' && (
+            <StockTab
               inventory={inventory}
               loading={loadingInventory}
-              groupMemberObjects={groupMemberObjects}
-              onDelete={(id) => deleteInventoryItem(id)}
+              groupMembers={groupMembers}
               mobileFiltersOpen={mobileFiltersOpen}
               onMobileFiltersOpenChange={setMobileFiltersOpen}
             />

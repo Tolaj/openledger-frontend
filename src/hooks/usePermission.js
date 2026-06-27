@@ -17,7 +17,7 @@ export function useActiveGroupPermissions() {
     )
     // if the assigned role is a system (Admin) role → full access
     if (mr?.roleId?.isSystem) return 'ADMIN'
-    // if no role assigned → no explicit permissions (personal groups ignore this, business = read-only)
+    // if no role assigned → no permissions
     if (!mr?.roleId) return null
     return mr.roleId.permissions || []
   }, [groups, activeGroupId, userId])
@@ -26,7 +26,6 @@ export function useActiveGroupPermissions() {
 // Check a specific permission. Returns true if:
 // - group is personal (no role enforcement)
 // - user is the group creator (ADMIN)
-// - user has no role assigned (guest — allow read-only, so default true for 'view', false for mutating actions)
 // - user's role has that permission explicitly true
 export function usePermission(page, tab, action) {
   const activeGroupId = useGroupStore((s) => s.activeGroupId)
@@ -40,8 +39,8 @@ export function usePermission(page, tab, action) {
   if (!isBusiness) return true
   // Creator / admin role
   if (permissions === 'ADMIN') return true
-  // No role assigned yet: allow view, block mutations
-  if (!permissions) return action === 'view'
+  // No role assigned → no access at all
+  if (!permissions) return false
   // Find the permission entry
   const entry = permissions.find(
     (p) => p.page === page && (tab ? p.tab === tab : p.tab === null)
@@ -61,8 +60,9 @@ export function useTabPermissions(page, tab) {
     // All true
     return { view: true, add: true, edit: true, delete: true, status: true, email: true, cart: true, place_order: true }
   }
+  // No role assigned → no access at all
   if (!permissions) {
-    return { view: true, add: false, edit: false, delete: false, status: false, email: false, cart: false, place_order: false }
+    return { view: false, add: false, edit: false, delete: false, status: false, email: false, cart: false, place_order: false }
   }
   const entry = permissions.find((p) => p.page === page && p.tab === tab)
   return entry || { view: false, add: false, edit: false, delete: false, status: false, email: false, cart: false, place_order: false }
@@ -90,8 +90,8 @@ export function getPermissionForGroup(group, userId, page, tab, action) {
   )
   // System (Admin) role → full access
   if (mr?.roleId?.isSystem) return true
-  // No role assigned → read-only guest
-  if (!mr?.roleId) return action === 'view'
+  // No role assigned → no access
+  if (!mr?.roleId) return false
   const permissions = mr.roleId.permissions || []
   const entry = permissions.find(
     (p) => p.page === page && (tab ? p.tab === tab : p.tab === null)
