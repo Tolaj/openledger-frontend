@@ -23,6 +23,7 @@ import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
 import { useSalesInvoices } from '../hooks/useSalesInvoices'
 import { useActiveGroupType } from '../hooks/useActiveGroupType'
 import { startOfMonth, endOfMonth, format } from 'date-fns'
+import AIInsights from '../components/features/AIInsights'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(amount, symbol) {
@@ -419,6 +420,10 @@ export default function Dashboard() {
             )}
           </>
         )}
+
+        {/* ── AI Insights (both personal and business) ──────────────────── */}
+        <AIInsights />
+
       </div>
     </>
   )

@@ -1,9 +1,11 @@
 import { useEffect, useId } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
+import { Sparkles, Loader2 } from 'lucide-react'
 import useGroupStore from '../../store/groupStore'
 import { useCreateProduct, useUpdateProduct } from '../../hooks/useProducts'
 import { useCategories } from '../../hooks/useCategories'
 import { useIsBusiness } from '../../hooks/useActiveGroupType'
+import { useSuggestProduct } from '../../hooks/useAI'
 import BottomSheet from '../ui/BottomSheet'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
@@ -26,8 +28,22 @@ export default function ProductForm({ open, onClose, editing }) {
   const { mutate: create, isPending: creating } = useCreateProduct()
   const { mutate: update, isPending: updating } = useUpdateProduct()
 
-  const { register, handleSubmit, reset, control, formState: { errors } } = useForm()
+  const { register, handleSubmit, reset, control, setValue, getValues, formState: { errors } } = useForm()
   const trackInventory = useWatch({ control, name: 'inventory', defaultValue: false })
+  const { mutate: suggest, isPending: suggesting } = useSuggestProduct()
+
+  const handleAISuggest = () => {
+    const name = getValues('name')
+    if (!name?.trim()) return
+    suggest({ productName: name, groupId }, {
+      onSuccess: (data) => {
+        if (data.description && !getValues('description')) setValue('description', data.description)
+        if (data.categoryId) setValue('category', data.categoryId)
+        if (data.unit) setValue('unit', data.unit)
+        if (data.suggestedPrice && !getValues('price')) setValue('price', data.suggestedPrice)
+      },
+    })
+  }
 
   useEffect(() => {
     if (editing) {
@@ -67,12 +83,27 @@ export default function ProductForm({ open, onClose, editing }) {
       }
     >
       <form id={formId} onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <Input
-          label="Product name"
-          placeholder="e.g. Whole milk"
-          error={errors.name?.message}
-          {...register('name', { required: 'Name is required' })}
-        />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-zinc-700">Product name *</label>
+            <button
+              type="button"
+              onClick={handleAISuggest}
+              disabled={suggesting}
+              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900 disabled:opacity-50 transition-colors"
+              title="Auto-fill with AI"
+            >
+              {suggesting ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              AI Fill
+            </button>
+          </div>
+          <input
+            placeholder="e.g. Whole milk"
+            className={`h-11 px-3 rounded-xl border bg-white text-sm outline-none focus:border-zinc-900 ${errors.name ? 'border-red-400' : 'border-zinc-300'}`}
+            {...register('name', { required: 'Name is required' })}
+          />
+          {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+        </div>
 
         <div className="grid grid-cols-3 gap-3">
           <Input

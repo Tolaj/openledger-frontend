@@ -42,6 +42,10 @@ export default defineConfig({
       workbox: {
         runtimeCaching: [
           {
+            urlPattern: /^https?:\/\/.*\/api\/ai\/.*/,
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^https?:\/\/.*\/api\/.*/,
             handler: 'NetworkFirst',
             options: {

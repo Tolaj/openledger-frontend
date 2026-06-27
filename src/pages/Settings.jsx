@@ -1248,11 +1248,49 @@ function ConfigurationTab({ canEdit = true }) {
   const [activeSection, setActiveSection] = useState(isBusiness ? 'business' : 'preferences')
   useEffect(() => { setActiveSection(isBusiness ? 'business' : 'preferences') }, [activeGroupId])
 
+  // Gemini AI key state
+  const [geminiKey, setGeminiKey] = useState('')
+  const [geminiSaved, setGeminiSaved] = useState(false)
+  const [geminiSaving, setGeminiSaving] = useState(false)
+  const [geminiRemoving, setGeminiRemoving] = useState(false)
+  const geminiConfigured = !!activeGroup?.geminiConfigured
+  const aiEnabled = !!activeGroup?.aiEnabled
+
+  const handleAiToggle = () => {
+    updateGroup({ id: activeGroupId, data: { aiEnabled: !aiEnabled } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
+    })
+  }
+
+  const handleGeminiSave = () => {
+    if (!geminiKey.trim()) return
+    setGeminiSaving(true)
+    updateGroup({ id: activeGroupId, data: { geminiApiKey: geminiKey } }, {
+      onSuccess: () => {
+        setGeminiSaved(true)
+        setGeminiKey('')
+        setTimeout(() => setGeminiSaved(false), 2500)
+        queryClient.invalidateQueries({ queryKey: ['groups'] })
+      },
+      onSettled: () => setGeminiSaving(false),
+    })
+  }
+
+  const handleGeminiRemove = () => {
+    if (!confirm('Remove Gemini API key? AI features will use the server default key or be unavailable.')) return
+    setGeminiRemoving(true)
+    updateGroup({ id: activeGroupId, data: { geminiApiKey: '__CLEAR__' } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
+      onSettled: () => setGeminiRemoving(false),
+    })
+  }
+
   const navSections = [
     isBusiness && { id: 'business',     emoji: '🏢', label: 'Business Info' },
     isBusiness && { id: 'appearance',   emoji: '🎨', label: 'Invoice Template' },
                   { id: 'preferences',  emoji: '⚙️',  label: 'Preferences'  },
                   { id: 'email',        emoji: '✉️',  label: 'Email'         },
+                  { id: 'ai',           emoji: '✨',  label: 'AI (Gemini)'   },
   ].filter(Boolean)
 
   if (isLoading) return <Spinner className="py-12" />
@@ -1585,48 +1623,136 @@ function ConfigurationTab({ canEdit = true }) {
                 </button>
               </div>
 
-              {/* Fields */}
-              <div>
-                <label className={labelCls}>SMTP Email Address</label>
-                <input type="email" value={smtp.smtpUser}
-                  onChange={(e) => setSmtp((s) => ({ ...s, smtpUser: e.target.value }))}
-                  readOnly={!canEdit} placeholder="you@gmail.com" className={fieldCls(!canEdit)} />
-              </div>
+              {/* Fields — only show when not yet configured */}
+              {!smtpConfigured && (
+                <>
+                  <div>
+                    <label className={labelCls}>SMTP Email Address</label>
+                    <input type="email" value={smtp.smtpUser}
+                      onChange={(e) => setSmtp((s) => ({ ...s, smtpUser: e.target.value }))}
+                      readOnly={!canEdit} placeholder="you@gmail.com" className={fieldCls(!canEdit)} />
+                  </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-zinc-500">{smtpConfigured ? 'New Password' : 'App Password / SMTP Password'}</label>
-                  {smtpConfigured && <span className="text-[11px] text-zinc-400">Leave blank to keep existing</span>}
-                </div>
-                <input type="password" value={smtp.smtpPass}
-                  onChange={(e) => setSmtp((s) => ({ ...s, smtpPass: e.target.value }))}
-                  readOnly={!canEdit}
-                  placeholder={smtpConfigured ? '••••••••' : 'App password or SMTP password'}
-                  className={fieldCls(!canEdit)} />
-              </div>
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 block mb-1.5">App Password / SMTP Password</label>
+                    <input type="password" value={smtp.smtpPass}
+                      onChange={(e) => setSmtp((s) => ({ ...s, smtpPass: e.target.value }))}
+                      readOnly={!canEdit}
+                      placeholder="App password or SMTP password"
+                      className={fieldCls(!canEdit)} />
+                  </div>
 
-              <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-50 rounded-xl px-3 py-2.5">
-                For Gmail: Google Account → Security → 2-Step Verification → <strong className="text-zinc-600">App passwords</strong>.
-                &nbsp;Host: <code className="bg-zinc-200 px-1 rounded text-zinc-700 text-[11px]">smtp.gmail.com:587</code>
-              </p>
+                  <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-50 rounded-xl px-3 py-2.5">
+                    For Gmail: Google Account → Security → 2-Step Verification → <strong className="text-zinc-600">App passwords</strong>.
+                    &nbsp;Host: <code className="bg-zinc-200 px-1 rounded text-zinc-700 text-[11px]">smtp.gmail.com:587</code>
+                  </p>
 
-              {canEdit && (
-                <div className="flex gap-2">
-                  <button onClick={handleSmtpSave} disabled={smtpSaving || smtpRemoving || !smtp.smtpUser}
-                    className="flex-1 h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
-                    {smtpSaving && <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                    {smtpSaved ? '✓ Saved' : smtpSaving ? 'Saving…' : 'Save Credentials'}
-                  </button>
-                  {smtpConfigured && (
-                    <button onClick={handleSmtpRemove} disabled={smtpSaving || smtpRemoving}
-                      className="h-10 px-4 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-40 flex items-center gap-1.5">
-                      {smtpRemoving && <span className="h-3.5 w-3.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />}
-                      {smtpRemoving ? '…' : 'Remove'}
+                  {canEdit && (
+                    <button onClick={handleSmtpSave} disabled={smtpSaving || !smtp.smtpUser}
+                      className="h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                      {smtpSaving && <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                      {smtpSaved ? '✓ Saved' : smtpSaving ? 'Saving…' : 'Save Credentials'}
                     </button>
                   )}
+                </>
+              )}
+
+              {/* Configured state — show who it's configured for + delete only */}
+              {smtpConfigured && canEdit && (
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-50 border border-zinc-200">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-700">{smtp.smtpUser || 'Credentials saved'}</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">SMTP credentials are encrypted</p>
+                  </div>
+                  <button onClick={handleSmtpRemove} disabled={smtpRemoving}
+                    className="h-9 px-3 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-40 flex items-center gap-1.5 flex-shrink-0">
+                    {smtpRemoving && <span className="h-3.5 w-3.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />}
+                    {smtpRemoving ? '…' : 'Delete key'}
+                  </button>
                 </div>
               )}
 
+            </div>
+          )}
+
+          {/* ── AI (Gemini) ───────────────────────────────── */}
+          {activeSection === 'ai' && (
+            <div className="p-6 flex flex-col gap-4 max-w-md">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">AI Assistant (Gemini)</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Add your own Gemini API key to use AI features with your quota.</p>
+              </div>
+
+              {/* Status card + enable toggle */}
+              <div className={`rounded-xl border-2 p-4 flex items-center gap-4 transition-colors ${aiEnabled ? 'border-emerald-200 bg-emerald-50' : 'border-zinc-200 bg-zinc-50'}`}>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl ${aiEnabled ? 'bg-emerald-100' : 'bg-zinc-200'}`}>
+                  {aiEnabled ? '✨' : '🤖'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${aiEnabled ? 'text-emerald-800' : 'text-zinc-700'}`}>
+                    {aiEnabled ? 'AI features are active' : 'AI features are off'}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${aiEnabled ? 'text-emerald-600' : 'text-zinc-500'}`}>
+                    {aiEnabled
+                      ? geminiConfigured ? 'Using your Gemini key' : 'Using shared server key'
+                      : 'Chat and scan buttons are hidden'}
+                  </p>
+                </div>
+                {canEdit && (
+                  <button
+                    onClick={handleAiToggle}
+                    disabled={!geminiConfigured}
+                    title={!geminiConfigured ? 'Add an API key first' : ''}
+                    className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${aiEnabled ? 'bg-emerald-500' : 'bg-zinc-300'} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${aiEnabled ? 'translate-x-6' : ''}`} />
+                  </button>
+                )}
+              </div>
+
+              {/* Input — only show when not yet configured */}
+              {!geminiConfigured && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-zinc-500 block mb-1.5">Gemini API Key</label>
+                    <input
+                      type="password"
+                      value={geminiKey}
+                      onChange={(e) => setGeminiKey(e.target.value)}
+                      readOnly={!canEdit}
+                      placeholder="AIza…"
+                      className={fieldCls(!canEdit)}
+                    />
+                  </div>
+
+                  <p className="text-xs text-zinc-400 leading-relaxed bg-zinc-50 rounded-xl px-3 py-2.5">
+                    Get a free key at <strong className="text-zinc-600">aistudio.google.com</strong> → API keys.
+                    Free tier: <strong className="text-zinc-600">1,500 requests/day</strong>. Key is encrypted and never returned to the client.
+                  </p>
+
+                  {canEdit && (
+                    <button onClick={handleGeminiSave} disabled={geminiSaving || !geminiKey.trim()}
+                      className="h-10 rounded-xl bg-zinc-900 text-white text-sm font-semibold hover:bg-zinc-800 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                      {geminiSaving && <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                      {geminiSaved ? '✓ Saved' : geminiSaving ? 'Saving…' : 'Save API Key'}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* Configured state — show delete only */}
+              {geminiConfigured && canEdit && (
+                <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-50 border border-zinc-200">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-700">API key saved</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">Key is encrypted and stored securely</p>
+                  </div>
+                  <button onClick={handleGeminiRemove} disabled={geminiRemoving}
+                    className="h-9 px-3 rounded-xl border border-red-200 text-red-500 text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-40 flex items-center gap-1.5 flex-shrink-0">
+                    {geminiRemoving && <span className="h-3.5 w-3.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />}
+                    {geminiRemoving ? '…' : 'Delete key'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

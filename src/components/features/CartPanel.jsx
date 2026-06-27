@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Trash2, ShoppingCart, Check, ChevronDown } from 'lucide-react'
+import { X, Trash2, ShoppingCart, Check, ChevronDown, ScanLine } from 'lucide-react'
+import ReceiptScanner from './ReceiptScanner'
 import useCartStore from '../../store/cartStore'
 import { useCurrencySymbol } from '../../hooks/useCurrency'
 import useGroupStore from '../../store/groupStore'
@@ -311,6 +312,7 @@ export default function CartPanel() {
     amount: i._price * i.quantity,
   }))
 
+  const [scannerOpen, setScannerOpen] = useState(false)
   const afterSuccess = () => { clearCart(); closeCart() }
 
   const handleGeneral = () => {
@@ -394,7 +396,15 @@ export default function CartPanel() {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 flex-shrink-0">
           <h2 className="text-base font-semibold text-zinc-900">Shopping cart</h2>
-          <button onClick={closeCart} className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100"><X size={18} /></button>
+          <div className="flex items-center gap-1">
+            {group?.aiEnabled && (
+              <button onClick={() => setScannerOpen(true)} title="Scan receipt" className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 flex items-center gap-1">
+                <ScanLine size={17} />
+                <span className="text-xs font-medium hidden sm:inline">Scan</span>
+              </button>
+            )}
+            <button onClick={closeCart} className="p-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100"><X size={18} /></button>
+          </div>
         </div>
 
         {/* Items */}
@@ -610,6 +620,7 @@ export default function CartPanel() {
           </div>
         )}
       </div>
+      <ReceiptScanner open={scannerOpen} onClose={() => setScannerOpen(false)} />
     </div>,
     document.body
   )
