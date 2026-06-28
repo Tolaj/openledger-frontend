@@ -60,10 +60,9 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none md:hidden"
-      style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}
+      className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none md:hidden"
     >
-      <div className="pointer-events-auto flex items-center gap-1 bg-white rounded-full shadow-[0_4px_32px_rgba(0,0,0,0.12)] px-2 py-2 border border-zinc-100">
+      <div className="pointer-events-auto flex items-center gap-1 bg-white rounded-full shadow-[0_4px_32px_rgba(0,0,0,0.12)] px-2 py-2 border border-zinc-100 mb-4">
         {tabs.map((item) =>
           isBusiness && item.pageKey
             ? <BottomNavItemGated key={item.to} {...item} />
@@ -79,6 +78,8 @@ export default function BottomNav() {
           </button>
         )}
       </div>
+      {/* Cover the safe-area strip so page content doesn't show through */}
+      <div className="w-full bg-[#f5f5f5] pointer-events-auto" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
     </nav>
   )
 }
