@@ -12,6 +12,18 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query':   ['@tanstack/react-query'],
+          'vendor-gemini':  ['@google/generative-ai'],
+          'vendor-ui':      ['lucide-react'],
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -40,6 +52,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024, // 4 MiB
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*\/api\/(ai|client-ai)\/.*/,
