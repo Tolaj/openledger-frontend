@@ -62,7 +62,7 @@
   }
 
   .pb-nav {
-    padding-bottom: 0px;
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   }
 
   .min-touch {
