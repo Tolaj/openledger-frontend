@@ -101,9 +101,10 @@ export default function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 flex flex-col items-center pointer-events-none md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none md:hidden"
       style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}
     >
+      <div className="relative flex items-center">
       <div
         className="pointer-events-auto bg-white rounded-full shadow-[0_4px_32px_rgba(0,0,0,0.12)] border border-zinc-100 px-2 py-2 flex items-center"
         style={{ width: pillW }}
@@ -137,19 +138,20 @@ export default function BottomNav() {
       </div>
 
       {hasOverflow && (
-        <div className="flex gap-1 mt-1.5 pointer-events-none">
-          {[0, 1].map(pi => (
-            <div
-              key={pi}
-              className={`rounded-full transition-all duration-200 ${
-                currentPage === pi
-                  ? 'w-3 h-1.5 bg-zinc-900'
-                  : 'w-1.5 h-1.5 bg-zinc-300'
-              }`}
-            />
-          ))}
-        </div>
-      )}
+          <div className="absolute top-full mt-1.5 left-0 right-0 flex justify-center gap-1 pointer-events-none">
+            {[0, 1].map(pi => (
+              <div
+                key={pi}
+                className={`rounded-full transition-all duration-200 ${
+                  currentPage === pi
+                    ? 'w-3 h-1.5 bg-zinc-900'
+                    : 'w-1.5 h-1.5 bg-zinc-300'
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </nav>
   )
 }
