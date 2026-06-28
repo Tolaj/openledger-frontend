@@ -58,7 +58,7 @@
 
 @layer utilities {
   .safe-bottom {
-    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .pb-nav {
