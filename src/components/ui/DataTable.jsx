@@ -65,7 +65,7 @@ function Pagination({ page, total, pageSize, onChange }) {
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1
   const end = Math.min(page * pageSize, total)
   return (
-    <div className="flex items-center justify-between px-2 py-3 flex-shrink-0">
+    <div className="flex items-center justify-between px-2 py-3 flex-shrink-0 md:pr-20">
       <p className="text-xs text-zinc-400">
         {total === 0 ? 'No results' : `${start}–${end} of ${total}`}
       </p>

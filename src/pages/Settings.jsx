@@ -1313,7 +1313,7 @@ function ConfigurationTab({ canEdit = true }) {
     <div className="flex flex-col gap-0">
 
       {/* ── Unified settings card ──────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden flex flex-col md:flex-row" style={{ height: 'calc(100vh - 116px)', minHeight: 520 }}>
+      <div className="bg-white rounded-2xl border border-zinc-200 flex flex-col md:flex-row md:overflow-hidden" style={{ height: window.innerWidth >= 768 ? 'calc(100vh - 116px)' : 'auto', minHeight: window.innerWidth >= 768 ? 520 : 'auto' }}>
 
         {/* Mobile: horizontal pill tabs */}
         <div className="md:hidden flex gap-1.5 overflow-x-auto px-4 py-3 border-b border-zinc-100 scrollbar-none flex-shrink-0">
@@ -1344,7 +1344,7 @@ function ConfigurationTab({ canEdit = true }) {
         </nav>
 
         {/* Content panel */}
-        <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="flex-1 min-w-0 md:overflow-y-auto">
 
           {/* ── Business Info ─────────────────────────────── */}
           {activeSection === 'business' && isBusiness && (
@@ -1691,7 +1691,7 @@ function ConfigurationTab({ canEdit = true }) {
 
           {/* ── AI (Gemini) ───────────────────────────────── */}
           {activeSection === 'ai' && (
-            <div className="p-6 flex flex-col gap-4 max-w-md">
+            <div className="p-6 flex flex-col gap-4 max-w-md pb-24 md:pb-6">
               <div>
                 <h2 className="text-sm font-semibold text-zinc-900">AI Assistant (Gemini)</h2>
                 <p className="text-xs text-zinc-400 mt-0.5">Add your own Gemini API key to use AI features with your quota.</p>

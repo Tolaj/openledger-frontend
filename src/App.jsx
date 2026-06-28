@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import queryClient from './lib/queryClient'
 import { getSession } from './api/auth'
 import useAuthStore from './store/authStore'
@@ -12,6 +12,7 @@ import ProtectedRoute from './components/layout/ProtectedRoute'
 import InstallPrompt from './components/ui/InstallPrompt'
 import Toaster from './components/ui/Toaster'
 import ClientAIAssistant from './components/features/ClientAIAssistant'
+import { aiTriggerRef } from './lib/aiTrigger'
 
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -80,7 +81,7 @@ export default function App() {
           <ThemeColorSync />
           <InstallPrompt />
           <Toaster />
-          <ClientAIAssistant />
+          <ClientAIAssistant triggerRef={aiTriggerRef} />
           <Routes>
             <Route path="/" element={<LandingOrDashboard />} />
             <Route path="/landing" element={<Landing />} />

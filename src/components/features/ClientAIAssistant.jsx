@@ -65,7 +65,7 @@ const SUGGESTIONS = [
   'Add ₹500 grocery expense for today',
 ]
 
-export default function ClientAIAssistant() {
+export default function ClientAIAssistant({ triggerRef }) {
   const [open, setOpen]         = useState(false)
   const [input, setInput]       = useState('')
   const [messages, setMessages] = useState([
@@ -101,6 +101,11 @@ export default function ClientAIAssistant() {
   useEffect(() => {
     if (open && groupId) init()
   }, [open, groupId, init])
+
+  // Expose open handler to external trigger (e.g. BottomNav)
+  useEffect(() => {
+    if (triggerRef) triggerRef.current = () => setOpen(true)
+  }, [triggerRef])
 
   useEffect(() => {
     reset()
@@ -192,10 +197,10 @@ export default function ClientAIAssistant() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button — desktop only */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 right-4 md:bottom-6 md:right-6 z-50 w-12 h-12 rounded-full bg-zinc-900 text-white shadow-lg flex items-center justify-center hover:bg-zinc-700 active:scale-95 transition-all"
+        className="hidden md:flex fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-zinc-900 text-white shadow-lg items-center justify-center hover:bg-zinc-700 active:scale-95 transition-all"
         title="AI Assistant"
       >
         <Sparkles size={20} />

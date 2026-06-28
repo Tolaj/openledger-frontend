@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes, BarChart2 } from 'lucide-react'
+import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes, BarChart2, Sparkles } from 'lucide-react'
 import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
 import { usePagePermission } from '../../hooks/usePermission'
+import { aiTriggerRef } from '../../lib/aiTrigger'
 
 const PERSONAL_TABS = [
   { to: '/dashboard', icon: Home,        label: 'Home',      exact: true },
@@ -55,10 +56,11 @@ export default function BottomNav() {
   const activeGroup = groups.find(g => g._id === activeGroupId)
   const isBusiness = activeGroup?.type === 'business'
   const tabs = isBusiness ? BUSINESS_TABS : PERSONAL_TABS
+  const aiEnabled = activeGroup?.aiEnabled
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none"
+      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none md:hidden"
       style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}
     >
       <div className="pointer-events-auto flex items-center gap-1 bg-white rounded-full shadow-[0_4px_32px_rgba(0,0,0,0.12)] px-2 py-2 border border-zinc-100">
@@ -66,6 +68,15 @@ export default function BottomNav() {
           isBusiness && item.pageKey
             ? <BottomNavItemGated key={item.to} {...item} />
             : <BottomNavItem key={item.to} {...item} />
+        )}
+        {aiEnabled && (
+          <button
+            onClick={() => aiTriggerRef.current?.()}
+            className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-zinc-50 active:bg-zinc-100 transition-all duration-200"
+            title="Aura AI"
+          >
+            <Sparkles size={20} strokeWidth={1.8} className="text-zinc-400" />
+          </button>
         )}
       </div>
     </nav>
