@@ -34,13 +34,17 @@
   }
 
   /* Scrollable containers should not chain overscroll to the page */
-  .overflow-y-auto, .overflow-auto, .overflow-scroll {
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-scroll {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
 
   /* Re-enable text selection for inputs */
-  input, textarea, [contenteditable] {
+  input,
+  textarea,
+  [contenteditable] {
     -webkit-user-select: text;
     user-select: text;
   }
@@ -52,16 +56,10 @@
   }
 }
 
+
 @layer utilities {
-  .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
 
-  .pb-nav {
-    /* floating pill nav: 44px pill + 16px gap above + safe area covered by nav */
-    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
-  }
-
+  /* here---- */
   .min-touch {
     min-height: 48px;
     min-width: 48px;
@@ -71,17 +69,32 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
+
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
 }
 
 @keyframes slideUp {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes toast-in {
-  from { transform: translateY(-12px) scale(0.95); opacity: 0; }
-  to   { transform: translateY(0)     scale(1);    opacity: 1; }
+  from {
+    transform: translateY(-12px) scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
