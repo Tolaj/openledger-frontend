@@ -62,8 +62,8 @@
   }
 
   .pb-nav {
-    /* floating pill nav: 44px pill + 16px gap above + safe area covered by nav */
-    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    /* just clear the safe-area home indicator — nav floats over content */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   .min-touch {
