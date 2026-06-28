@@ -24,6 +24,7 @@ import { useSalesInvoices } from '../hooks/useSalesInvoices'
 import { useActiveGroupType } from '../hooks/useActiveGroupType'
 import { startOfMonth, endOfMonth, format } from 'date-fns'
 import AIInsights from '../components/features/AIInsights'
+import AppLogo from '../components/ui/AppLogo'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmt(amount, symbol) {
@@ -154,10 +155,15 @@ export default function Dashboard() {
 
         {/* Mobile greeting — no sticky header, inline at top of scroll */}
         <div className="md:hidden pt-5 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm text-zinc-500 font-medium">Welcome back,</p>
-            <p className="text-3xl font-bold text-zinc-900 leading-tight mt-0.5">{firstName}</p>
-            <p className="text-xs text-zinc-400 mt-1">{format(now, 'EEEE, d MMMM')}</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+              <AppLogo size={20} />
+            </div>
+            <div>
+              <p className="text-sm text-zinc-500 font-medium">Welcome back,</p>
+              <p className="text-2xl font-bold text-zinc-900 leading-tight">{firstName}</p>
+              <p className="text-xs text-zinc-400 mt-0.5">{format(now, 'EEEE, d MMMM')}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 mt-1">
             <GroupSwitcher compact />

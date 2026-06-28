@@ -30,7 +30,7 @@ function isAndroid() {
 
 const IOS_STEPS = {
   safari: [
-    { icon: Share,        bg: 'bg-blue-50',    color: 'text-blue-500',    title: 'Tap the Share button',  desc: 'Tap ↑ at the bottom of Safari.' },
+    { icon: Share,        bg: 'bg-blue-50',    color: 'text-blue-500',    title: 'Tap the Share button',  desc: 'Tap the share icon (box with arrow up) at the bottom of Safari.' },
     { icon: SquarePlus,   bg: 'bg-emerald-50', color: 'text-emerald-600', title: 'Add to Home Screen',    desc: 'Scroll and tap "Add to Home Screen", then Add.' },
   ],
   chrome: [
