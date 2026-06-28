@@ -1874,7 +1874,7 @@ export default function Finance() {
 
       <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
         <div
-          className="sticky z-20 bg-transparent -mx-4 px-4 md:static md:bg-transparent md:mx-0 md:px-0 flex items-center justify-between gap-4 flex-shrink-0 py-3 md:py-0 md:mb-4"
+          className="sticky z-20 bg-transparent -mx-4 px-4 md:static md:bg-transparent md:mx-0 md:px-0 flex items-center justify-between gap-4 flex-shrink-0 py-2 md:py-0 md:mb-4"
           style={{ top: 'calc(3.5rem + env(safe-area-inset-top))' }}
         >
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />

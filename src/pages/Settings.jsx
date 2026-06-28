@@ -1316,15 +1316,12 @@ function ConfigurationTab({ canEdit = true }) {
       <div className="bg-white rounded-2xl border border-zinc-200 flex flex-col md:flex-row md:overflow-hidden" style={{ height: window.innerWidth >= 768 ? 'calc(100vh - 116px)' : 'auto', minHeight: window.innerWidth >= 768 ? 520 : 'auto' }}>
 
         {/* Mobile: horizontal pill tabs */}
-        <div className="md:hidden flex gap-1.5 overflow-x-auto px-4 py-3 border-b border-zinc-100 scrollbar-none flex-shrink-0">
-          {navSections.map((s) => (
-            <button key={s.id} onClick={() => setActiveSection(s.id)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition-all ${
-                activeSection === s.id ? 'bg-zinc-900 text-white' : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200'
-              }`}>
-              <span>{s.emoji}</span>{s.label}
-            </button>
-          ))}
+        <div className="md:hidden px-4 py-2 border-b border-zinc-100 flex-shrink-0">
+          <Tabs
+            tabs={navSections.map((s) => ({ key: s.id, label: `${s.emoji} ${s.label}` }))}
+            active={activeSection}
+            onChange={setActiveSection}
+          />
         </div>
 
         {/* Desktop: sidebar */}
@@ -3092,7 +3089,7 @@ export default function Settings() {
       <div className="md:px-0 md:flex md:flex-col md:flex-1 md:min-h-0">
         {/* Tab bar — fixed below TopBar on mobile, static on desktop */}
         <div className="flex items-center justify-between gap-4 flex-shrink-0
-                        sticky top-14 z-10 bg-transparent px-4 py-4
+                        sticky top-14 z-10 bg-transparent px-4 py-2
                         md:static md:top-auto md:bg-transparent md:px-0 md:py-0 md:mb-4">
           <Tabs tabs={TABS} active={tab} onChange={handleTabChange} />
           <PageActions add={
@@ -3107,7 +3104,7 @@ export default function Settings() {
         </div>
 
         {/* Content — scrolls internally on desktop, naturally on mobile */}
-        <div className="px-4 pb-5 md:px-0 md:pb-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col">
+        <div className="px-4 pb-2 md:px-0 md:pb-4 md:flex-1 md:min-h-0 md:overflow-y-auto md:flex md:flex-col">
           {tab === 'profile'       && <ProfileTab isBusiness={isBusiness} />}
           {tab === 'friends'       && <FriendsTab showAddForm={showAddFriend} setShowAddForm={setShowAddFriend} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} canEdit={!isBusiness || canEditTeam} canDelete={!isBusiness || canDeleteTeam} />}
           {tab === 'groups'        && <GroupsTab openAddRef={openGroupAdd} mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} isBusiness={isBusiness} canEdit={!isBusiness || canEditWS} canDelete={!isBusiness || canDeleteWS} />}

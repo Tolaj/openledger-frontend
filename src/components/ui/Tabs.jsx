@@ -1,6 +1,6 @@
 export default function Tabs({ tabs = [], active, onChange, className = '' }) {
   return (
-    <div className={`flex gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0 md:w-fit md:flex-none ${className}`}>
+    <div className={`flex gap-1 overflow-x-auto scrollbar-none flex-1 min-w-0 md:w-fit md:flex-none pb-1 ${className}`}>
       {tabs.map((tab) => {
         const Icon = tab.icon
         const isActive = active === tab.key
