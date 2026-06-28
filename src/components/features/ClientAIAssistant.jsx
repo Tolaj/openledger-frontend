@@ -55,12 +55,14 @@ export default function ClientAIAssistant({ triggerRef }) {
     if (triggerRef) triggerRef.current = () => setOpen(true)
   }, [triggerRef])
 
+  // Reset session when groupId OR model changes so the new model is always used
   useEffect(() => {
     reset()
     setMessages([{ role: 'model', text: "Hi! I'm Aura — your AI assistant. Ask me anything: your spending, orders, inventory, vendors, invoices, or any general question. I'm here to help." }])
     setStreamingText('')
     setActiveToolLabel(null)
-  }, [groupId, reset])
+    if (open && groupId) setTimeout(() => init(), 50)
+  }, [groupId, modelId, reset])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -120,6 +122,7 @@ export default function ClientAIAssistant({ triggerRef }) {
           confirmResolveRef.current = resolve
           setPendingConfirm({ calls })
         }),
+        onRateLimit: (secs) => startRateLimitCountdown(secs),
       })
       setStreamingText('')
       setActiveToolLabel(null)
@@ -316,18 +319,13 @@ export default function ClientAIAssistant({ triggerRef }) {
                   className="flex flex-col border-t border-zinc-100 flex-shrink-0"
                   style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
                 >
-                  {rateLimitSecs > 0 && (
-                    <div className="mx-3 mt-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 text-center">
-                      Rate limited — please wait <span className="font-semibold tabular-nums">{rateLimitSecs}s</span> before sending
-                    </div>
-                  )}
                   <div className="flex items-center gap-2 px-3 py-3">
                     <input
                       ref={inputRef}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
-                      placeholder={rateLimitSecs > 0 ? `Wait ${rateLimitSecs}s…` : 'Ask anything…'}
+                      placeholder="Ask anything…"
                       disabled={rateLimitSecs > 0 || !!pendingConfirm}
                       className="flex-1 h-10 px-3 rounded-xl border border-zinc-200 text-sm outline-none focus:border-zinc-900 bg-zinc-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
@@ -336,10 +334,7 @@ export default function ClientAIAssistant({ triggerRef }) {
                       disabled={!input.trim() || loading || rateLimitSecs > 0 || !!pendingConfirm}
                       className="w-10 h-10 rounded-xl bg-zinc-900 text-white flex items-center justify-center disabled:opacity-40 active:bg-zinc-700 transition-colors flex-shrink-0"
                     >
-                      {rateLimitSecs > 0
-                        ? <span className="text-[10px] font-bold tabular-nums">{rateLimitSecs}</span>
-                        : <Send size={15} />
-                      }
+                      <Send size={15} />
                     </button>
                   </div>
                 </div>

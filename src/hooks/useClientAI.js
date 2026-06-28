@@ -210,7 +210,7 @@ export function useClientAI(groupId) {
   // onToken(fullTextSoFar) — stream tokens
   // onToolCall(label)      — a tool is executing (including rate-limit waits)
   // onToolDone()           — all tools done, about to stream final answer
-  const sendMessage = useCallback(async (text, { onToken, onToolCall, onToolDone, onConfirm } = {}) => {
+  const sendMessage = useCallback(async (text, { onToken, onToolCall, onToolDone, onConfirm, onRateLimit } = {}) => {
     if (!sessionRef.current) throw new Error('AI session not initialised')
     setLoading(true)
     setToolStatus(null)
@@ -229,10 +229,13 @@ export function useClientAI(groupId) {
         const isDaily = raw.includes('PerDay') || raw.includes('per_day') || raw.includes('requests_per_day')
         if (isDaily) throw err
 
-        const retryMatch = raw.match(/retry in ([\d.]+)s/i)
+        const retryMatch = raw.match(/retry[^\d]*([\d.]+)s/i)
         const waitSecs   = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60
 
-        // Count down once, then retry exactly once
+        // Surface countdown to the UI amber bar immediately
+        onRateLimit?.(waitSecs)
+
+        // Count down in the tool indicator too
         for (let s = waitSecs; s > 0; s--) {
           const label = `Rate limited — retrying in ${s}s…`
           setToolStatus(label)
@@ -319,6 +322,14 @@ export function useClientAI(groupId) {
         // More tool calls — keep looping
       }
     } catch (err) {
+      // Surface rate-limit wait time even for errors in the tool loop
+      const raw = err?.message || ''
+      const is429 = raw.includes('429') || raw.includes('quota') || raw.includes('Too Many Requests')
+      const isDaily = raw.includes('PerDay') || raw.includes('per_day') || raw.includes('requests_per_day')
+      if (is429 && !isDaily) {
+        const rm = raw.match(/retry[^\d]*([\d.]+)s/i)
+        onRateLimit?.(rm ? Math.ceil(parseFloat(rm[1])) : 60)
+      }
       throw new Error(cleanGeminiError(err))
     } finally {
       setLoading(false)
