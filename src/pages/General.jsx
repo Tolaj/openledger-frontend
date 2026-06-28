@@ -1256,7 +1256,7 @@ export default function General() {
       />
 
       <div className="px-4 pt-0 pb-5 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        <div className="flex items-center justify-between gap-4 flex-shrink-0 py-2 md:py-0 md:mb-4">
+        <div className="flex items-center justify-between gap-4 flex-shrink-0 py-2 sticky z-20 -mx-4 px-4 bg-[#f5f5f5] md:static md:bg-transparent md:mx-0 md:px-0 md:py-0 md:mb-4" style={{ top: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}>
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
           <PageActions add={addBtn} />
         </div>
