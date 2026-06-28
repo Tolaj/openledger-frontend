@@ -5,58 +5,6 @@ import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
 
 // Human-readable summaries of what each write tool does
-const WRITE_TOOL_SUMMARY = {
-  create_finance_entry:    'Record a transaction',
-  update_finance_entry:    'Update a transaction',
-  delete_finance_entry:    'Delete a transaction',
-  create_order:            'Create an order',
-  delete_order:            'Delete an order',
-  create_product:          'Create a product',
-  update_product:          'Update a product',
-  delete_product:          'Delete a product',
-  create_category:         'Create a category',
-  delete_category:         'Delete a category',
-  create_budget:           'Create a budget',
-  update_budget:           'Update a budget',
-  delete_budget:           'Delete a budget',
-  create_stock_adjustment: 'Adjust stock',
-  create_wishlist:         'Create a wishlist',
-  delete_wishlist:         'Delete a wishlist',
-  create_recurring:        'Create a recurring schedule',
-  update_recurring:        'Update a recurring schedule',
-  delete_recurring:        'Delete a recurring schedule',
-  create_vendor:           'Create a vendor',
-  update_vendor:           'Update a vendor',
-  delete_vendor:           'Delete a vendor',
-  create_customer:         'Create a customer',
-  update_customer:         'Update a customer',
-  delete_customer:         'Delete a customer',
-  create_purchase_order:   'Create a purchase order',
-  update_purchase_order:   'Update a purchase order',
-  delete_purchase_order:   'Delete a purchase order',
-  create_sales_order:      'Create a sales order',
-  update_sales_order:      'Update a sales order',
-  delete_sales_order:      'Delete a sales order',
-  create_general_order:    'Create a general order',
-  update_general_order:    'Update a general order',
-  delete_general_order:    'Delete a general order',
-  create_general_invoice:  'Create an invoice',
-  update_general_invoice:  'Update an invoice',
-  delete_general_invoice:  'Delete an invoice',
-  create_purchase_invoice: 'Create a purchase invoice',
-  update_purchase_invoice: 'Update a purchase invoice',
-  delete_purchase_invoice: 'Delete a purchase invoice',
-  create_sales_invoice:    'Create a sales invoice',
-  update_sales_invoice:    'Update a sales invoice',
-  delete_sales_invoice:    'Delete a sales invoice',
-  create_grn:              'Record goods receipt',
-  delete_grn:              'Delete a GRN',
-  create_delivery:         'Record a delivery',
-  delete_delivery:         'Delete a delivery',
-  create_recipient:        'Create a recipient',
-  update_recipient:        'Update a recipient',
-  delete_recipient:        'Delete a recipient',
-}
 
 const SUGGESTIONS = [
   'How much did I spend this month?',
@@ -168,9 +116,9 @@ export default function ClientAIAssistant({ triggerRef }) {
         onToolDone: () => {
           setActiveToolLabel(null)
         },
-        onConfirm: (calls, type) => new Promise((resolve) => {
+        onConfirm: (calls) => new Promise((resolve) => {
           confirmResolveRef.current = resolve
-          setPendingConfirm({ calls, type: type || 'confirm' })
+          setPendingConfirm({ calls })
         }),
       })
       setStreamingText('')
@@ -297,60 +245,40 @@ export default function ClientAIAssistant({ triggerRef }) {
                     </div>
                   )}
 
-                  {/* Clarify / Confirm card */}
+                  {/* Write-confirm card */}
                   {pendingConfirm && (
                     <div className="flex gap-2 justify-start">
                       <div className="w-7 h-7 rounded-full bg-zinc-900 flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Bot size={13} className="text-white" />
                       </div>
-
-                      {pendingConfirm.type === 'clarify' ? (
-                        // Clarification card — option buttons
-                        <div className="max-w-[85%] bg-zinc-100 rounded-2xl rounded-bl-md px-3 py-2.5 text-sm">
-                          <p className="text-zinc-800 font-medium mb-2">{pendingConfirm.calls.args?.question}</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {(pendingConfirm.calls.args?.options || []).map((opt, i) => (
-                              <button
-                                key={i}
-                                onClick={() => handleConfirm(opt)}
-                                className="px-3 py-1.5 bg-white border border-zinc-300 text-zinc-700 text-xs font-medium rounded-lg hover:border-zinc-900 hover:text-zinc-900 active:scale-95 transition-all"
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
+                      <div className="max-w-[80%] bg-amber-50 border border-amber-200 rounded-2xl rounded-bl-md px-3 py-2.5 text-sm">
+                        <p className="font-medium text-amber-900 mb-1.5">Confirm action{pendingConfirm.calls.length > 1 ? 's' : ''}:</p>
+                        <ul className="space-y-0.5 mb-3">
+                          {pendingConfirm.calls.map((call, i) => {
+                            const label = call.name.replace(/_/g, ' ')
+                            const detail = call.args?.name || call.args?.amount || call.args?.description || ''
+                            return (
+                              <li key={i} className="text-amber-800 text-xs">
+                                • {label}{detail ? `: "${detail}"` : ''}
+                              </li>
+                            )
+                          })}
+                        </ul>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleConfirm(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 text-white text-xs font-medium rounded-lg hover:bg-zinc-700 active:scale-95 transition-all"
+                          >
+                            <Check size={12} /> Confirm
+                          </button>
+                          <button
+                            onClick={() => handleConfirm(false)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-medium rounded-lg hover:border-zinc-400 active:scale-95 transition-all"
+                          >
+                            <Ban size={12} /> Cancel
+                          </button>
                         </div>
-                      ) : (
-                        // Write-confirm card — confirm / cancel
-                        <div className="max-w-[80%] bg-amber-50 border border-amber-200 rounded-2xl rounded-bl-md px-3 py-2.5 text-sm">
-                          <p className="font-medium text-amber-900 mb-1.5">Confirm action{pendingConfirm.calls.length > 1 ? 's' : ''}:</p>
-                          <ul className="space-y-0.5 mb-3">
-                            {pendingConfirm.calls.map((call, i) => {
-                              const summary = WRITE_TOOL_SUMMARY[call.name] || call.name
-                              const detail = call.args?.name || call.args?.amount || call.args?.description || ''
-                              return (
-                                <li key={i} className="text-amber-800 text-xs">
-                                  • {summary}{detail ? `: "${detail}"` : ''}
-                                </li>
-                              )
-                            })}
-                          </ul>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleConfirm(true)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 text-white text-xs font-medium rounded-lg hover:bg-zinc-700 active:scale-95 transition-all"
-                            >
-                              <Check size={12} /> Confirm
-                            </button>
-                            <button
-                              onClick={() => handleConfirm(false)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-200 text-zinc-700 text-xs font-medium rounded-lg hover:border-zinc-400 active:scale-95 transition-all"
-                            >
-                              <Ban size={12} /> Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
                   )}
 

@@ -140,19 +140,6 @@ export const TOOL_DECLARATIONS = [
   { name:'create_delivery',  description:'Record goods dispatched to customer. Use get_sales_orders for salesOrderId.', parameters:{ type:'object', properties:{ deliveryNumber:STR, salesOrderId:STR, status:RECEIPT_STATUS, deliveredDate:DATE, notes:STR, items:{ type:'array', items:{ type:'object', properties:{ productId:STR, description:STR, qtyOrdered:NUM, qtyDelivered:NUM, unit:STR, unitPrice:NUM }, required:['qtyDelivered'] } } }, required:['deliveryNumber','salesOrderId','items'] } },
   { name:'delete_delivery',  description:'Delete a delivery by id.', parameters:{ type:'object', properties:{ id:STR }, required:['id'] } },
 
-  // Clarification (UI only — never hits the backend)
-  {
-    name: 'clarify',
-    description: 'Ask the user a clarifying question ONLY when you are about to perform a write/create/update/delete and the exact action or target is genuinely ambiguous. Do NOT use this for read/list/count queries — just answer those directly.',
-    parameters: {
-      type: 'object',
-      properties: {
-        question: { type: 'string', description: 'The question to ask the user' },
-        options:  { type: 'array', items: { type: 'string' }, description: '2-4 short option labels the user can click' },
-      },
-      required: ['question', 'options'],
-    },
-  },
 ]
 
 // ── Helper to map AI line items to backend shape ──────────────────────────────

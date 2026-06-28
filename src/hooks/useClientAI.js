@@ -52,9 +52,8 @@ TOOL USE RULES (follow exactly):
 1. User asks to DO something with app data → call the right tool immediately. No asking for confirmation, no preamble.
 2. "place order / create order / add order" → call get_products first (to find product id), then immediately call create_order. Do NOT stop between steps.
 3. "show / list / how many / what" → call the relevant GET tool, then answer directly. Never ask "what would you like to do?"
-4. Ambiguous write intent only → call clarify tool with 2-4 options.
-5. Never call multiple unneeded tools. One tool per step.
-6. After writes: one sentence confirmation.
+4. Never call multiple unneeded tools. One tool per step.
+5. After writes: one sentence confirmation.
 
 FORMAT RULES:
 - Dates: YYYY-MM-DD
@@ -292,35 +291,6 @@ export function useClientAI(groupId) {
         const label = pendingCalls.map((c) => TOOL_LABELS[c.name] || `Running ${c.name}…`).join(' · ')
         setToolStatus(label)
         onToolCall?.(label)
-
-        // Handle `clarify` tool — pause for user input, never hit backend
-        const clarifyCall = pendingCalls.find((c) => c.name === 'clarify')
-        if (clarifyCall && onConfirm) {
-          setToolStatus(null)
-          const chosen = await onConfirm(clarifyCall, 'clarify')
-          // If user dismissed without choosing, treat as cancel
-          const answer = chosen ?? 'Cancel'
-          const clarifyParts = pendingCalls.map((call) => ({
-            functionResponse: {
-              name: call.name,
-              response: call.name === 'clarify'
-                ? { chosen: answer }
-                : { cancelled: true, message: 'Waiting for clarification.' },
-            },
-          }))
-          const clarifyRes = await sessionRef.current.sendMessage(clarifyParts)
-          pendingCalls = clarifyRes.response.functionCalls?.() || []
-          if (!pendingCalls.length) {
-            onToolDone?.()
-            const clarifyText = clarifyRes.response.text?.() || ''
-            for (let i = 0; i < clarifyText.length; i++) {
-              onToken?.(clarifyText.slice(0, i + 1))
-              if (i % 8 === 7) await new Promise((r) => setTimeout(r, 0))
-            }
-            return clarifyText
-          }
-          continue
-        }
 
         const functionParts = await Promise.all(
           pendingCalls.map(async (call) => {
