@@ -154,7 +154,7 @@ export default function Dashboard() {
       <div className="px-4 pt-0 pb-6 md:px-0 md:py-0 md:pb-6 flex flex-col gap-5 md:gap-6">
 
         {/* Mobile greeting — no sticky header, inline at top of scroll */}
-        <div className="md:hidden pt-5 flex items-start justify-between gap-3">
+        <div className="md:hidden flex items-start justify-between gap-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
               <AppLogo size={20} />
