@@ -2396,7 +2396,7 @@ function PreviewModal({ template, biz, onClose, onSelect }) {
   }, [])
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black/60 backdrop-blur-sm">
       <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 text-white flex-shrink-0">
         <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-base leading-none">✕</button>
         <div className="flex-1 overflow-x-auto scrollbar-none">

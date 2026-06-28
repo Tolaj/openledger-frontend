@@ -1984,7 +1984,7 @@ function StockTab({ inventory = [], loading, mobileFiltersOpen, onMobileFiltersO
 
       {/* Adjust stock sheet */}
       {adjustSheet && createPortal(
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAdjustSheet(null)} />
           <div className="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
             <p className="text-base font-semibold text-zinc-900 mb-1">Adjust Stock</p>

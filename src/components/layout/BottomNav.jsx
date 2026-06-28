@@ -10,7 +10,7 @@ const ITEMS_PER_PAGE = 6
 const STEP = 2       // buttons revealed per scroll step
 const BTN_PX = 44   // w-11
 const GAP_PX = 4    // gap-1
-const PILL_PAD = 16 // px-2 (8px * 2)
+const PILL_PAD = 20 // pl-2 pr-3 (8px left + 12px right)
 
 function pageWidth(count) {
   return count * BTN_PX + (count - 1) * GAP_PX
@@ -56,22 +56,22 @@ export default function BottomNav() {
   const aiEnabled = activeGroup?.aiEnabled
 
   // Always call permission hooks (rules of hooks)
-  const canDashboard   = usePagePermission('dashboard')
-  const canProducts    = usePagePermission('products')
-  const canPurchases   = usePagePermission('purchase_orders')
-  const canSales       = usePagePermission('sales_orders')
-  const canStock       = usePagePermission('stock')
-  const canFinance     = usePagePermission('finance')
+  const canDashboard = usePagePermission('dashboard')
+  const canProducts = usePagePermission('products')
+  const canPurchases = usePagePermission('purchase_orders')
+  const canSales = usePagePermission('sales_orders')
+  const canStock = usePagePermission('stock')
+  const canFinance = usePagePermission('finance')
 
   // Build visible button list
   const buttons = []
   if (isBusiness) {
-    if (canDashboard)  buttons.push({ type: 'nav', to: '/dashboard', icon: Home, exact: true })
-    if (canProducts)   buttons.push({ type: 'nav', to: '/products', icon: Tag })
-    if (canPurchases)  buttons.push({ type: 'nav', to: '/purchases', icon: ShoppingCart })
-    if (canSales)      buttons.push({ type: 'nav', to: '/sales', icon: TrendingUp })
-    if (canStock)      buttons.push({ type: 'nav', to: '/stock', icon: Boxes })
-    if (canFinance)    buttons.push({ type: 'nav', to: '/finance', icon: BarChart2 })
+    if (canDashboard) buttons.push({ type: 'nav', to: '/dashboard', icon: Home, exact: true })
+    if (canProducts) buttons.push({ type: 'nav', to: '/products', icon: Tag })
+    if (canPurchases) buttons.push({ type: 'nav', to: '/purchases', icon: ShoppingCart })
+    if (canSales) buttons.push({ type: 'nav', to: '/sales', icon: TrendingUp })
+    if (canStock) buttons.push({ type: 'nav', to: '/stock', icon: Boxes })
+    if (canFinance) buttons.push({ type: 'nav', to: '/finance', icon: BarChart2 })
     buttons.push({ type: 'nav', to: '/settings', icon: Settings })
   } else {
     buttons.push({ type: 'nav', to: '/dashboard', icon: Home, exact: true })
@@ -105,48 +105,47 @@ export default function BottomNav() {
       style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom, 0px))' }}
     >
       <div className="relative flex items-center">
-      <div
-        className="pointer-events-auto bg-white rounded-full shadow-[0_4px_32px_rgba(0,0,0,0.12)] border border-zinc-100 px-2 py-2 flex items-center"
-        style={{ width: pillW }}
-      >
-        {hasOverflow ? (
-          <div
-            ref={scrollRef}
-            onScroll={handleScroll}
-            className="flex gap-1 overflow-x-auto scrollbar-none"
-            style={{
-              scrollSnapType: 'x mandatory',
-              WebkitOverflowScrolling: 'touch',
-              width: pageWidth(ITEMS_PER_PAGE),
-            }}
-          >
-            {buttons.map((btn, i) => (
-              <div
-                key={btn.type === 'ai' ? 'ai' : btn.to}
-                className="flex-shrink-0"
-                style={{ scrollSnapAlign: i % STEP === 0 ? 'start' : undefined }}
-              >
-                {renderBtn(btn)}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1">
-            {buttons.map(renderBtn)}
-          </div>
-        )}
-      </div>
+        <div
+          className="pointer-events-auto bg-white rounded-full shadow-[0_4px_32px_rgba(0,0,0,0.12)] border border-zinc-100 px-2 py-2 flex items-center overflow-hidden"
+          style={{ width: pillW }}
+        >
+          {hasOverflow ? (
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="flex gap-1 overflow-x-auto scrollbar-none"
+              style={{
+                scrollSnapType: 'x mandatory',
+                WebkitOverflowScrolling: 'touch',
+                width: pageWidth(ITEMS_PER_PAGE),
+              }}
+            >
+              {buttons.map((btn, i) => (
+                <div
+                  key={btn.type === 'ai' ? 'ai' : btn.to}
+                  className="flex-shrink-0"
+                  style={{ scrollSnapAlign: i % STEP === 0 ? 'start' : undefined }}
+                >
+                  {renderBtn(btn)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              {buttons.map(renderBtn)}
+            </div>
+          )}
+        </div>
 
-      {hasOverflow && (
+        {hasOverflow && (
           <div className="absolute top-full mt-1.5 left-0 right-0 flex justify-center gap-1 pointer-events-none">
             {[0, 1].map(pi => (
               <div
                 key={pi}
-                className={`rounded-full transition-all duration-200 ${
-                  currentPage === pi
-                    ? 'w-3 h-1.5 bg-zinc-900'
-                    : 'w-1.5 h-1.5 bg-zinc-300'
-                }`}
+                className={`rounded-full transition-all duration-200 ${currentPage === pi
+                  ? 'w-3 h-1.5 bg-zinc-900'
+                  : 'w-1.5 h-1.5 bg-zinc-300'
+                  }`}
               />
             ))}
           </div>

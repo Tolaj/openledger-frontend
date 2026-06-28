@@ -277,7 +277,7 @@ export default function WishlistCartPanel() {
   if (!editingId || !entry) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-[60] flex">
       <div className="flex-1 bg-black/40" onClick={closeEdit} />
 
       <div className="w-full max-w-[420px] bg-white flex flex-col shadow-2xl">
