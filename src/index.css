@@ -13,7 +13,7 @@
 
   html {
     font-size: 16px;
-    background-color: #ffffff;
+    background-color: #f5f5f5;
     color: #18181b;
     height: 100%;
   }
@@ -26,8 +26,19 @@
     height: 100%;
     -webkit-user-select: none;
     user-select: none;
-    /* Prevent iOS rubber-band scroll on the body */
+    /* Prevent iOS rubber-band scroll and swipe-back gesture */
     overflow: hidden;
+    touch-action: pan-y;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* Scrollable containers should not chain overscroll to the page */
+  .overflow-y-auto,
+  .overflow-auto,
+  .overflow-scroll {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Re-enable text selection for inputs */
@@ -51,8 +62,7 @@
   }
 
   .pb-nav {
-    /* floating pill nav: 44px pill + 16px gap + 16px margin + safe area */
-    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 0px;
   }
 
   .min-touch {
@@ -78,6 +88,18 @@
 
   to {
     transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(-12px) scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0) scale(1);
     opacity: 1;
   }
 }
