@@ -11,7 +11,7 @@ import AppShell from './components/layout/AppShell'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import InstallPrompt from './components/ui/InstallPrompt'
 import Toaster from './components/ui/Toaster'
-import AIAssistant from './components/features/AIAssistant'
+import ClientAIAssistant from './components/features/ClientAIAssistant'
 
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -80,7 +80,7 @@ export default function App() {
           <ThemeColorSync />
           <InstallPrompt />
           <Toaster />
-          <AIAssistant />
+          <ClientAIAssistant />
           <Routes>
             <Route path="/" element={<LandingOrDashboard />} />
             <Route path="/landing" element={<Landing />} />

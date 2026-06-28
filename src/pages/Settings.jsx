@@ -1255,6 +1255,20 @@ function ConfigurationTab({ canEdit = true }) {
   const [geminiRemoving, setGeminiRemoving] = useState(false)
   const geminiConfigured = !!activeGroup?.geminiConfigured
   const aiEnabled = !!activeGroup?.aiEnabled
+  const aiModel = activeGroup?.aiModel || 'gemini-2.5-flash-lite'
+
+  const AI_MODELS = [
+    { id: 'gemini-2.5-flash-lite',         label: 'Gemini 2.5 Flash Lite', rpm: 10, rpd: 20,  note: '10 RPM · 20/day — recommended' },
+    { id: 'gemini-2.5-flash',              label: 'Gemini 2.5 Flash',      rpm: 5,  rpd: 20,  note: '5 RPM · 20/day — smarter' },
+    { id: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite', rpm: 15, rpd: 500, note: '15 RPM · 500/day — more quota, less accurate' },
+    { id: 'gemini-3.5-flash',              label: 'Gemini 3.5 Flash',      rpm: 5,  rpd: 20,  note: '5 RPM · 20/day' },
+  ]
+
+  const handleModelChange = (modelId) => {
+    updateGroup({ id: activeGroupId, data: { aiModel: modelId } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
+    })
+  }
 
   const handleAiToggle = () => {
     updateGroup({ id: activeGroupId, data: { aiEnabled: !aiEnabled } }, {
@@ -1751,6 +1765,42 @@ function ConfigurationTab({ canEdit = true }) {
                     {geminiRemoving && <span className="h-3.5 w-3.5 border-2 border-red-300 border-t-transparent rounded-full animate-spin" />}
                     {geminiRemoving ? '…' : 'Delete key'}
                   </button>
+                </div>
+              )}
+
+              {/* Model selector — shown when AI is configured */}
+              {geminiConfigured && (
+                <div>
+                  <label className="text-xs font-medium text-zinc-500 block mb-2">Active Model</label>
+                  <div className="flex flex-col gap-2">
+                    {AI_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() => canEdit && handleModelChange(m.id)}
+                        disabled={!canEdit}
+                        className={[
+                          'flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-colors',
+                          aiModel === m.id
+                            ? 'border-zinc-900 bg-zinc-900 text-white'
+                            : 'border-zinc-200 bg-zinc-50 hover:border-zinc-400 text-zinc-700',
+                          !canEdit && 'cursor-default',
+                        ].join(' ')}
+                      >
+                        <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${aiModel === m.id ? 'border-white' : 'border-zinc-400'}`}>
+                          {aiModel === m.id && <div className="w-2 h-2 rounded-full bg-white" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-medium ${aiModel === m.id ? 'text-white' : 'text-zinc-800'}`}>{m.label}</p>
+                          <p className={`text-xs mt-0.5 ${aiModel === m.id ? 'text-zinc-300' : 'text-zinc-400'}`}>{m.note}</p>
+                        </div>
+                        <div className={`text-right flex-shrink-0 ${aiModel === m.id ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                          <p className="text-xs font-mono">{m.rpm} RPM</p>
+                          <p className="text-xs font-mono">{m.rpd}/day</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-zinc-400 mt-2 leading-relaxed">Switch models if you hit a limit. <strong className="text-zinc-500">Gemini 2.5 Flash Lite</strong> has 500 requests/day free.</p>
                 </div>
               )}
             </div>
