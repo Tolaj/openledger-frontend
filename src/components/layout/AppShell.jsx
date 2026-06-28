@@ -23,9 +23,9 @@ export default function AppShell() {
         </main>
       </div>
 
-      <div className="md:hidden">
+      {/* <div className="md:hidden">
         <BottomNav />
-      </div>
+      </div> */}
 
       <CartPanel />
       <WishlistCartPanel />

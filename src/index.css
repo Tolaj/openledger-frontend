@@ -56,10 +56,16 @@
   }
 }
 
-
 @layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 
-  /* here---- */
+  .pb-nav {
+    /* floating pill nav: 44px pill + 16px gap above + safe area covered by nav */
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
   .min-touch {
     min-height: 48px;
     min-width: 48px;
