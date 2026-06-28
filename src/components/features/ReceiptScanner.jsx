@@ -11,13 +11,14 @@ import { getProducts, createProduct } from '../../api/products'
 import { suggestProduct } from '../../api/ai'
 
 export default function ReceiptScanner({ open, onClose }) {
-  const [preview, setPreview]   = useState(null)   // data URL for display
-  const [b64, setB64]           = useState(null)    // raw base64
-  const [mime, setMime]         = useState(null)
-  const [result, setResult]     = useState(null)
-  const [selected, setSelected] = useState([])
-  const [scanning, setScanning] = useState(false)
-  const [scanError, setScanError] = useState(null)
+  const [preview, setPreview]       = useState(null)   // data URL for display
+  const [b64, setB64]               = useState(null)    // raw base64
+  const [mime, setMime]             = useState(null)
+  const [result, setResult]         = useState(null)
+  const [selected, setSelected]     = useState([])
+  const [scanning, setScanning]     = useState(false)
+  const [scanError, setScanError]   = useState(null)
+  const [loadingImage, setLoadingImage] = useState(false)
   const fileRef = useRef(null)
   const cameraRef = useRef(null)
 
@@ -41,6 +42,8 @@ export default function ReceiptScanner({ open, onClose }) {
 
   const processFile = async (file) => {
     if (!file) return
+    setLoadingImage(true)
+    setPreview(null)
     let blob = file
     const typeIsHeic = file.type === 'image/heic' || file.type === 'image/heif'
     const nameIsHeic = /\.(heic|heif)$/i.test(file.name || '')
@@ -61,7 +64,9 @@ export default function ReceiptScanner({ open, onClose }) {
       setPreview(dataUrl)
       setB64(dataUrl.split(',')[1])
       setMime(blob.type || 'image/jpeg')
+      setLoadingImage(false)
     }
+    reader.onerror = () => setLoadingImage(false)
     reader.readAsDataURL(blob)
   }
 
@@ -151,7 +156,14 @@ export default function ReceiptScanner({ open, onClose }) {
         {!result ? (
           <>
             {/* Image picker */}
-            {!preview ? (
+            {loadingImage ? (
+              <div className="flex flex-col items-center justify-center gap-3 py-16">
+                <div className="w-14 h-14 rounded-2xl bg-zinc-100 flex items-center justify-center">
+                  <Loader2 size={26} className="text-zinc-400 animate-spin" />
+                </div>
+                <p className="text-sm text-zinc-400">Loading image…</p>
+              </div>
+            ) : !preview ? (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-zinc-500">Take a photo or upload an image of your receipt. Gemini will extract the items automatically.</p>
                 <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import queryClient from './lib/queryClient'
 import { getSession } from './api/auth'
 import useAuthStore from './store/authStore'
@@ -10,6 +10,7 @@ import useCartStore from './store/cartStore'
 import AppShell from './components/layout/AppShell'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import InstallPrompt from './components/ui/InstallPrompt'
+import SplashScreen from './components/ui/SplashScreen'
 import Toaster from './components/ui/Toaster'
 import ClientAIAssistant from './components/features/ClientAIAssistant'
 import { aiTriggerRef } from './lib/aiTrigger'
@@ -74,9 +75,12 @@ function SessionLoader({ children }) {
 }
 
 export default function App() {
+  const [splash, setSplash] = useState(true)
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        {splash && <SplashScreen onDone={() => setSplash(false)} />}
         <SessionLoader>
           <ThemeColorSync />
           <InstallPrompt />
