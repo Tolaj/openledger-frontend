@@ -6,13 +6,15 @@ import WishlistCartPanel from '../features/WishlistCartPanel'
 
 export default function AppShell() {
   return (
-    <div className="flex-1 flex flex-col bg-[#f5f5f5] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-[#ded5f0] overflow-hidden">
+      {/* <div className="flex-1 flex flex-col bg-[#f5f5f5] overflow-hidden"> */}
+
       <Sidebar />
 
       <div className="md:pl-60 flex-1 min-h-0 flex flex-col overflow-x-hidden">
         {/* Mobile: page scrolls naturally */}
         <div className="flex-1 overflow-y-auto md:hidden">
-          <main className="max-w-md mx-auto">
+          <main className="max-w-md mx-auto pb-nav">
             <Outlet />
           </main>
         </div>
