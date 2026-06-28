@@ -12,7 +12,7 @@ export default function AppShell() {
       <div className="md:pl-60 flex-1 min-h-0 flex flex-col overflow-x-hidden">
         {/* Mobile: page scrolls naturally */}
         <div className="flex-1 overflow-y-auto md:hidden">
-          <main className="max-w-md mx-auto pb-nav">
+          <main className="max-w-md mx-auto">
             <Outlet />
           </main>
         </div>
@@ -23,9 +23,9 @@ export default function AppShell() {
         </main>
       </div>
 
-      {/* <div className="md:hidden">
+      <div className="md:hidden">
         <BottomNav />
-      </div> */}
+      </div>
 
       <CartPanel />
       <WishlistCartPanel />
