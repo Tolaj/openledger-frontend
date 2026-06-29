@@ -272,17 +272,18 @@ function DashHero() {
 
 /* dust kicked up by the heavy logo / name landing */
 const DUST_LOGO = [
-  { s: 5, tx: '-92px', ty: '-30px', d: 0.95 }, { s: 4, tx: '-70px', ty: '-58px', d: 1.05 },
-  { s: 6, tx: '-40px', ty: '-74px', d: 0.85 }, { s: 3, tx: '2px',   ty: '-84px', d: 1.15 },
-  { s: 5, tx: '46px',  ty: '-70px', d: 0.9 },  { s: 4, tx: '74px',  ty: '-52px', d: 1.0 },
-  { s: 6, tx: '98px',  ty: '-26px', d: 0.85 }, { s: 3, tx: '114px', ty: '4px',   d: 1.0 },
-  { s: 4, tx: '-114px',ty: '0px',   d: 0.95 }, { s: 3, tx: '-54px', ty: '12px',  d: 1.1 },
-  { s: 4, tx: '56px',  ty: '14px',  d: 1.0 },  { s: 5, tx: '24px',  ty: '-42px', d: 0.8 },
+  { s: 9,  tx: '-118px', ty: '-38px', d: 1.0 }, { s: 7,  tx: '-88px',  ty: '-72px', d: 1.1 },
+  { s: 11, tx: '-48px',  ty: '-92px', d: 0.9 }, { s: 6,  tx: '2px',    ty: '-104px',d: 1.2 },
+  { s: 9,  tx: '58px',   ty: '-88px', d: 0.95 },{ s: 7,  tx: '94px',   ty: '-64px', d: 1.05 },
+  { s: 11, tx: '124px',  ty: '-32px', d: 0.9 }, { s: 6,  tx: '142px',  ty: '6px',   d: 1.05 },
+  { s: 8,  tx: '-142px', ty: '2px',   d: 1.0 }, { s: 6,  tx: '-70px',  ty: '16px',  d: 1.15 },
+  { s: 8,  tx: '72px',   ty: '18px',  d: 1.05 },{ s: 10, tx: '28px',   ty: '-54px', d: 0.85 },
+  { s: 5,  tx: '-30px',  ty: '-60px', d: 1.1 }, { s: 7,  tx: '108px',  ty: '-18px', d: 0.95 },
 ]
 const DUST_NAME = [
-  { s: 3, tx: '-124px', ty: '-8px',  d: 0.8 }, { s: 3, tx: '-82px', ty: '-20px', d: 0.9 },
-  { s: 4, tx: '-42px',  ty: '-24px', d: 0.75 },{ s: 4, tx: '44px',  ty: '-24px', d: 0.85 },
-  { s: 4, tx: '88px',   ty: '-16px', d: 0.8 }, { s: 3, tx: '128px', ty: '-6px',  d: 0.9 },
+  { s: 6, tx: '-150px', ty: '-10px', d: 0.85 },{ s: 5, tx: '-100px', ty: '-26px', d: 0.95 },
+  { s: 7, tx: '-52px',  ty: '-32px', d: 0.8 }, { s: 7, tx: '54px',   ty: '-32px', d: 0.9 },
+  { s: 6, tx: '104px',  ty: '-22px', d: 0.85 },{ s: 5, tx: '154px',  ty: '-8px',  d: 0.95 },
 ]
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -312,7 +313,7 @@ export default function Landing() {
 
   // first-visit splash (once per browser)
   const [splash, setSplash] = useState(() => {
-    try { return !localStorage.getItem('ol_splash_seen') } catch { return false }
+    try { return !sessionStorage.getItem('ol_splash_seen') } catch { return false }
   })
   const [splashOut, setSplashOut] = useState(false)
   useEffect(() => {
@@ -322,7 +323,7 @@ export default function Landing() {
     const t2 = setTimeout(() => {
       setSplash(false)
       document.body.style.overflow = 'visible'
-      try { localStorage.setItem('ol_splash_seen', '1') } catch (_) { }
+      try { sessionStorage.setItem('ol_splash_seen', '1') } catch (_) { }
     }, 3750)
     return () => { clearTimeout(t1); clearTimeout(t2); document.body.style.overflow = 'visible' }
   }, [splash])
@@ -372,7 +373,8 @@ export default function Landing() {
           style={{ animation: splashOut ? 'splashOut .55s ease forwards' : 'none' }}>
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full opacity-70 blur-3xl"
             style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.22), transparent 65%)' }} />
-          <div className="relative flex flex-col items-center gap-6">
+          <div className="relative flex flex-col items-center gap-6"
+            style={{ animation: 'shake .5s cubic-bezier(.36,.07,.19,.97) .58s both' }}>
             {/* logo — heavy drop + dust */}
             <div className="relative">
               <div className="w-20 h-20 rounded-[22px] bg-zinc-900 flex items-center justify-center shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
@@ -380,11 +382,11 @@ export default function Landing() {
                 <AppLogo size={44} />
               </div>
               {/* shockwave */}
-              <span className="absolute left-1/2 bottom-0 w-24 h-24 rounded-full border-2 border-zinc-300 pointer-events-none"
+              <span className="absolute left-1/2 bottom-0 w-24 h-24 rounded-full border-2 border-zinc-400 pointer-events-none"
                 style={{ animation: 'shock .6s ease-out .62s both' }} />
               {/* dust */}
               {DUST_LOGO.map((p, i) => (
-                <span key={i} className="absolute left-1/2 bottom-1 rounded-full bg-zinc-300/90 pointer-events-none"
+                <span key={i} className="absolute left-1/2 bottom-1 rounded-full bg-zinc-500/70 pointer-events-none blur-[0.5px]"
                   style={{ width: p.s, height: p.s, '--tx': p.tx, '--ty': p.ty, animation: `dust ${p.d}s ease-out .62s both` }} />
               ))}
             </div>
@@ -393,7 +395,7 @@ export default function Landing() {
               <span className="block font-black tracking-tight text-xl text-zinc-900"
                 style={{ animation: 'dropHeavy .6s .55s both', transformOrigin: 'bottom center' }}>OpenLedger</span>
               {DUST_NAME.map((p, i) => (
-                <span key={i} className="absolute left-1/2 bottom-0 rounded-full bg-zinc-300/90 pointer-events-none"
+                <span key={i} className="absolute left-1/2 bottom-0 rounded-full bg-zinc-500/70 pointer-events-none blur-[0.5px]"
                   style={{ width: p.s, height: p.s, '--tx': p.tx, '--ty': p.ty, animation: `dust ${p.d}s ease-out 1s both` }} />
               ))}
             </div>
@@ -694,6 +696,16 @@ export default function Landing() {
         @keyframes shock {
           0%   { opacity: .5; transform: translateX(-50%) scale(.25); }
           100% { opacity: 0; transform: translateX(-50%) scale(2.3); }
+        }
+        @keyframes shake {
+          0%   { transform: translate(0,0); }
+          12%  { transform: translate(-5px, 4px); }
+          24%  { transform: translate(6px, -3px); }
+          38%  { transform: translate(-5px, 2px); }
+          52%  { transform: translate(4px, 3px); }
+          66%  { transform: translate(-3px, -2px); }
+          80%  { transform: translate(2px, 1px); }
+          100% { transform: translate(0,0); }
         }
         @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.001ms!important; animation-iteration-count:1!important; } }
       `}</style>
