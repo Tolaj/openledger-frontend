@@ -16,6 +16,8 @@ import ClientAIAssistant from './components/features/ClientAIAssistant'
 import { aiTriggerRef } from './lib/aiTrigger'
 
 import Landing from './pages/Landing'
+import Docs from './pages/Docs'
+import Features from './pages/Features'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Onboarding from './pages/Onboarding'
@@ -89,6 +91,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<LandingOrDashboard />} />
             <Route path="/landing" element={<Landing />} />
+            <Route path="/docs" element={<Docs />} />
+            <Route path="/features" element={<Features />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
 

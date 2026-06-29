@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight, ArrowUpRight, Check, Sparkles, Menu, X, Plus,
   TrendingUp, TrendingDown, Boxes, AlertTriangle,
-  ScanLine, FileText, ShoppingCart, Send,
+  ScanLine, FileText, ShoppingCart, Send, Download, Smartphone,
 } from 'lucide-react'
 import AppLogo from '../components/ui/AppLogo'
+import { getDeferredPrompt, clearDeferredPrompt, onInstallAvailable } from '../lib/pwa'
 
 /* ════════════════════════════════════════════════════════════════════════
    Primitives
@@ -120,9 +121,9 @@ function Mosaic({ children, className = '' }) {
    ════════════════════════════════════════════════════════════════════════ */
 const AURA_SCRIPT = [
   { role: 'user', kind: 'text', text: 'Create a sales order — 50kg Basmati for Rahul Stores' },
-  { role: 'ai',   kind: 'card' },
+  { role: 'ai', kind: 'card' },
   { role: 'user', kind: 'text', text: 'Confirm & send it' },
-  { role: 'ai',   kind: 'text', text: '✅ Confirmed & emailed to rahul@stores.in' },
+  { role: 'ai', kind: 'text', text: '✅ Confirmed & emailed to rahul@stores.in' },
 ]
 
 function AuraChat() {
@@ -219,10 +220,10 @@ function FinanceMini() {
 /* Full dashboard preview sized for a wide hero tile */
 function DashHero() {
   const kpis = [
-    { icon: TrendingUp,    color: 'text-emerald-600', bg: 'bg-emerald-50', v: '₹8,240', l: 'Receivable' },
-    { icon: TrendingDown,  color: 'text-red-500',     bg: 'bg-red-50',     v: '₹3,180', l: 'Payable' },
-    { icon: Boxes,         color: 'text-blue-500',    bg: 'bg-blue-50',    v: '₹12.4k', l: 'Stock value' },
-    { icon: AlertTriangle, color: 'text-amber-500',   bg: 'bg-amber-50',   v: '3',      l: 'Low stock' },
+    { icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50', v: '$8,240', l: 'Receivable' },
+    { icon: TrendingDown, color: 'text-red-500', bg: 'bg-red-50', v: '₹3,180', l: 'Payable' },
+    { icon: Boxes, color: 'text-blue-500', bg: 'bg-blue-50', v: '₹12.4k', l: 'Stock value' },
+    { icon: AlertTriangle, color: 'text-amber-500', bg: 'bg-amber-50', v: '3', l: 'Low stock' },
   ]
   return (
     <div className="rounded-2xl bg-[#f6f6f7] p-4 sm:p-5 w-full">
@@ -231,7 +232,7 @@ function DashHero() {
           <p className="text-[11px] text-zinc-400 leading-none mb-1 font-mono">/dashboard</p>
           <p className="text-sm font-bold text-zinc-900 tracking-tight">Rahul Traders</p>
         </div>
-        <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center text-white text-[11px] font-bold">KT</div>
+        <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center text-white text-[11px] font-bold">RT</div>
       </div>
       <div className="grid grid-cols-2 gap-2.5 mb-2.5">
         {kpis.map(k => {
@@ -252,9 +253,9 @@ function DashHero() {
         </div>
         <div className="space-y-2">
           {[
-            { id: 'SINV-0051', n: 'Bhumi Stores',   a: '₹2,400', s: 'Paid',     c: 'text-emerald-700 bg-emerald-50' },
-            { id: 'SO-0042',   n: 'Global Supply',   a: '₹860',   s: 'Pending',  c: 'text-amber-700 bg-amber-50' },
-            { id: 'PO-0038',   n: 'Annapurna Mills', a: '₹2,100', s: 'Received', c: 'text-blue-700 bg-blue-50' },
+            { id: 'SINV-0051', n: 'Bhumi Stores', a: '₹2,400', s: 'Paid', c: 'text-emerald-700 bg-emerald-50' },
+            { id: 'SO-0042', n: 'Global Supply', a: '₹860', s: 'Pending', c: 'text-amber-700 bg-amber-50' },
+            { id: 'PO-0038', n: 'Annapurna Mills', a: '₹2,100', s: 'Received', c: 'text-blue-700 bg-blue-50' },
           ].map(r => (
             <div key={r.id} className="flex items-center gap-2.5">
               <span className="text-[10px] font-mono text-zinc-400 w-16 shrink-0">{r.id}</span>
@@ -273,26 +274,65 @@ function DashHero() {
    Page
    ════════════════════════════════════════════════════════════════════════ */
 export default function Landing() {
+  const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
 
+  // PWA install handling
+  const isMobile = typeof navigator !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent)
+  const [canInstall, setCanInstall] = useState(!!getDeferredPrompt())
+  useEffect(() => onInstallAvailable((e) => setCanInstall(!!e)), [])
+  const handleInstall = async () => {
+    const evt = getDeferredPrompt()
+    if (evt) {
+      evt.prompt()
+      await evt.userChoice
+      clearDeferredPrompt()
+      setCanInstall(false)
+    } else {
+      // No native prompt available (e.g. iOS Safari) — show step-by-step guide
+      navigate('/docs#install')
+    }
+  }
+
+  // first-visit splash (once per browser)
+  const [splash, setSplash] = useState(() => {
+    try { return !localStorage.getItem('ol_splash_seen') } catch { return false }
+  })
+  const [splashOut, setSplashOut] = useState(false)
+  useEffect(() => {
+    if (!splash) return
+    document.body.style.overflow = 'hidden'
+    const t1 = setTimeout(() => setSplashOut(true), 1400)
+    const t2 = setTimeout(() => {
+      setSplash(false)
+      document.body.style.overflow = 'visible'
+      try { localStorage.setItem('ol_splash_seen', '1') } catch (_) { }
+    }, 1950)
+    return () => { clearTimeout(t1); clearTimeout(t2); document.body.style.overflow = 'visible' }
+  }, [splash])
+
   useEffect(() => {
     const b = document.body, h = document.documentElement
-    const prev = { bo: b.style.overflow, bp: b.style.position, bw: b.style.width, bg: b.style.background, hbg: h.style.background }
-    b.style.overflow = 'auto'; b.style.position = 'static'; b.style.width = 'auto'
+    const prev = { bo: b.style.overflow, bp: b.style.position, bw: b.style.width, bh: b.style.height, hh: h.style.height, bg: b.style.background, hbg: h.style.background }
+    // let the window be the scroll container (not the body) so window.scrollY tracks
+    b.style.overflow = 'visible'; b.style.position = 'static'; b.style.width = 'auto'; b.style.height = 'auto'
+    h.style.height = 'auto'
     b.style.background = '#fff'; h.style.background = '#fff'
     const meta = document.querySelector('meta[name="theme-color"]')
     const prevMeta = meta?.getAttribute('content')
     meta?.setAttribute('content', '#ffffff')
     return () => {
       b.style.overflow = prev.bo; b.style.position = prev.bp; b.style.width = prev.bw
+      b.style.height = prev.bh; h.style.height = prev.hh
       b.style.background = prev.bg; h.style.background = prev.hbg
       if (prevMeta) meta?.setAttribute('content', prevMeta)
     }
   }, [])
 
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 12)
+    const fn = () => setScrolled((window.scrollY || document.documentElement.scrollTop || 0) > 12)
+    fn()
     window.addEventListener('scroll', fn, { passive: true })
     return () => window.removeEventListener('scroll', fn)
   }, [])
@@ -311,6 +351,23 @@ export default function Landing() {
     <div className="min-h-screen bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white overflow-x-hidden"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
 
+      {/* first-visit splash */}
+      {splash && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-white"
+          style={{ animation: splashOut ? 'splashOut .55s ease forwards' : 'none' }}>
+          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] rounded-full opacity-70 blur-3xl"
+            style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.22), transparent 65%)' }} />
+          <div className="relative flex flex-col items-center gap-5">
+            <div className="w-20 h-20 rounded-[22px] bg-zinc-900 flex items-center justify-center shadow-[0_20px_60px_rgba(0,0,0,0.25)]"
+              style={{ animation: 'splashLogo .8s cubic-bezier(.34,1.56,.64,1) both' }}>
+              <AppLogo size={44} />
+            </div>
+            <span className="font-black tracking-tight text-xl text-zinc-900"
+              style={{ animation: 'fadeUp .6s cubic-bezier(.16,1,.3,1) .35s both' }}>OpenLedger</span>
+          </div>
+        </div>
+      )}
+
       {/* full-page blueprint grid */}
       <div className="pointer-events-none fixed inset-0 -z-10"
         style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.035) 1px,transparent 1px)', backgroundSize: '80px 80px' }} />
@@ -319,14 +376,17 @@ export default function Landing() {
         style={{ background: 'radial-gradient(480px circle at var(--cx,50%) var(--cy,0%), rgba(124,58,237,0.06), transparent 70%)' }} />
 
       {/* ── Nav ───────────────────────────────────────────────────────── */}
-      <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-xl border-b border-zinc-200/70 shadow-[0_1px_20px_rgba(0,0,0,0.04)]' : 'border-b border-transparent'}`}>
+      <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'border-b border-zinc-200/60 shadow-[0_1px_20px_rgba(0,0,0,0.04)]' : 'border-b border-transparent'}`}
+        style={scrolled ? { backgroundColor: 'rgba(255,255,255,0.6)', backdropFilter: 'blur(16px) saturate(180%)', WebkitBackdropFilter: 'blur(16px) saturate(180%)' } : undefined}>
         <div className="max-w-6xl mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-zinc-900 rounded-[10px] flex items-center justify-center"><AppLogo size={15} /></div>
             <span className="font-bold tracking-tight">OpenLedger</span>
           </div>
           <nav className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
-            {['Features', 'Pricing'].map(l => <a key={l} href={`#${l.toLowerCase()}`} className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors">{l}</a>)}
+            <Link to="/features" className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors">Features</Link>
+            <a href="#pricing" className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors">Pricing</a>
+            <Link to="/docs" className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors">Docs</Link>
           </nav>
           <div className="hidden md:flex items-center gap-1.5">
             <Link to="/login" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 px-3 py-2 transition-colors">Sign in</Link>
@@ -338,7 +398,9 @@ export default function Landing() {
         </div>
         {menuOpen && (
           <div className="md:hidden bg-white border-t border-zinc-100 px-5 py-5 flex flex-col gap-1">
-            {['Features', 'Pricing'].map(l => <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setMenuOpen(false)} className="text-sm font-medium text-zinc-700 py-2">{l}</a>)}
+            <Link to="/features" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-zinc-700 py-2">Features</Link>
+            <a href="#pricing" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-zinc-700 py-2">Pricing</a>
+            <Link to="/docs" onClick={() => setMenuOpen(false)} className="text-sm font-medium text-zinc-700 py-2">Docs</Link>
             <div className="pt-3 mt-2 border-t border-zinc-100 flex flex-col gap-2">
               <Link to="/login" className="text-sm font-medium text-center py-2.5 border border-zinc-200 rounded-xl">Sign in</Link>
               <Link to="/register" className="text-sm font-semibold text-center bg-zinc-900 text-white py-2.5 rounded-xl">Get started free</Link>
@@ -371,9 +433,10 @@ export default function Landing() {
                 <Link to="/register" className="group inline-flex items-center justify-center gap-2 bg-zinc-900 text-white font-semibold px-6 py-3 rounded-full text-sm hover:bg-zinc-700 transition-all hover:-translate-y-0.5">
                   Start for free <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
                 </Link>
-                <Link to="/login" className="inline-flex items-center justify-center gap-2 bg-white text-zinc-900 font-semibold px-6 py-3 rounded-full text-sm border border-zinc-200 hover:border-zinc-300 transition-all">
-                  Sign in
-                </Link>
+                <button onClick={handleInstall} className="inline-flex items-center justify-center gap-2 bg-white text-zinc-900 font-semibold px-6 py-3 rounded-full text-sm border border-zinc-200 hover:border-zinc-300 transition-all">
+                  {isMobile ? <Smartphone size={15} /> : <Download size={15} />}
+                  {isMobile ? 'Install app' : 'Download app'}
+                </button>
               </div>
               <p className="mt-7 text-[11px] text-zinc-400 font-mono">no credit card · free forever · installs as an app</p>
             </div>
@@ -476,9 +539,9 @@ export default function Landing() {
             </Cell>
             {[
               { icon: ShoppingCart, t: 'Orders', d: 'Purchase & sales orders, GRNs, delivery tracking.', c: 'text-blue-500 bg-blue-50' },
-              { icon: Boxes,        t: 'Inventory', d: 'Live stock with every order. Low-stock alerts.', c: 'text-emerald-600 bg-emerald-50' },
-              { icon: FileText,     t: 'Invoicing', d: 'Beautiful PDFs, email delivery, aging reports.', c: 'text-violet-600 bg-violet-50' },
-              { icon: TrendingUp,   t: 'Finance', d: 'Income, expenses, budgets, group finances.', c: 'text-amber-500 bg-amber-50' },
+              { icon: Boxes, t: 'Inventory', d: 'Live stock with every order. Low-stock alerts.', c: 'text-emerald-600 bg-emerald-50' },
+              { icon: FileText, t: 'Invoicing', d: 'Beautiful PDFs, email delivery, aging reports.', c: 'text-violet-600 bg-violet-50' },
+              { icon: TrendingUp, t: 'Finance', d: 'Income, expenses, budgets, group finances.', c: 'text-amber-500 bg-amber-50' },
             ].map(c => {
               const Icon = c.icon
               return (
@@ -566,8 +629,9 @@ export default function Landing() {
           </div>
           <p className="text-xs text-zinc-400 order-3 md:order-2 font-mono">© {new Date().getFullYear()} OpenLedger — for households and businesses alike.</p>
           <div className="flex gap-6 order-2 md:order-3">
-            <a href="#features" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Features</a>
+            <Link to="/features" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Features</Link>
             <a href="#pricing" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Pricing</a>
+            <Link to="/docs" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Docs</Link>
             <Link to="/login" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Sign in</Link>
           </div>
         </div>
@@ -580,6 +644,8 @@ export default function Landing() {
         @keyframes msgIn  { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
         @keyframes dot    { 0%,60%,100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
         @keyframes grow   { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+        @keyframes splashLogo { 0% { opacity: 0; transform: scale(.6); } 60% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
+        @keyframes splashOut  { from { opacity: 1; } to { opacity: 0; visibility: hidden; } }
         @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.001ms!important; animation-iteration-count:1!important; } }
       `}</style>
     </div>
