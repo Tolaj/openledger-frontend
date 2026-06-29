@@ -1,601 +1,587 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  TrendingUp, TrendingDown, ShoppingCart, BarChart2,
-  ArrowRight, CheckCircle, Boxes, Receipt, Landmark, ChevronRight,
-  Zap, Globe, Lock, Sparkles, Star, Menu, X, MoveRight,
+  ArrowRight, ArrowUpRight, Check, Sparkles, Menu, X, Plus,
+  TrendingUp, TrendingDown, Boxes, AlertTriangle,
+  ScanLine, FileText, ShoppingCart, Send,
 } from 'lucide-react'
 import AppLogo from '../components/ui/AppLogo'
 
-/* ─── tiny animation hook ──────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   Primitives
+   ════════════════════════════════════════════════════════════════════════ */
 function useInView(threshold = 0.15) {
   const ref = useRef(null)
-  const [visible, setVisible] = useState(false)
+  const [seen, setSeen] = useState(false)
   useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect() } }, { threshold })
+    const el = ref.current; if (!el) return
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setSeen(true); obs.disconnect() } },
+      { threshold }
+    )
     obs.observe(el)
     return () => obs.disconnect()
   }, [threshold])
-  return [ref, visible]
+  return [ref, seen]
 }
 
-function FadeIn({ children, delay = 0, className = '' }) {
-  const [ref, visible] = useInView()
+function Reveal({ children, delay = 0, y = 24, className = '' }) {
+  const [ref, seen] = useInView()
   return (
-    <div ref={ref} className={className}
-      style={{ opacity: visible ? 1 : 0, transform: visible ? 'none' : 'translateY(28px)', transition: `opacity 0.7s ease ${delay}s, transform 0.7s ease ${delay}s` }}>
+    <div ref={ref} className={className} style={{
+      opacity: seen ? 1 : 0,
+      transform: seen ? 'none' : `translateY(${y}px)`,
+      transition: `opacity .8s cubic-bezier(.16,1,.3,1) ${delay}s, transform .8s cubic-bezier(.16,1,.3,1) ${delay}s`,
+    }}>
       {children}
     </div>
   )
 }
 
-/* ─── data ──────────────────────────────────────────────────────────────────── */
-const NAV_LINKS = [
-  { label: 'Features', href: '#features' },
-  { label: 'How it works', href: '#how' },
-  { label: 'Pricing', href: '#pricing' },
+function TiltCard({ children, className = '', max = 7 }) {
+  const ref = useRef(null)
+  const onMove = (e) => {
+    const el = ref.current; if (!el) return
+    const r = el.getBoundingClientRect()
+    const px = (e.clientX - r.left) / r.width - 0.5
+    const py = (e.clientY - r.top) / r.height - 0.5
+    el.style.transform = `perspective(1000px) rotateY(${px * max}deg) rotateX(${-py * max}deg)`
+  }
+  const reset = () => { if (ref.current) ref.current.style.transform = 'perspective(1000px) rotateY(0) rotateX(0)' }
+  return (
+    <div ref={ref} onMouseMove={onMove} onMouseLeave={reset} className={className}
+      style={{ transition: 'transform .3s cubic-bezier(.16,1,.3,1)', transformStyle: 'preserve-3d' }}>
+      {children}
+    </div>
+  )
+}
+
+function CountUp({ to, suffix = '', prefix = '', duration = 1400 }) {
+  const [ref, seen] = useInView(0.4)
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!seen) return
+    let raf, start
+    const tick = (t) => {
+      if (!start) start = t
+      const p = Math.min((t - start) / duration, 1)
+      setVal(Math.round((1 - Math.pow(1 - p, 3)) * to))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [seen, to, duration])
+  return <span ref={ref}>{prefix}{val.toLocaleString()}{suffix}</span>
+}
+
+/* A bento cell: seamless white tile in the grid mosaic, lights up on hover */
+function Cell({ className = '', children, span = '', pad = 'p-6 md:p-7', glow = 'rgba(124,58,237,0.06)' }) {
+  const ref = useRef(null)
+  const onMove = (e) => {
+    const el = ref.current; if (!el) return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--mx', `${e.clientX - r.left}px`)
+    el.style.setProperty('--my', `${e.clientY - r.top}px`)
+  }
+  return (
+    <div ref={ref} onMouseMove={onMove}
+      className={`group/cell relative bg-white overflow-hidden transition-colors duration-300 hover:bg-zinc-50/70 ${pad} ${span} ${className}`}>
+      <div className="pointer-events-none absolute inset-0 opacity-0 group-hover/cell:opacity-100 transition-opacity duration-300"
+        style={{ background: `radial-gradient(300px circle at var(--mx) var(--my), ${glow}, transparent 70%)` }} />
+      <div className="relative h-full">{children}</div>
+    </div>
+  )
+}
+
+/* Bordered mosaic frame with crosshair plus-marks at the corners */
+function Mosaic({ children, className = '' }) {
+  return (
+    <div className={`relative ${className}`}>
+      {/* corner crosshairs */}
+      {[
+        'top-0 left-0 -translate-x-1/2 -translate-y-1/2',
+        'top-0 right-0 translate-x-1/2 -translate-y-1/2',
+        'bottom-0 left-0 -translate-x-1/2 translate-y-1/2',
+        'bottom-0 right-0 translate-x-1/2 translate-y-1/2',
+      ].map((p, i) => (
+        <Plus key={i} size={16} strokeWidth={1.25} className={`absolute ${p} text-zinc-300 z-20 pointer-events-none`} />
+      ))}
+      <div className="rounded-[1.25rem] overflow-hidden border border-zinc-200 bg-zinc-200">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-px">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Mini product visuals
+   ════════════════════════════════════════════════════════════════════════ */
+const AURA_SCRIPT = [
+  { role: 'user', kind: 'text', text: 'Create a sales order — 50kg Basmati for Rahul Stores' },
+  { role: 'ai',   kind: 'card' },
+  { role: 'user', kind: 'text', text: 'Confirm & send it' },
+  { role: 'ai',   kind: 'text', text: '✅ Confirmed & emailed to rahul@stores.in' },
 ]
 
-const STATS = [
-  { value: '10+', label: 'Invoice templates' },
-  { value: '100%', label: 'Free to use' },
-  { value: '2', label: 'Workspace types' },
-  { value: '∞', label: 'Products & SKUs' },
-]
-
-const BENTO = [
-  {
-    col: 'md:col-span-2', size: 'large',
-    icon: Receipt, iconBg: 'bg-zinc-900', iconColor: 'text-white',
-    tag: 'Invoicing', tagColor: 'bg-zinc-100 text-zinc-600',
-    title: '10 stunning invoice templates',
-    desc: 'Classic, modern, minimal, bold and more. Send professional PDF invoices via email in one tap.',
-    visual: (
-      <div className="mt-4 flex gap-2 overflow-hidden">
-        {['Classic','Modern','Minimal','Bold','Elegant'].map((t, i) => (
-          <div key={t} style={{ opacity: 1 - i * 0.15, transform: `rotate(${i * 1.5 - 3}deg) scale(${1 - i * 0.03})` }}
-            className="flex-shrink-0 w-24 h-32 bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.12)] border border-zinc-100 p-2 flex flex-col gap-1">
-            <div className="h-1.5 w-8 bg-zinc-900 rounded-full" />
-            <div className="h-1 w-12 bg-zinc-200 rounded-full" />
-            <div className="flex-1 mt-1 flex flex-col gap-0.5">
-              {[...Array(5)].map((_, j) => <div key={j} className="h-0.5 bg-zinc-100 rounded-full" />)}
+function AuraChat() {
+  const [ref, seen] = useInView(0.4)
+  const [count, setCount] = useState(0)
+  const [typing, setTyping] = useState(false)
+  useEffect(() => {
+    if (!seen) return
+    let timers = []
+    const run = () => {
+      setCount(0)
+      AURA_SCRIPT.forEach((m, i) => {
+        if (m.role === 'ai') timers.push(setTimeout(() => setTyping(true), i * 1050 + 250))
+        timers.push(setTimeout(() => { setTyping(false); setCount(i + 1) }, i * 1050 + 850))
+      })
+      timers.push(setTimeout(run, AURA_SCRIPT.length * 1050 + 2600))
+    }
+    run()
+    return () => timers.forEach(clearTimeout)
+  }, [seen])
+  return (
+    <div ref={ref} className="flex flex-col justify-end space-y-2.5 h-full">
+      {AURA_SCRIPT.slice(0, count).map((m, i) => (
+        <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`} style={{ animation: 'msgIn .4s cubic-bezier(.16,1,.3,1) both' }}>
+          {m.kind === 'card' ? (
+            <div className="bg-white border border-zinc-200 text-zinc-700 text-xs leading-relaxed px-3 py-2.5 rounded-2xl rounded-bl-md max-w-[90%] shadow-sm">
+              <p className="mb-2">Done — here's the draft:</p>
+              <div className="rounded-lg border border-zinc-100 p-2 bg-zinc-50 space-y-1">
+                <div className="flex justify-between"><span className="text-zinc-400">Order</span><span className="font-mono font-semibold text-zinc-900">SO-0043</span></div>
+                <div className="flex justify-between"><span className="text-zinc-400">Total</span><span className="font-bold text-zinc-900">₹4,500</span></div>
+              </div>
             </div>
-            <div className="text-[7px] font-bold text-zinc-900 text-right">{t}</div>
-          </div>
-        ))}
-      </div>
-    ),
-  },
-  {
-    col: 'md:col-span-1', size: 'medium',
-    icon: Boxes, iconBg: 'bg-violet-600', iconColor: 'text-white',
-    tag: 'Inventory', tagColor: 'bg-violet-50 text-violet-600',
-    title: 'Stock that tracks itself',
-    desc: 'Real-time levels, low-stock alerts, movement history and adjustments.',
-    visual: (
-      <div className="mt-4 space-y-2">
-        {[{ name: 'Basmati Rice', pct: 78, color: 'bg-violet-500' }, { name: 'Olive Oil', pct: 32, color: 'bg-amber-500' }, { name: 'Sugar', pct: 12, color: 'bg-red-500' }].map(s => (
-          <div key={s.name}>
-            <div className="flex justify-between text-[10px] text-zinc-500 mb-0.5"><span>{s.name}</span><span>{s.pct}%</span></div>
-            <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${s.color}`} style={{ width: `${s.pct}%` }} /></div>
-          </div>
-        ))}
-      </div>
-    ),
-  },
-  {
-    col: 'md:col-span-1', size: 'medium',
-    icon: TrendingUp, iconBg: 'bg-emerald-600', iconColor: 'text-white',
-    tag: 'AR / AP', tagColor: 'bg-emerald-50 text-emerald-700',
-    title: 'Cash flow at a glance',
-    desc: 'Know exactly what you\'re owed and what you owe with aging breakdowns.',
-    visual: (
-      <div className="mt-4 flex gap-3">
-        <div className="flex-1 bg-emerald-50 rounded-xl p-3">
-          <p className="text-[10px] font-semibold text-emerald-600 mb-1">Receivable</p>
-          <p className="text-lg font-extrabold text-emerald-700">$8,240</p>
-          <p className="text-[10px] text-emerald-500">13 invoices</p>
+          ) : (
+            <div className={`text-xs leading-relaxed px-3 py-2 rounded-2xl max-w-[88%] ${m.role === 'user' ? 'bg-zinc-900 text-white rounded-br-md' : 'bg-white border border-zinc-200 text-zinc-700 rounded-bl-md shadow-sm'}`}>{m.text}</div>
+          )}
         </div>
-        <div className="flex-1 bg-red-50 rounded-xl p-3">
-          <p className="text-[10px] font-semibold text-red-500 mb-1">Payable</p>
-          <p className="text-lg font-extrabold text-red-600">$3,180</p>
-          <p className="text-[10px] text-red-400">7 invoices</p>
+      ))}
+      {typing && (
+        <div className="flex justify-start" style={{ animation: 'msgIn .3s ease both' }}>
+          <div className="bg-white border border-zinc-200 rounded-2xl rounded-bl-md px-3.5 py-2.5 flex items-center gap-1 shadow-sm">
+            {[0, 1, 2].map(d => <span key={d} className="w-1.5 h-1.5 rounded-full bg-zinc-400" style={{ animation: `dot 1.2s ease-in-out ${d * 0.15}s infinite` }} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReceiptMini() {
+  return (
+    <div className="relative rounded-xl bg-zinc-50 border border-zinc-100 p-3.5 overflow-hidden">
+      <div className="space-y-1.5">
+        <div className="h-1.5 w-16 bg-zinc-200 rounded-full mx-auto mb-2.5" />
+        {[['Whole Milk ×2', '₹68'], ['Brown Bread', '₹42'], ['Olive Oil 1L', '₹540']].map(([a, b]) => (
+          <div key={a} className="flex justify-between text-[10px]"><span className="text-zinc-500">{a}</span><span className="font-mono text-zinc-700">{b}</span></div>
+        ))}
+        <div className="border-t border-dashed border-zinc-200 my-1.5" />
+        <div className="flex justify-between text-[11px] font-bold text-zinc-900"><span>Total</span><span>₹650</span></div>
+      </div>
+      <div className="absolute left-0 right-0 h-10 pointer-events-none"
+        style={{ background: 'linear-gradient(180deg,transparent,rgba(225,29,72,0.18),transparent)', animation: 'scan 2.4s ease-in-out infinite' }} />
+    </div>
+  )
+}
+
+function InvoiceMini() {
+  const t = [{ a: '#18181b', r: '-8deg', x: '-22%', z: 10 }, { a: '#7c3aed', r: '0deg', x: '0%', z: 30 }, { a: '#0ea5e9', r: '8deg', x: '22%', z: 20 }]
+  return (
+    <div className="relative h-28 flex items-center justify-center">
+      {t.map((c, i) => (
+        <div key={i} className="absolute w-24" style={{ transform: `translateX(${c.x}) rotate(${c.r})`, zIndex: c.z }}>
+          <div className="rounded-lg bg-white border border-zinc-100 p-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+            <div className="flex justify-between mb-2"><div className="w-3.5 h-3.5 rounded" style={{ background: c.a }} /><div className="h-1 w-5 rounded-full" style={{ background: c.a, opacity: .3 }} /></div>
+            <div className="space-y-1">{[10, 7, 9].map((w, k) => <div key={k} className="h-1 rounded-full bg-zinc-100" style={{ width: `${w * 3}px` }} />)}</div>
+            <div className="h-1.5 w-6 rounded-full mt-2" style={{ background: c.a, opacity: .8 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function FinanceMini() {
+  const bars = [48, 62, 40, 78, 55, 88, 70]
+  return (
+    <div className="flex items-end gap-1.5 h-20">
+      {bars.map((h, i) => (
+        <div key={i} className="flex-1 rounded-t-md bg-gradient-to-t from-zinc-900 to-zinc-500" style={{ height: `${h}%`, animation: `grow .8s cubic-bezier(.16,1,.3,1) ${i * 0.07}s both`, transformOrigin: 'bottom' }} />
+      ))}
+    </div>
+  )
+}
+
+/* Full dashboard preview sized for a wide hero tile */
+function DashHero() {
+  const kpis = [
+    { icon: TrendingUp,    color: 'text-emerald-600', bg: 'bg-emerald-50', v: '₹8,240', l: 'Receivable' },
+    { icon: TrendingDown,  color: 'text-red-500',     bg: 'bg-red-50',     v: '₹3,180', l: 'Payable' },
+    { icon: Boxes,         color: 'text-blue-500',    bg: 'bg-blue-50',    v: '₹12.4k', l: 'Stock value' },
+    { icon: AlertTriangle, color: 'text-amber-500',   bg: 'bg-amber-50',   v: '3',      l: 'Low stock' },
+  ]
+  return (
+    <div className="rounded-2xl bg-[#f6f6f7] p-4 sm:p-5 w-full">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-[11px] text-zinc-400 leading-none mb-1 font-mono">/dashboard</p>
+          <p className="text-sm font-bold text-zinc-900 tracking-tight">Rahul Traders</p>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center text-white text-[11px] font-bold">KT</div>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 mb-2.5">
+        {kpis.map(k => {
+          const Icon = k.icon
+          return (
+            <div key={k.l} className="rounded-xl bg-white shadow-[0_1px_4px_rgba(0,0,0,0.05)] p-3">
+              <div className={`w-7 h-7 rounded-lg ${k.bg} flex items-center justify-center mb-2`}><Icon size={14} className={k.color} /></div>
+              <p className="text-lg font-bold tracking-tight text-zinc-900 leading-none">{k.v}</p>
+              <p className="text-[10px] text-zinc-400 mt-1">{k.l}</p>
+            </div>
+          )
+        })}
+      </div>
+      <div className="rounded-xl bg-white shadow-[0_1px_4px_rgba(0,0,0,0.05)] p-3.5">
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-xs font-bold text-zinc-900">Recent orders</p>
+          <span className="text-[10px] text-zinc-400 flex items-center gap-0.5">See all <ArrowRight size={10} /></span>
+        </div>
+        <div className="space-y-2">
+          {[
+            { id: 'SINV-0051', n: 'Bhumi Stores',   a: '₹2,400', s: 'Paid',     c: 'text-emerald-700 bg-emerald-50' },
+            { id: 'SO-0042',   n: 'Global Supply',   a: '₹860',   s: 'Pending',  c: 'text-amber-700 bg-amber-50' },
+            { id: 'PO-0038',   n: 'Annapurna Mills', a: '₹2,100', s: 'Received', c: 'text-blue-700 bg-blue-50' },
+          ].map(r => (
+            <div key={r.id} className="flex items-center gap-2.5">
+              <span className="text-[10px] font-mono text-zinc-400 w-16 shrink-0">{r.id}</span>
+              <span className="text-[11px] text-zinc-600 flex-1 truncate">{r.n}</span>
+              <span className="text-[11px] font-bold text-zinc-900">{r.a}</span>
+              <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${r.c}`}>{r.s}</span>
+            </div>
+          ))}
         </div>
       </div>
-    ),
-  },
-  {
-    col: 'md:col-span-1', size: 'medium',
-    icon: ShoppingCart, iconBg: 'bg-blue-600', iconColor: 'text-white',
-    tag: 'Purchases', tagColor: 'bg-blue-50 text-blue-600',
-    title: 'PO to invoice in seconds',
-    desc: 'Purchase orders → GRN → invoice with full tax tracking at every step.',
-    visual: (
-      <div className="mt-4 flex items-center gap-1.5 text-[10px] font-semibold">
-        {['PO', '→', 'GRN', '→', 'Invoice'].map((s, i) => (
-          <span key={i} className={s === '→' ? 'text-zinc-300' : 'bg-blue-50 text-blue-700 px-2 py-1 rounded-lg'}>{s}</span>
-        ))}
-      </div>
-    ),
-  },
-  {
-    col: 'md:col-span-2', size: 'large',
-    icon: BarChart2, iconBg: 'bg-amber-500', iconColor: 'text-white',
-    tag: 'Finance', tagColor: 'bg-amber-50 text-amber-700',
-    title: 'Personal & business finances unified',
-    desc: 'Track income, expenses, budgets and group spending in one beautiful dashboard.',
-    visual: (
-      <div className="mt-4 flex items-end gap-1.5 h-16">
-        {[40,65,45,80,55,90,70,95,60,85,75,100].map((h, i) => (
-          <div key={i} className="flex-1 rounded-t-md bg-gradient-to-t from-amber-400 to-amber-200" style={{ height: `${h}%` }} />
-        ))}
-      </div>
-    ),
-  },
-]
+    </div>
+  )
+}
 
-const STEPS = [
-  { n: '01', title: 'Create your workspace', desc: 'Sign up free, choose Personal or Business, and name your space. Ready in under a minute.' },
-  { n: '02', title: 'Add your products & vendors', desc: 'Import your catalogue, set prices, tax rates and stock levels. Templates help you get started instantly.' },
-  { n: '03', title: 'Manage orders & invoices', desc: 'Raise POs, track deliveries, issue invoices and get paid — all from one clean dashboard.' },
-]
-
-const TESTIMONIALS = [
-  { name: 'Priya S.', role: 'Retail shop owner', stars: 5, text: 'Finally an app that handles purchase orders AND invoices together. Saves me hours every single week.' },
-  { name: 'Rahul M.', role: 'Freelance consultant', stars: 5, text: 'The invoice templates look incredibly professional. My clients always ask which software I use.' },
-  { name: 'Ananya K.', role: 'Restaurant manager', stars: 5, text: 'Stock tracking and purchase orders in one place — exactly what our café needed. Highly recommend.' },
-  { name: 'Dev P.', role: 'E-commerce owner', stars: 5, text: 'The AR/AP aging feature alone is worth it. I always know who owes me money and when.' },
-]
-
-const PLANS = [
-  {
-    name: 'Personal',
-    badge: null,
-    price: 'Free',
-    period: 'forever',
-    desc: 'For households & individuals',
-    features: ['Expense & income tracking', 'Budget planning', 'Wishlist & shopping cart', 'Shared group spaces', 'Finance overview dashboard'],
-    cta: 'Start for free',
-    dark: false,
-  },
-  {
-    name: 'Business',
-    badge: 'Most popular',
-    price: 'Free',
-    period: 'during launch',
-    desc: 'For teams, shops & companies',
-    features: ['Everything in Personal', 'Purchase & sales orders', 'Inventory management', 'AR / AP aging reports', '10 invoice templates', 'PDF export & email delivery'],
-    cta: 'Start your workspace',
-    dark: true,
-  },
-]
-
-/* ─── component ─────────────────────────────────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════════════
+   Page
+   ════════════════════════════════════════════════════════════════════════ */
 export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
 
-  // Allow scrolling on the landing page (app CSS sets body overflow:hidden)
   useEffect(() => {
-    const body = document.body
-    const prevOverflow = body.style.overflow
-    const prevPosition = body.style.position
-    const prevWidth = body.style.width
-    body.style.overflow = 'auto'
-    body.style.position = 'static'
-    body.style.width = 'auto'
+    const b = document.body, h = document.documentElement
+    const prev = { bo: b.style.overflow, bp: b.style.position, bw: b.style.width, bg: b.style.background, hbg: h.style.background }
+    b.style.overflow = 'auto'; b.style.position = 'static'; b.style.width = 'auto'
+    b.style.background = '#fff'; h.style.background = '#fff'
+    const meta = document.querySelector('meta[name="theme-color"]')
+    const prevMeta = meta?.getAttribute('content')
+    meta?.setAttribute('content', '#ffffff')
     return () => {
-      body.style.overflow = prevOverflow
-      body.style.position = prevPosition
-      body.style.width = prevWidth
+      b.style.overflow = prev.bo; b.style.position = prev.bp; b.style.width = prev.bw
+      b.style.background = prev.bg; h.style.background = prev.hbg
+      if (prevMeta) meta?.setAttribute('content', prevMeta)
     }
   }, [])
 
   useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', fn)
+    const fn = () => setScrolled(window.scrollY > 12)
+    window.addEventListener('scroll', fn, { passive: true })
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
-  return (
-    <div className="min-h-screen bg-[#fafafa] text-zinc-900" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+  const auraRef = useRef(null)
+  useEffect(() => {
+    const move = (e) => {
+      const el = auraRef.current; if (!el) return
+      el.style.setProperty('--cx', `${e.clientX}px`); el.style.setProperty('--cy', `${e.clientY}px`)
+    }
+    window.addEventListener('pointermove', move, { passive: true })
+    return () => window.removeEventListener('pointermove', move)
+  }, [])
 
-      {/* ── Navbar ───────────────────────────────────────────────────────────── */}
-      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-md shadow-[0_1px_0_rgba(0,0,0,0.06)]' : 'bg-transparent'}`}>
-        <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between">
+  return (
+    <div className="min-h-screen bg-white text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white overflow-x-hidden"
+      style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+
+      {/* full-page blueprint grid */}
+      <div className="pointer-events-none fixed inset-0 -z-10"
+        style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,0.035) 1px,transparent 1px)', backgroundSize: '80px 80px' }} />
+      {/* cursor aurora */}
+      <div ref={auraRef} className="pointer-events-none fixed inset-0 -z-10 hidden md:block"
+        style={{ background: 'radial-gradient(480px circle at var(--cx,50%) var(--cy,0%), rgba(124,58,237,0.06), transparent 70%)' }} />
+
+      {/* ── Nav ───────────────────────────────────────────────────────── */}
+      <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/90 backdrop-blur-xl border-b border-zinc-200/70 shadow-[0_1px_20px_rgba(0,0,0,0.04)]' : 'border-b border-transparent'}`}>
+        <div className="max-w-6xl mx-auto px-5 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-zinc-900 rounded-xl flex items-center justify-center shadow-md">
-              <AppLogo size={15} className="text-white" />
-            </div>
-            <span className="font-extrabold text-zinc-900 tracking-tight text-lg">OpenLedger</span>
+            <div className="w-8 h-8 bg-zinc-900 rounded-[10px] flex items-center justify-center"><AppLogo size={15} /></div>
+            <span className="font-bold tracking-tight">OpenLedger</span>
           </div>
-          <nav className="hidden md:flex items-center gap-8">
-            {NAV_LINKS.map(l => (
-              <a key={l.label} href={l.href} className="text-sm font-medium text-zinc-500 hover:text-zinc-900 transition-colors">{l.label}</a>
-            ))}
+          <nav className="hidden md:flex items-center gap-8 absolute left-1/2 -translate-x-1/2">
+            {['Features', 'Pricing'].map(l => <a key={l} href={`#${l.toLowerCase()}`} className="text-sm text-zinc-500 hover:text-zinc-900 transition-colors">{l}</a>)}
           </nav>
-          <div className="hidden md:flex items-center gap-3">
-            <Link to="/login" className="text-sm font-semibold text-zinc-600 hover:text-zinc-900 transition-colors">Sign in</Link>
-            <Link to="/register" className="text-sm font-bold bg-zinc-900 text-white px-5 py-2.5 rounded-xl hover:bg-zinc-800 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.15)] hover:shadow-[0_4px_16px_rgba(0,0,0,0.2)]">
-              Get started free
+          <div className="hidden md:flex items-center gap-1.5">
+            <Link to="/login" className="text-sm font-medium text-zinc-600 hover:text-zinc-900 px-3 py-2 transition-colors">Sign in</Link>
+            <Link to="/register" className="group text-sm font-semibold bg-zinc-900 text-white pl-4 pr-3.5 py-2 rounded-full hover:bg-zinc-700 transition-all flex items-center gap-1">
+              Get started <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
             </Link>
           </div>
-          <button className="md:hidden p-2 rounded-lg hover:bg-zinc-100" onClick={() => setMenuOpen(o => !o)}>
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+          <button className="md:hidden -mr-2 p-2" onClick={() => setMenuOpen(o => !o)}>{menuOpen ? <X size={20} /> : <Menu size={20} />}</button>
         </div>
-        {/* Mobile menu */}
         {menuOpen && (
-          <div className="md:hidden bg-white border-t border-zinc-100 px-5 py-4 flex flex-col gap-4">
-            {NAV_LINKS.map(l => <a key={l.label} href={l.href} onClick={() => setMenuOpen(false)} className="text-sm font-medium text-zinc-700">{l.label}</a>)}
-            <div className="flex flex-col gap-2 pt-2 border-t border-zinc-100">
-              <Link to="/login" className="text-sm font-semibold text-zinc-700 py-2.5 text-center border border-zinc-200 rounded-xl">Sign in</Link>
-              <Link to="/register" className="text-sm font-bold bg-zinc-900 text-white py-2.5 text-center rounded-xl">Get started free</Link>
+          <div className="md:hidden bg-white border-t border-zinc-100 px-5 py-5 flex flex-col gap-1">
+            {['Features', 'Pricing'].map(l => <a key={l} href={`#${l.toLowerCase()}`} onClick={() => setMenuOpen(false)} className="text-sm font-medium text-zinc-700 py-2">{l}</a>)}
+            <div className="pt-3 mt-2 border-t border-zinc-100 flex flex-col gap-2">
+              <Link to="/login" className="text-sm font-medium text-center py-2.5 border border-zinc-200 rounded-xl">Sign in</Link>
+              <Link to="/register" className="text-sm font-semibold text-center bg-zinc-900 text-white py-2.5 rounded-xl">Get started free</Link>
             </div>
           </div>
         )}
       </header>
 
-      {/* ── Hero ─────────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
-        {/* Background blobs */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-violet-100 rounded-full blur-3xl opacity-40" style={{ animation: 'blob1 8s ease-in-out infinite' }} />
-          <div className="absolute top-1/3 right-1/4 w-80 h-80 bg-blue-100 rounded-full blur-3xl opacity-30" style={{ animation: 'blob2 10s ease-in-out infinite' }} />
-          <div className="absolute bottom-1/4 left-1/3 w-72 h-72 bg-emerald-100 rounded-full blur-3xl opacity-30" style={{ animation: 'blob3 12s ease-in-out infinite' }} />
-        </div>
-
-        <div className="relative max-w-4xl mx-auto px-5 text-center py-24">
-          <div className="inline-flex items-center gap-2 bg-white border border-zinc-200 text-zinc-600 text-xs font-semibold px-4 py-2 rounded-full mb-8 shadow-sm"
-            style={{ animation: 'fadeSlideUp 0.6s ease forwards', opacity: 0 }}>
-            <Sparkles size={12} className="text-amber-500" />
-            The complete business management app — 100% free
-          </div>
-
-          <h1 style={{ animation: 'fadeSlideUp 0.6s ease 0.1s forwards', opacity: 0 }}
-            className="text-5xl md:text-7xl font-black tracking-tighter text-zinc-900 leading-[1.05] mb-6">
-            Your business,<br />
-            <span className="relative inline-block">
-              <span className="relative z-10 text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(135deg, #18181b 0%, #52525b 50%, #18181b 100%)' }}>
-                beautifully managed.
-              </span>
-              <span className="absolute -bottom-1 left-0 right-0 h-1 rounded-full bg-gradient-to-r from-violet-400 via-blue-400 to-emerald-400" />
-            </span>
-          </h1>
-
-          <p style={{ animation: 'fadeSlideUp 0.6s ease 0.2s forwards', opacity: 0 }}
-            className="text-lg md:text-xl text-zinc-500 max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
-            Purchase orders, sales, invoicing, inventory, AR&nbsp;/&nbsp;AP and finance tracking — all in one stunning app that works on every device.
-          </p>
-
-          <div style={{ animation: 'fadeSlideUp 0.6s ease 0.3s forwards', opacity: 0 }}
-            className="flex flex-col sm:flex-row gap-3 justify-center mb-16">
-            <Link to="/register"
-              className="group inline-flex items-center justify-center gap-2 bg-zinc-900 text-white font-bold px-8 py-4 rounded-2xl text-sm transition-all shadow-[0_4px_20px_rgba(0,0,0,0.2)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:-translate-y-0.5">
-              Start for free
-              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <Link to="/login"
-              className="inline-flex items-center justify-center gap-2 bg-white border border-zinc-200 text-zinc-700 font-semibold px-8 py-4 rounded-2xl text-sm hover:bg-zinc-50 transition-all shadow-sm">
-              Sign in to your account
-            </Link>
-          </div>
-
-          {/* Floating dashboard preview */}
-          <div style={{ animation: 'floatUp 0.8s ease 0.4s forwards', opacity: 0 }}
-            className="relative mx-auto max-w-3xl">
-            <div className="bg-white rounded-3xl shadow-[0_32px_80px_rgba(0,0,0,0.15)] border border-zinc-200/80 overflow-hidden">
-              {/* Titlebar */}
-              <div className="flex items-center gap-1.5 px-4 py-3 border-b border-zinc-100 bg-zinc-50">
-                <div className="w-3 h-3 rounded-full bg-red-400" />
-                <div className="w-3 h-3 rounded-full bg-amber-400" />
-                <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                <div className="flex-1 mx-3 bg-white border border-zinc-200 rounded-md h-5 flex items-center px-2">
-                  <span className="text-[9px] text-zinc-400">openledger-frontend.vercel.app/dashboard</span>
-                </div>
+      {/* ════════ HERO BENTO ════════ */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-6 pt-28 md:pt-36 pb-16">
+        <Mosaic>
+          {/* Headline tile */}
+          <Cell span="md:col-span-2 md:row-span-2" pad="p-8 md:p-11">
+            <div className="flex flex-col h-full justify-center">
+              <div style={{ animation: 'fadeUp .7s cubic-bezier(.16,1,.3,1) both' }}
+                className="inline-flex w-fit items-center gap-2 text-[11px] font-mono font-medium text-zinc-500 border border-zinc-200 pl-1.5 pr-3 py-1 rounded-full mb-7">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded-full"><Sparkles size={9} /> NEW</span>
+                Aura — your AI money assistant
               </div>
-              {/* App UI mockup */}
-              <div className="p-4 bg-[#f5f5f5]">
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="bg-zinc-900 rounded-2xl p-3">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <TrendingUp size={10} className="text-emerald-400" />
-                      <span className="text-[9px] text-zinc-400 font-semibold">Receivable</span>
-                    </div>
-                    <p className="text-base font-black text-emerald-400">$8,240</p>
-                    <p className="text-[8px] text-zinc-500">13 unpaid invoices</p>
-                  </div>
-                  <div className="bg-zinc-900 rounded-2xl p-3">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <TrendingDown size={10} className="text-red-400" />
-                      <span className="text-[9px] text-zinc-400 font-semibold">Payable</span>
-                    </div>
-                    <p className="text-base font-black text-red-400">$3,180</p>
-                    <p className="text-[8px] text-zinc-500">7 unpaid invoices</p>
-                  </div>
+              <h1 style={{ animation: 'fadeUp .7s cubic-bezier(.16,1,.3,1) .08s both' }}
+                className="text-[2.75rem] leading-[0.92] sm:text-6xl md:text-[4.25rem] md:leading-[0.9] font-black tracking-[-0.05em]">
+                Your whole<br />money life,<br />
+                <span className="bg-gradient-to-r from-zinc-900 via-zinc-500 to-zinc-900 bg-clip-text text-transparent">on one grid.</span>
+              </h1>
+              <p style={{ animation: 'fadeUp .7s cubic-bezier(.16,1,.3,1) .16s both' }}
+                className="mt-6 text-base md:text-lg text-zinc-500 max-w-md leading-relaxed">
+                For home or business — track money, send invoices, manage inventory and let AI do the busywork. Beautifully simple, and completely free.
+              </p>
+              <div style={{ animation: 'fadeUp .7s cubic-bezier(.16,1,.3,1) .24s both' }} className="mt-8 flex flex-col sm:flex-row gap-3">
+                <Link to="/register" className="group inline-flex items-center justify-center gap-2 bg-zinc-900 text-white font-semibold px-6 py-3 rounded-full text-sm hover:bg-zinc-700 transition-all hover:-translate-y-0.5">
+                  Start for free <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform" />
+                </Link>
+                <Link to="/login" className="inline-flex items-center justify-center gap-2 bg-white text-zinc-900 font-semibold px-6 py-3 rounded-full text-sm border border-zinc-200 hover:border-zinc-300 transition-all">
+                  Sign in
+                </Link>
+              </div>
+              <p className="mt-7 text-[11px] text-zinc-400 font-mono">no credit card · free forever · installs as an app</p>
+            </div>
+          </Cell>
+
+          {/* Dashboard preview tile */}
+          <Cell span="md:col-span-2 md:row-span-2" pad="p-6 md:p-8" glow="rgba(2,132,199,0.07)">
+            <div className="flex items-center justify-center h-full">
+              <TiltCard className="w-full max-w-sm relative">
+                <div className="absolute -inset-6 rounded-full opacity-60 blur-3xl pointer-events-none"
+                  style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.18), transparent 65%)' }} />
+                <div className="relative shadow-[0_24px_70px_rgba(0,0,0,0.14)] rounded-2xl">
+                  <DashHero />
                 </div>
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {[
-                    { l: 'Pending POs', v: '4', c: 'text-blue-600' },
-                    { l: 'Pending SOs', v: '7', c: 'text-violet-600' },
-                    { l: 'Stock Value', v: '$12k', c: 'text-zinc-900' },
-                    { l: 'Low Stock', v: '3', c: 'text-red-500' },
-                  ].map(s => (
-                    <div key={s.l} className="bg-white rounded-xl p-2.5 shadow-sm">
-                      <p className={`text-sm font-black ${s.c}`}>{s.v}</p>
-                      <p className="text-[8px] text-zinc-400 leading-tight mt-0.5">{s.l}</p>
-                    </div>
+              </TiltCard>
+            </div>
+          </Cell>
+
+          {/* Stat tiles */}
+          <Cell span="md:col-span-1" pad="p-6">
+            <p className="text-3xl md:text-4xl font-black tracking-tight"><CountUp to={100} suffix="%" /></p>
+            <p className="text-xs text-zinc-400 font-medium mt-1">Free forever</p>
+          </Cell>
+          <Cell span="md:col-span-1" pad="p-6">
+            <p className="text-3xl md:text-4xl font-black tracking-tight"><CountUp to={10} suffix="+" /></p>
+            <p className="text-xs text-zinc-400 font-medium mt-1">Invoice templates</p>
+          </Cell>
+          <Cell span="md:col-span-1" pad="p-6">
+            <p className="text-3xl md:text-4xl font-black tracking-tight">AI</p>
+            <p className="text-xs text-zinc-400 font-medium mt-1">Built-in assistant</p>
+          </Cell>
+          <Cell span="md:col-span-1" pad="p-6">
+            <p className="text-3xl md:text-4xl font-black tracking-tight">PWA</p>
+            <p className="text-xs text-zinc-400 font-medium mt-1">Installs anywhere</p>
+          </Cell>
+        </Mosaic>
+      </section>
+
+      {/* ════════ FEATURE BENTO ════════ */}
+      <section id="features" className="max-w-6xl mx-auto px-5 sm:px-6 py-16 md:py-24 scroll-mt-20">
+        <Reveal>
+          <div className="flex items-end justify-between mb-10 flex-wrap gap-4">
+            <div>
+              <p className="text-xs font-mono text-zinc-400 uppercase tracking-[0.25em] mb-3">[ what's inside ]</p>
+              <h2 className="text-4xl md:text-6xl font-black tracking-[-0.04em] leading-[0.98]">Less software.<br /><span className="text-zinc-300">More done.</span></h2>
+            </div>
+            <p className="text-sm text-zinc-500 max-w-xs">Whether you're splitting bills at home or running a storefront — one tool does it all.</p>
+          </div>
+        </Reveal>
+
+        <Reveal y={32}>
+          <Mosaic>
+            {/* Aura — big tile */}
+            <Cell span="md:col-span-2 md:row-span-2" pad="p-7 md:p-8">
+              <div className="flex flex-col h-full">
+                <div className="inline-flex w-fit items-center gap-2 text-[11px] font-mono font-bold tracking-wider px-2.5 py-1 rounded-full border border-violet-200 bg-violet-50 text-violet-700 mb-4"><Sparkles size={12} /> AURA AI</div>
+                <h3 className="text-2xl md:text-3xl font-black tracking-[-0.03em] mb-2">An AI that runs the busywork.</h3>
+                <p className="text-sm text-zinc-500 leading-relaxed mb-6 max-w-sm">At home or at work — ask about your spending, log expenses, draft orders or scan receipts. Aura just gets it done.</p>
+                <div className="mt-auto rounded-2xl border border-zinc-100 bg-zinc-50/70 p-4 h-[300px] overflow-hidden"><AuraChat /></div>
+              </div>
+            </Cell>
+
+            {/* Receipt scanner — tall */}
+            <Cell span="md:col-span-2 md:row-span-1" pad="p-7" glow="rgba(225,29,72,0.06)">
+              <div className="flex items-start gap-5">
+                <div className="flex-1">
+                  <div className="inline-flex w-fit items-center gap-2 text-[11px] font-mono font-bold tracking-wider px-2.5 py-1 rounded-full border border-rose-200 bg-rose-50 text-rose-600 mb-4"><ScanLine size={12} /> SCANNER</div>
+                  <h3 className="text-xl md:text-2xl font-black tracking-[-0.03em] mb-2">Snap a receipt. That's it.</h3>
+                  <p className="text-sm text-zinc-500 leading-relaxed">Every line item is read, priced and dropped straight into your cart.</p>
+                </div>
+                <div className="w-32 shrink-0"><ReceiptMini /></div>
+              </div>
+            </Cell>
+
+            {/* Invoicing */}
+            <Cell span="md:col-span-1 md:row-span-1" pad="p-7" glow="rgba(2,132,199,0.06)">
+              <div className="inline-flex w-fit items-center gap-2 text-[11px] font-mono font-bold tracking-wider px-2.5 py-1 rounded-full border border-sky-200 bg-sky-50 text-sky-600 mb-4"><FileText size={12} /> INVOICING</div>
+              <h3 className="text-lg font-black tracking-[-0.02em] mb-3">Invoices worth sending.</h3>
+              <InvoiceMini />
+            </Cell>
+
+            {/* Finance */}
+            <Cell span="md:col-span-1 md:row-span-1" pad="p-7" glow="rgba(245,158,11,0.06)">
+              <div className="inline-flex w-fit items-center gap-2 text-[11px] font-mono font-bold tracking-wider px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-600 mb-4"><TrendingUp size={12} /> FINANCE</div>
+              <h3 className="text-lg font-black tracking-[-0.02em] mb-3">Your numbers, clear.</h3>
+              <FinanceMini />
+            </Cell>
+          </Mosaic>
+        </Reveal>
+      </section>
+
+      {/* ════════ THE CYCLE ════════ */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-6 py-16 md:py-24">
+        <Reveal>
+          <Mosaic>
+            <Cell span="md:col-span-4" pad="p-8 md:p-12">
+              <p className="text-xs font-mono text-violet-500 uppercase tracking-[0.25em] mb-3">[ for businesses ]</p>
+              <h2 className="text-3xl md:text-5xl font-black tracking-[-0.04em] leading-[1.02] max-w-xl">Running a business? The full cycle, covered.</h2>
+              <p className="mt-3 text-sm text-zinc-500 max-w-md">Switch to a Business workspace for orders, inventory and invoicing — purchase to payment, without the spreadsheets.</p>
+            </Cell>
+            {[
+              { icon: ShoppingCart, t: 'Orders', d: 'Purchase & sales orders, GRNs, delivery tracking.', c: 'text-blue-500 bg-blue-50' },
+              { icon: Boxes,        t: 'Inventory', d: 'Live stock with every order. Low-stock alerts.', c: 'text-emerald-600 bg-emerald-50' },
+              { icon: FileText,     t: 'Invoicing', d: 'Beautiful PDFs, email delivery, aging reports.', c: 'text-violet-600 bg-violet-50' },
+              { icon: TrendingUp,   t: 'Finance', d: 'Income, expenses, budgets, group finances.', c: 'text-amber-500 bg-amber-50' },
+            ].map(c => {
+              const Icon = c.icon
+              return (
+                <Cell key={c.t} span="md:col-span-1" pad="p-6">
+                  <div className={`w-9 h-9 rounded-xl ${c.c} flex items-center justify-center mb-4`}><Icon size={17} /></div>
+                  <h3 className="text-sm font-bold mb-1.5">{c.t}</h3>
+                  <p className="text-xs text-zinc-500 leading-relaxed">{c.d}</p>
+                </Cell>
+              )
+            })}
+          </Mosaic>
+        </Reveal>
+      </section>
+
+      {/* ════════ PRICING ════════ */}
+      <section id="pricing" className="max-w-6xl mx-auto px-5 sm:px-6 py-16 md:py-24 scroll-mt-20">
+        <Reveal>
+          <div className="text-center mb-10">
+            <p className="text-xs font-mono text-zinc-400 uppercase tracking-[0.25em] mb-3">[ pricing ]</p>
+            <h2 className="text-4xl md:text-5xl font-black tracking-[-0.04em]">Free. Genuinely.</h2>
+          </div>
+        </Reveal>
+        <Reveal y={28}>
+          <Mosaic>
+            <Cell span="md:col-span-2" pad="p-8">
+              <div className="flex flex-col h-full">
+                <p className="text-xs text-zinc-400 mb-1">For households & individuals</p>
+                <h3 className="text-lg font-black mb-3">Personal</h3>
+                <div className="flex items-end gap-1.5 mb-6"><span className="text-4xl font-black tracking-tight">Free</span><span className="text-sm text-zinc-400 mb-1">/ forever</span></div>
+                <ul className="space-y-2.5 mb-7">
+                  {['Expense & income tracking', 'Budgets & planning', 'Wishlist & shopping cart', 'Shared group spaces'].map(f => (
+                    <li key={f} className="flex items-center gap-2.5 text-sm"><Check size={15} className="shrink-0 text-emerald-600" /><span className="text-zinc-600">{f}</span></li>
                   ))}
+                </ul>
+                <Link to="/register" className="mt-auto flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold bg-white border border-zinc-300 text-zinc-900 hover:bg-zinc-50 transition-all">Get started <ArrowRight size={14} /></Link>
+              </div>
+            </Cell>
+            <Cell span="md:col-span-2" pad="p-8" className="!bg-zinc-900 hover:!bg-zinc-900" glow="rgba(124,58,237,0.18)">
+              <div className="flex flex-col h-full">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs text-zinc-500">For shops, teams & companies</p>
+                  <span className="inline-block text-[10px] font-bold bg-gradient-to-r from-violet-500 to-indigo-500 text-white px-2.5 py-0.5 rounded-full">Most popular</span>
                 </div>
-                <div className="bg-white rounded-2xl p-3 shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-bold text-zinc-700">Recent Sales Orders</span>
-                    <span className="text-[8px] text-zinc-400">See all →</span>
-                  </div>
-                  {[{ id: 'SO-0042', c: 'Keshav Traders', v: '$1,240', s: 'Confirmed', sc: 'text-emerald-600 bg-emerald-50' },
-                    { id: 'SO-0041', c: 'Bhumi Stores', v: '$860', s: 'Pending', sc: 'text-amber-600 bg-amber-50' }].map(r => (
-                    <div key={r.id} className="flex items-center justify-between py-1.5 border-b border-zinc-50 last:border-0">
-                      <span className="text-[8px] font-mono font-bold text-zinc-700">{r.id}</span>
-                      <span className="text-[8px] text-zinc-500">{r.c}</span>
-                      <span className="text-[8px] font-bold text-zinc-900">{r.v}</span>
-                      <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${r.sc}`}>{r.s}</span>
-                    </div>
+                <h3 className="text-lg font-black mb-3 text-white">Business</h3>
+                <div className="flex items-end gap-1.5 mb-6"><span className="text-4xl font-black tracking-tight text-white">Free</span><span className="text-sm text-zinc-500 mb-1">/ during launch</span></div>
+                <ul className="space-y-2.5 mb-7">
+                  {['Everything in Personal', 'Purchase & sales orders', 'Inventory & stock control', 'AR / AP aging reports', '10 invoice templates', 'Aura AI assistant'].map(f => (
+                    <li key={f} className="flex items-center gap-2.5 text-sm"><Check size={15} className="shrink-0 text-emerald-400" /><span className="text-zinc-300">{f}</span></li>
                   ))}
-                </div>
+                </ul>
+                <Link to="/register" className="mt-auto flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold bg-white text-zinc-900 hover:bg-zinc-100 transition-all">Start your workspace <ArrowRight size={14} /></Link>
               </div>
-            </div>
-            {/* floating badges */}
-            <div className="absolute -left-4 top-16 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-zinc-100 px-3 py-2.5 flex items-center gap-2 hidden md:flex">
-              <div className="w-7 h-7 bg-emerald-50 rounded-xl flex items-center justify-center"><CheckCircle size={14} className="text-emerald-600" /></div>
-              <div><p className="text-[10px] font-bold text-zinc-900">Invoice sent</p><p className="text-[9px] text-zinc-400">SINV-0048 · $2,400</p></div>
-            </div>
-            <div className="absolute -right-4 bottom-20 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-zinc-100 px-3 py-2.5 hidden md:flex items-center gap-2">
-              <div className="w-7 h-7 bg-violet-50 rounded-xl flex items-center justify-center"><Boxes size={14} className="text-violet-600" /></div>
-              <div><p className="text-[10px] font-bold text-zinc-900">Low stock alert</p><p className="text-[9px] text-zinc-400">Sugar · 3 units left</p></div>
-            </div>
-          </div>
-        </div>
+            </Cell>
+          </Mosaic>
+        </Reveal>
       </section>
 
-      {/* ── Stats strip ──────────────────────────────────────────────────────── */}
-      <section className="bg-zinc-900 py-12">
-        <div className="max-w-4xl mx-auto px-5">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            {STATS.map((s, i) => (
-              <FadeIn key={s.label} delay={i * 0.1}>
-                <p className="text-3xl md:text-4xl font-black text-white tracking-tight">{s.value}</p>
-                <p className="text-xs font-semibold text-zinc-500 mt-1">{s.label}</p>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Bento features ───────────────────────────────────────────────────── */}
-      <section id="features" className="max-w-6xl mx-auto px-5 py-24">
-        <FadeIn>
-          <div className="text-center mb-14">
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-violet-600 bg-violet-50 px-3 py-1.5 rounded-full mb-4">
-              <Zap size={11} /> Features
-            </span>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4 leading-tight">Everything you need.<br />Nothing you don't.</h2>
-            <p className="text-zinc-500 text-lg max-w-xl mx-auto">One app replacing five spreadsheets. Built for small businesses and freelancers who mean business.</p>
-          </div>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 auto-rows-min">
-          {BENTO.map((b, i) => {
-            const Icon = b.icon
-            return (
-              <FadeIn key={b.title} delay={i * 0.08} className={b.col}>
-                <div className="h-full bg-white rounded-3xl p-6 border border-zinc-100 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.1)] transition-all duration-300 hover:-translate-y-0.5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${b.iconBg}`}>
-                      <Icon size={18} className={b.iconColor} />
-                    </div>
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${b.tagColor}`}>{b.tag}</span>
-                  </div>
-                  <h3 className="text-base font-extrabold text-zinc-900 mb-1.5 leading-snug">{b.title}</h3>
-                  <p className="text-sm text-zinc-500 leading-relaxed">{b.desc}</p>
-                  {b.visual}
-                </div>
-              </FadeIn>
-            )
-          })}
-        </div>
-      </section>
-
-      {/* ── How it works ─────────────────────────────────────────────────────── */}
-      <section id="how" className="bg-zinc-900 py-24 overflow-hidden relative">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-white/[0.03] rounded-full blur-3xl translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-white/[0.03] rounded-full blur-3xl -translate-x-1/2 translate-y-1/2" />
-        </div>
-        <div className="max-w-4xl mx-auto px-5 relative">
-          <FadeIn>
-            <div className="text-center mb-16">
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-zinc-400 bg-white/10 px-3 py-1.5 rounded-full mb-4">
-                <Globe size={11} /> Getting started
-              </span>
-              <h2 className="text-4xl md:text-5xl font-black text-white tracking-tight mb-4">Up and running<br />in minutes.</h2>
-              <p className="text-zinc-400 text-lg">No setup fees. No credit card. No complexity.</p>
-            </div>
-          </FadeIn>
-          <div className="flex flex-col md:flex-row gap-8 relative">
-            {/* connector line */}
-            <div className="hidden md:block absolute top-8 left-0 right-0 h-px bg-gradient-to-r from-transparent via-zinc-700 to-transparent" />
-            {STEPS.map((s, i) => (
-              <FadeIn key={s.n} delay={i * 0.15} className="flex-1">
-                <div className="relative">
-                  <div className="w-16 h-16 bg-white/10 border border-white/20 rounded-2xl flex items-center justify-center mb-5 relative z-10 backdrop-blur-sm">
-                    <span className="text-xl font-black text-white">{s.n}</span>
-                  </div>
-                  <h3 className="text-lg font-extrabold text-white mb-2">{s.title}</h3>
-                  <p className="text-sm text-zinc-400 leading-relaxed">{s.desc}</p>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-          <FadeIn delay={0.4}>
-            <div className="text-center mt-14">
-              <Link to="/register"
-                className="group inline-flex items-center gap-2 bg-white text-zinc-900 font-bold px-8 py-4 rounded-2xl text-sm hover:bg-zinc-100 transition-all shadow-[0_4px_20px_rgba(255,255,255,0.15)]">
-                Start your workspace
-                <MoveRight size={16} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
-            </div>
-          </FadeIn>
-        </div>
-      </section>
-
-      {/* ── Testimonials ─────────────────────────────────────────────────────── */}
-      <section className="max-w-6xl mx-auto px-5 py-24">
-        <FadeIn>
-          <div className="text-center mb-14">
-            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full mb-4">
-              <Star size={11} /> Testimonials
-            </span>
-            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">Loved by small businesses.</h2>
-          </div>
-        </FadeIn>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {TESTIMONIALS.map((t, i) => (
-            <FadeIn key={t.name} delay={i * 0.1}>
-              <div className="bg-white rounded-3xl p-7 border border-zinc-100 shadow-[0_2px_12px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.1)] transition-all duration-300 group">
-                <div className="flex gap-0.5 mb-4">
-                  {[...Array(t.stars)].map((_, i) => <Star key={i} size={13} className="text-amber-400 fill-amber-400" />)}
-                </div>
-                <p className="text-zinc-700 leading-relaxed mb-5 font-medium">"{t.text}"</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-zinc-900 rounded-full flex items-center justify-center text-white text-sm font-black">{t.name[0]}</div>
-                  <div>
-                    <p className="text-sm font-bold text-zinc-900">{t.name}</p>
-                    <p className="text-xs text-zinc-400">{t.role}</p>
-                  </div>
-                </div>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Pricing ──────────────────────────────────────────────────────────── */}
-      <section id="pricing" className="bg-zinc-50 py-24">
-        <div className="max-w-4xl mx-auto px-5">
-          <FadeIn>
-            <div className="text-center mb-14">
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full mb-4">
-                <Lock size={11} /> Pricing
-              </span>
-              <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">Simple, honest pricing.</h2>
-              <p className="text-zinc-500 text-lg">Both plans are completely free during our launch period.</p>
-            </div>
-          </FadeIn>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {PLANS.map((p, i) => (
-              <FadeIn key={p.name} delay={i * 0.15}>
-                <div className={`relative rounded-3xl p-8 border transition-all ${p.dark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-white border-zinc-200 text-zinc-900 shadow-[0_2px_12px_rgba(0,0,0,0.06)]'}`}>
-                  {p.badge && (
-                    <span className="absolute -top-3 left-6 bg-gradient-to-r from-violet-500 to-blue-500 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-md">
-                      {p.badge}
-                    </span>
-                  )}
-                  <p className={`text-xs font-semibold mb-1 ${p.dark ? 'text-zinc-500' : 'text-zinc-400'}`}>{p.desc}</p>
-                  <h3 className={`text-2xl font-extrabold mb-1 ${p.dark ? 'text-white' : 'text-zinc-900'}`}>{p.name}</h3>
-                  <div className="flex items-end gap-1.5 mb-6">
-                    <span className={`text-5xl font-black tracking-tighter ${p.dark ? 'text-white' : 'text-zinc-900'}`}>{p.price}</span>
-                    <span className={`text-sm font-medium mb-1.5 ${p.dark ? 'text-zinc-500' : 'text-zinc-400'}`}>/ {p.period}</span>
-                  </div>
-                  <ul className="flex flex-col gap-2.5 mb-8">
-                    {p.features.map(f => (
-                      <li key={f} className="flex items-center gap-2.5 text-sm">
-                        <CheckCircle size={15} className={p.dark ? 'text-emerald-400 flex-shrink-0' : 'text-emerald-600 flex-shrink-0'} />
-                        <span className={p.dark ? 'text-zinc-300' : 'text-zinc-600'}>{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <Link to="/register"
-                    className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-sm font-bold transition-all ${p.dark ? 'bg-white text-zinc-900 hover:bg-zinc-100 shadow-[0_4px_16px_rgba(255,255,255,0.1)]' : 'bg-zinc-900 text-white hover:bg-zinc-800 shadow-[0_4px_16px_rgba(0,0,0,0.12)]'}`}>
-                    {p.cta} <ChevronRight size={15} />
-                  </Link>
-                </div>
-              </FadeIn>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Final CTA ────────────────────────────────────────────────────────── */}
-      <section className="max-w-6xl mx-auto px-5 py-24">
-        <FadeIn>
-          <div className="relative bg-zinc-900 rounded-[2.5rem] overflow-hidden px-8 py-16 text-center">
-            {/* decorative bg */}
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute top-0 left-1/4 w-64 h-64 bg-violet-500/10 rounded-full blur-3xl" />
-              <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
+      {/* ════════ CTA ════════ */}
+      <section className="max-w-6xl mx-auto px-5 sm:px-6 py-16 md:py-28">
+        <Reveal>
+          <div className="relative overflow-hidden rounded-[1.5rem] bg-zinc-900 px-6 py-20 md:py-28 text-center">
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute left-1/2 -translate-x-1/2 -top-1/3 w-[800px] h-[800px] opacity-50"
+                style={{ background: 'conic-gradient(from 90deg at 50% 50%, transparent, rgba(139,92,246,0.35), rgba(56,189,248,0.25), transparent)', filter: 'blur(70px)', animation: 'spin 20s linear infinite' }} />
             </div>
             <div className="relative">
-              <p className="text-zinc-500 text-sm font-semibold mb-4">Get started today — it's free</p>
-              <h2 className="text-4xl md:text-6xl font-black text-white tracking-tight mb-5 leading-tight">
-                Ready to run your<br />business smarter?
+              <h2 className="text-4xl md:text-7xl font-black tracking-[-0.05em] leading-[0.95] mb-6 text-white">
+                Run it all from<br /><span className="bg-gradient-to-b from-white to-white/40 bg-clip-text text-transparent">your pocket.</span>
               </h2>
-              <p className="text-zinc-400 text-lg mb-10 max-w-xl mx-auto">Join thousands of businesses already using OpenLedger to manage orders, stock and finances.</p>
-              <Link to="/register"
-                className="group inline-flex items-center gap-2 bg-white text-zinc-900 font-black px-10 py-4 rounded-2xl text-sm hover:bg-zinc-100 transition-all shadow-[0_8px_30px_rgba(255,255,255,0.15)] hover:shadow-[0_12px_40px_rgba(255,255,255,0.2)] hover:-translate-y-0.5">
-                Create your free account
-                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              <p className="text-zinc-400 text-lg mb-10 max-w-md mx-auto">Ditch the spreadsheets for something you'll actually enjoy using.</p>
+              <Link to="/register" className="group inline-flex items-center gap-2 bg-white text-zinc-900 font-bold px-8 py-4 rounded-full text-sm hover:bg-zinc-100 transition-all hover:-translate-y-0.5">
+                Create your free account <ArrowUpRight size={16} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </Link>
             </div>
           </div>
-        </FadeIn>
+        </Reveal>
       </section>
 
-      {/* ── Footer ───────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-zinc-100 py-10">
-        <div className="max-w-6xl mx-auto px-5 flex flex-col md:flex-row items-center justify-between gap-6">
+      {/* ── Footer ── */}
+      <footer className="border-t border-zinc-200/70 py-10 px-5 sm:px-6">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-zinc-900 rounded-xl flex items-center justify-center">
-              <AppLogo size={13} className="text-white" />
-            </div>
-            <span className="font-extrabold text-zinc-900 tracking-tight">OpenLedger</span>
+            <div className="w-7 h-7 bg-zinc-900 rounded-lg flex items-center justify-center"><AppLogo size={13} /></div>
+            <span className="font-bold text-sm">OpenLedger</span>
           </div>
-          <p className="text-xs text-zinc-400 font-medium">© {new Date().getFullYear()} OpenLedger · Built for small businesses that mean business.</p>
-          <div className="flex gap-6">
-            {NAV_LINKS.map(l => <a key={l.label} href={l.href} className="text-xs font-medium text-zinc-400 hover:text-zinc-900 transition-colors">{l.label}</a>)}
-            <Link to="/login" className="text-xs font-medium text-zinc-400 hover:text-zinc-900 transition-colors">Sign in</Link>
+          <p className="text-xs text-zinc-400 order-3 md:order-2 font-mono">© {new Date().getFullYear()} OpenLedger — for households and businesses alike.</p>
+          <div className="flex gap-6 order-2 md:order-3">
+            <a href="#features" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Features</a>
+            <a href="#pricing" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Pricing</a>
+            <Link to="/login" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Sign in</Link>
           </div>
         </div>
       </footer>
 
-      {/* ── Keyframes ────────────────────────────────────────────────────────── */}
       <style>{`
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(24px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes floatUp {
-          from { opacity: 0; transform: translateY(40px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes blob1 {
-          0%, 100% { transform: translate(0,0) scale(1); }
-          33%  { transform: translate(30px,-20px) scale(1.05); }
-          66%  { transform: translate(-20px,15px) scale(0.95); }
-        }
-        @keyframes blob2 {
-          0%, 100% { transform: translate(0,0) scale(1); }
-          33%  { transform: translate(-25px,20px) scale(1.05); }
-          66%  { transform: translate(20px,-15px) scale(0.95); }
-        }
-        @keyframes blob3 {
-          0%, 100% { transform: translate(0,0) scale(1); }
-          33%  { transform: translate(20px,25px) scale(0.95); }
-          66%  { transform: translate(-15px,-20px) scale(1.05); }
-        }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+        @keyframes scan   { 0% { top: -12%; } 100% { top: 100%; } }
+        @keyframes spin   { to { transform: rotate(360deg); } }
+        @keyframes msgIn  { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+        @keyframes dot    { 0%,60%,100% { opacity: .25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+        @keyframes grow   { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+        @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration:.001ms!important; animation-iteration-count:1!important; } }
       `}</style>
-
     </div>
   )
 }
