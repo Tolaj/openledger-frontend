@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, Sparkles, ScanLine, FileText, Boxes,
-  ShoppingCart, TrendingUp, Users, Smartphone, Rocket, HelpCircle,
+  ShoppingCart, TrendingUp, Users, Smartphone, Rocket, HelpCircle, Repeat,
 } from 'lucide-react'
 import AppLogo from '../components/ui/AppLogo'
 
@@ -12,6 +12,7 @@ const SECTIONS = [
   { id: 'aura',           label: 'Aura AI assistant', icon: Sparkles },
   { id: 'scanner',        label: 'Receipt scanner', icon: ScanLine },
   { id: 'inventory',      label: 'Products & inventory', icon: Boxes },
+  { id: 'recurring',      label: 'Recurring & reminders', icon: Repeat },
   { id: 'orders',         label: 'Orders', icon: ShoppingCart },
   { id: 'invoicing',      label: 'Invoicing', icon: FileText },
   { id: 'finance',        label: 'Finance & budgets', icon: TrendingUp },
@@ -54,6 +55,7 @@ function Pill({ children, tone = 'zinc' }) {
     violet: 'bg-violet-50 text-violet-700',
     emerald: 'bg-emerald-50 text-emerald-700',
     blue: 'bg-blue-50 text-blue-700',
+    amber: 'bg-amber-50 text-amber-700',
   }
   return <span className={`inline-block text-[11px] font-semibold px-2 py-0.5 rounded-full ${tones[tone]}`}>{children}</span>
 }
@@ -180,6 +182,23 @@ export default function Docs() {
               <li>Get <Pill tone="emerald">low-stock</Pill> alerts before you run out.</li>
               <li>See total stock value at a glance on your dashboard.</li>
             </ul>
+          </Section>
+
+          <Section id="recurring" icon={Repeat} tag="Automation" title="Recurring & reminders">
+            <p>Set up anything that repeats — a subscription, a regular purchase, or <strong>daily stock usage</strong> — from <Pill>Products → Recurring</Pill>. Pick a frequency, a start date, and one or more <strong>times of day</strong> (add a morning and an evening time, for example).</p>
+            <p className="font-semibold text-zinc-900">On each run, choose what happens:</p>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><strong>Create an order</strong> — logs an order/expense for the items (replenish).</li>
+              <li><strong>Deduct from stock</strong> — subtracts the quantities from your inventory (consume), clamped at 0, and recorded in <Pill tone="blue">Stock → Movements</Pill>.</li>
+            </ul>
+            <p className="font-semibold text-zinc-900">For stock usage, pick a notification style:</p>
+            <ul className="list-disc pl-5 space-y-1.5">
+              <li><strong>Silently</strong> — just consume the stock, no notification.</li>
+              <li><strong>Notify me</strong> — consume and send a push letting you know.</li>
+              <li><strong>Ask first</strong> — send a push with <Pill tone="emerald">Yes</Pill> / <Pill tone="amber">Snooze</Pill> / Skip; stock is deducted only if you tap Yes. Snooze re-asks you a bit later.</li>
+            </ul>
+            <p>Every action — confirmed, snoozed, skipped or auto-deducted — is recorded in the <Pill tone="blue">Stock → Activity</Pill> tab, so you can see how well you're keeping up with what you scheduled.</p>
+            <p className="text-sm text-zinc-500">Tip: push reminders need notifications enabled and the app added to your home screen — see <a href="#install" className="underline">Install as an app</a> below.</p>
           </Section>
 
           <Section id="orders" icon={ShoppingCart} tag="Business" title="Orders">

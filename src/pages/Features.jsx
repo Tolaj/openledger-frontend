@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, Check, Sparkles, ScanLine, FileText, Boxes,
-  ShoppingCart, TrendingUp, Users, Send,
+  ShoppingCart, TrendingUp, Users, Send, Repeat, Bell, Clock, X,
 } from 'lucide-react'
 import AppLogo from '../components/ui/AppLogo'
 
@@ -129,6 +129,42 @@ function FinanceViz() {
   )
 }
 
+function RemindersViz() {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      {/* notification card */}
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3.5 mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-7 h-7 rounded-lg bg-zinc-900 flex items-center justify-center"><Bell size={13} className="text-white" /></div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-zinc-900 leading-tight">Use stock for "Morning chai"?</p>
+            <p className="text-[10px] text-zinc-400 leading-tight">Milk: 250 ml · Tea: 10 g</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-1.5">
+          <div className="text-[10px] font-semibold text-center py-1.5 rounded-lg bg-zinc-900 text-white">Yes</div>
+          <div className="text-[10px] font-semibold text-center py-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-600 flex items-center justify-center gap-1"><Clock size={10} /> 1h</div>
+          <div className="text-[10px] font-semibold text-center py-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-600">Skip</div>
+        </div>
+      </div>
+      {/* activity log */}
+      {[
+        { a: 'Confirmed', c: 'bg-emerald-50 text-emerald-700', t: 'Today 08:00' },
+        { a: 'Snoozed',   c: 'bg-amber-50 text-amber-700',     t: 'Yesterday 19:00' },
+        { a: 'Confirmed', c: 'bg-emerald-50 text-emerald-700', t: 'Yesterday 08:00' },
+      ].map((l, i) => (
+        <div key={i} className="flex items-center justify-between py-1.5">
+          <span className="text-xs text-zinc-500">Morning chai</span>
+          <span className="flex items-center gap-2">
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${l.c}`}>{l.a}</span>
+            <span className="text-[10px] text-zinc-400">{l.t}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /* ── feature data ──────────────────────────────────────────────────────── */
 const FEATURES = [
   {
@@ -197,6 +233,18 @@ const FEATURES = [
       'Monthly budgets and planning',
       'Shared group finances split between members',
       'Clear dashboards and trends',
+    ],
+  },
+  {
+    id: 'recurring', tag: 'AUTOMATION', accent: '#0891b2', icon: Repeat, Viz: RemindersViz,
+    title: 'Recurring & smart reminders',
+    lead: 'Set things that repeat — subscriptions, regular buys, or daily stock usage — and let OpenLedger keep them on track.',
+    points: [
+      'Run at one or many times a day (e.g. morning & evening)',
+      'Auto-deduct recurring usage straight from your stock',
+      'Push reminders: silent, notify, or ask-first with Yes / Snooze / Skip',
+      'Confirm or snooze right from the notification',
+      'Activity log tracks how well you follow each recurring',
     ],
   },
 ]

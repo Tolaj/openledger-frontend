@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight, ArrowUpRight, Check, Sparkles, Menu, X, Plus,
   TrendingUp, TrendingDown, Boxes, AlertTriangle,
-  ScanLine, FileText, ShoppingCart, Send, Download, Smartphone,
+  ScanLine, FileText, ShoppingCart, Send, Download, Smartphone, Repeat, Bell, Clock,
 } from 'lucide-react'
 import AppLogo from '../components/ui/AppLogo'
 import { getDeferredPrompt, clearDeferredPrompt, onInstallAvailable } from '../lib/pwa'
@@ -558,6 +558,33 @@ export default function Landing() {
               <div className="inline-flex w-fit items-center gap-2 text-[11px] font-mono font-bold tracking-wider px-2.5 py-1 rounded-full border border-amber-200 bg-amber-50 text-amber-600 mb-4"><TrendingUp size={12} /> FINANCE</div>
               <h3 className="text-lg font-black tracking-[-0.02em] mb-3">Your numbers, clear.</h3>
               <FinanceMini />
+            </Cell>
+
+            {/* Recurring & reminders — full width */}
+            <Cell span="md:col-span-4 md:row-span-1" pad="p-7 md:p-8" glow="rgba(8,145,178,0.06)">
+              <div className="flex flex-col md:flex-row md:items-center gap-6">
+                <div className="flex-1">
+                  <div className="inline-flex w-fit items-center gap-2 text-[11px] font-mono font-bold tracking-wider px-2.5 py-1 rounded-full border border-cyan-200 bg-cyan-50 text-cyan-700 mb-4"><Repeat size={12} /> RECURRING</div>
+                  <h3 className="text-xl md:text-2xl font-black tracking-[-0.03em] mb-2">Set it once. It keeps itself honest.</h3>
+                  <p className="text-sm text-zinc-500 leading-relaxed max-w-md">Recurring buys and daily stock usage — at the times you choose. Get a push to confirm, snooze or skip, and track how well you follow through.</p>
+                </div>
+                <div className="w-full md:w-72 shrink-0">
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3.5">
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-zinc-900 flex items-center justify-center"><Bell size={13} className="text-white" /></div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-900 leading-tight">Use stock for "Morning chai"?</p>
+                        <p className="text-[10px] text-zinc-400 leading-tight">Milk: 250 ml · Tea: 10 g</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="text-[10px] font-semibold text-center py-1.5 rounded-lg bg-zinc-900 text-white">Yes</div>
+                      <div className="text-[10px] font-semibold text-center py-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-600 flex items-center justify-center gap-1"><Clock size={10} /> 1h</div>
+                      <div className="text-[10px] font-semibold text-center py-1.5 rounded-lg bg-white border border-zinc-200 text-zinc-600">Skip</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </Cell>
           </Mosaic>
         </Reveal>
