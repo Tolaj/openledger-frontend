@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Trash2, ShoppingBasket, Package, TrendingUp, TrendingDown, Plus, ChevronDown, Pencil } from 'lucide-react'
+import { Trash2, ShoppingBasket, Package, TrendingUp, TrendingDown, Plus, ChevronDown, Pencil, Check, X, Clock, Bell, Zap, History } from 'lucide-react'
 import DataTable, { DataTableMobileFilters, DataTableFilterIcon } from '../components/ui/DataTable'
 import BottomSheet from '../components/ui/BottomSheet'
 import TopBar from '../components/layout/TopBar'
@@ -12,6 +12,7 @@ import Spinner from '../components/ui/Spinner'
 import Button from '../components/ui/Button'
 import { useInventory, useDeleteInventory, useUpdateInventory } from '../hooks/useInventory'
 import { useStockMovements, useCreateAdjustment } from '../hooks/useStockMovements'
+import { useRecurringLogs } from '../hooks/useRecurring'
 import { useProducts } from '../hooks/useProducts'
 import useCartStore from '../store/cartStore'
 import useGroupStore from '../store/groupStore'
@@ -26,7 +27,86 @@ const ALL_TABS = [
   { key: 'levels',      label: 'Levels'      },
   { key: 'movements',   label: 'Movements'   },
   { key: 'adjustments', label: 'Adjustments' },
+  { key: 'activity',    label: 'Activity'    },
 ]
+
+// Recurring notification action → label, colour, icon
+const ACTION_META = {
+  auto:      { label: 'Auto-deducted', variant: 'default', icon: Zap,   chip: 'bg-zinc-100 text-zinc-600' },
+  notified:  { label: 'Deducted',      variant: 'success', icon: Check, chip: 'bg-emerald-50 text-emerald-600' },
+  confirmed: { label: 'Confirmed',     variant: 'success', icon: Check, chip: 'bg-emerald-50 text-emerald-600' },
+  asked:     { label: 'Asked',         variant: 'warning', icon: Bell,  chip: 'bg-blue-50 text-blue-600' },
+  snoozed:   { label: 'Snoozed',       variant: 'warning', icon: Clock, chip: 'bg-amber-50 text-amber-600' },
+  skipped:   { label: 'Skipped',       variant: 'danger',  icon: X,     chip: 'bg-red-50 text-red-500' },
+  expired:   { label: 'Missed',        variant: 'danger',  icon: X,     chip: 'bg-red-50 text-red-500' },
+}
+
+function fmtWhen(d) {
+  if (!d) return '—'
+  return new Date(d).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function ActivityTab() {
+  const { data: logs = [], isLoading } = useRecurringLogs()
+
+  if (isLoading) return <Spinner className="py-12" />
+  if (!logs.length) return (
+    <EmptyState icon={History} title="No activity yet"
+      description="Actions on your recurring stock reminders — confirmed, snoozed or skipped — will show up here." />
+  )
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Mobile */}
+      <div className="flex flex-col gap-2 md:hidden pb-6">
+        {logs.map((l) => {
+          const m = ACTION_META[l.action] || ACTION_META.auto
+          const Icon = m.icon
+          return (
+            <div key={l._id} className="bg-white rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.07)] px-3 py-3 flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.chip}`}><Icon size={17} /></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-zinc-900 truncate">{l.recurringName || 'Recurring'}</p>
+                <p className="text-xs text-zinc-400 truncate">{l.summary || fmtWhen(l.scheduledFor)}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <Badge variant={m.variant}>{m.label}</Badge>
+                <p className="text-[10px] text-zinc-400 mt-1">{fmtWhen(l.createdAt)}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Desktop */}
+      <div className="hidden md:block bg-white rounded-2xl border border-zinc-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-50 text-zinc-500">
+            <tr>
+              <th className="text-left font-medium px-4 py-2.5">Recurring</th>
+              <th className="text-left font-medium px-4 py-2.5">Action</th>
+              <th className="text-left font-medium px-4 py-2.5">Detail</th>
+              <th className="text-left font-medium px-4 py-2.5">When</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((l) => {
+              const m = ACTION_META[l.action] || ACTION_META.auto
+              return (
+                <tr key={l._id} className="border-t border-zinc-100 hover:bg-zinc-50 transition-colors">
+                  <td className="px-4 py-2.5 font-medium text-zinc-900">{l.recurringName || 'Recurring'}</td>
+                  <td className="px-4 py-2.5"><Badge variant={m.variant}>{m.label}</Badge></td>
+                  <td className="px-4 py-2.5 text-zinc-500">{l.summary || '—'}</td>
+                  <td className="px-4 py-2.5 text-zinc-500">{fmtWhen(l.createdAt)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
 
 function stockStatus(qty) {
   if (qty <= 0)                   return { label: 'Out of Stock', variant: 'danger'  }
@@ -612,8 +692,9 @@ export default function Stock() {
   const canSeeAdjustments = usePermission('stock', 'adjustment',  'view')
   const canAddAdjustment  = usePermission('stock', 'adjustment',  'add')
 
-  // Personal groups: no permission gating, show all tabs
+  // Activity (recurring action log) is a personal-group feature only
   const TABS = ALL_TABS.filter((t) => {
+    if (t.key === 'activity')    return !isBusiness
     if (!isBusiness) return true
     if (t.key === 'levels')      return canSeeLevels
     if (t.key === 'movements')   return canSeeMovements
@@ -621,7 +702,7 @@ export default function Stock() {
     return true
   })
 
-  const hasFilters = tab !== 'adjustments'
+  const hasFilters = tab !== 'adjustments' && tab !== 'activity'
   const addBtn = tab === 'adjustments' && canAddAdjustment
     ? <Button size="sm" onClick={() => onAddRef.current?.()}><Plus size={16} /> New Adjustment</Button>
     : null
@@ -650,6 +731,7 @@ export default function Stock() {
           {tab === 'levels'      && <LevelsTab      mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} groupMembers={groupMembers} />}
           {tab === 'movements'   && <MovementsTab   mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} />}
           {tab === 'adjustments' && <AdjustmentsTab onAdd={onAddRef} />}
+          {tab === 'activity'    && <ActivityTab />}
         </div>
       </div>
     </>

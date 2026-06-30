@@ -14,6 +14,15 @@ export function useRecurring() {
   })
 }
 
+export function useRecurringLogs() {
+  const gid = useGroupStore((s) => s.activeGroupId)
+  return useQuery({
+    queryKey: ['recurring-logs', gid],
+    queryFn: () => api.getRecurringLogs(gid).then((r) => r.data),
+    enabled: !!gid,
+  })
+}
+
 export function useCreateRecurring() {
   const qc  = useQueryClient()
   const gid = useGroupStore((s) => s.activeGroupId)
