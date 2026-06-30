@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
-import { Trash2, ShoppingBasket, Package, TrendingUp, TrendingDown, Plus, ChevronDown } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { Trash2, ShoppingBasket, Package, TrendingUp, TrendingDown, Plus, ChevronDown, Pencil } from 'lucide-react'
 import DataTable, { DataTableMobileFilters, DataTableFilterIcon } from '../components/ui/DataTable'
 import BottomSheet from '../components/ui/BottomSheet'
 import TopBar from '../components/layout/TopBar'
@@ -9,12 +10,12 @@ import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Spinner from '../components/ui/Spinner'
 import Button from '../components/ui/Button'
-import { useInventory, useDeleteInventory } from '../hooks/useInventory'
+import { useInventory, useDeleteInventory, useUpdateInventory } from '../hooks/useInventory'
 import { useStockMovements, useCreateAdjustment } from '../hooks/useStockMovements'
 import { useProducts } from '../hooks/useProducts'
 import useCartStore from '../store/cartStore'
 import useGroupStore from '../store/groupStore'
-import { useGroup } from '../hooks/useGroups'
+import { useGroup, useGroups } from '../hooks/useGroups'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import { usePermission } from '../hooks/usePermission'
 
@@ -49,7 +50,7 @@ const LEVEL_COLS = [
   { key: 'action',   label: 'action' },
 ]
 
-function LevelMobileCard({ inv, sym, groupMembers, onDelete, onAddToCart }) {
+function LevelMobileCard({ inv, sym, groupMembers, onDelete, onAddToCart, onAdjust }) {
   const [isOpen, setIsOpen] = useState(false)
   const { label, variant } = stockStatus(inv.quantityAvailable ?? 0)
   const stockVal = (inv.quantityAvailable ?? 0) * (inv.price || 0)
@@ -69,6 +70,11 @@ function LevelMobileCard({ inv, sym, groupMembers, onDelete, onAddToCart }) {
           <button onClick={() => onAddToCart(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700 ml-1">
             <ShoppingBasket size={17} />
           </button>
+          {onAdjust && (
+            <button onClick={() => onAdjust(inv)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-zinc-700" title="Adjust stock">
+              <Pencil size={17} />
+            </button>
+          )}
           <button onClick={() => onDelete(inv._id)} className="px-1 py-2 rounded-xl text-zinc-400 active:bg-zinc-100 hover:text-red-500">
             <Trash2 size={17} />
           </button>
@@ -105,14 +111,21 @@ function LevelMobileCard({ inv, sym, groupMembers, onDelete, onAddToCart }) {
   )
 }
 
-function LevelsTab({ mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers }) {
+function LevelsTab({ mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers, allowAdjust = false }) {
   const sym = useCurrencySymbol()
   const { data: inventory = [], isLoading } = useInventory()
   const { mutate: deleteInventory } = useDeleteInventory()
+  const updateInventory = useUpdateInventory()
   const { addItem } = useCartStore()
 
   const [filters, setFilters] = useState({ product: '', category: '', qty: '', status: '' })
   const [dropSel, setDropSel] = useState({})
+  const [adjustSheet, setAdjustSheet] = useState(null) // { inv, draft }
+  const openAdjust = (inv) => setAdjustSheet({ inv, draft: inv.quantityAvailable ?? 0 })
+  const saveAdjust = async () => {
+    await updateInventory.mutateAsync({ id: adjustSheet.inv._id, data: { quantityAvailable: Number(adjustSheet.draft) } })
+    setAdjustSheet(null)
+  }
 
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
   const getDrop   = (key)   => dropSel[key] || []
@@ -155,6 +168,7 @@ function LevelsTab({ mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers 
           <LevelMobileCard key={inv._id} inv={inv} sym={sym} groupMembers={groupMembers}
             onDelete={(id) => { if (confirm('Delete this stock entry?')) deleteInventory(id) }}
             onAddToCart={(inv) => addItem({ ...inv.product, price: inv.price }, inv.product?.unit, 'equal', groupMembers, groupMembers)}
+            onAdjust={allowAdjust ? openAdjust : undefined}
           />
         ))}
       </div>
@@ -191,6 +205,12 @@ function LevelsTab({ mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers 
                     className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Add to cart">
                     <ShoppingBasket size={14} />
                   </button>
+                  {allowAdjust && (
+                    <button onClick={() => openAdjust(inv)}
+                      className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Adjust stock">
+                      <Pencil size={14} />
+                    </button>
+                  )}
                   <button onClick={() => { if (confirm('Delete this stock entry?')) deleteInventory(inv._id) }}
                     className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Delete">
                     <Trash2 size={14} />
@@ -201,6 +221,35 @@ function LevelsTab({ mobileFiltersOpen, onMobileFiltersOpenChange, groupMembers 
           )
         }}
       />
+
+      {/* Adjust stock sheet (personal) */}
+      {adjustSheet && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setAdjustSheet(null)} />
+          <div className="relative bg-white w-full max-w-sm rounded-2xl shadow-2xl p-5">
+            <p className="text-base font-semibold text-zinc-900 mb-1">Adjust Stock</p>
+            <p className="text-sm text-zinc-500 mb-4">{adjustSheet.inv.product?.name}</p>
+            <div className="flex items-center gap-3 mb-5">
+              <button onClick={() => setAdjustSheet((s) => ({ ...s, draft: Math.max(0, Number(s.draft) - 1) }))}
+                className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-900 text-xl font-bold flex items-center justify-center active:bg-zinc-200">−</button>
+              <input type="number" min="0" value={adjustSheet.draft}
+                onChange={(e) => setAdjustSheet((s) => ({ ...s, draft: e.target.value }))}
+                className="flex-1 h-10 text-center text-lg font-bold border border-zinc-300 rounded-xl outline-none focus:border-zinc-900" />
+              <button onClick={() => setAdjustSheet((s) => ({ ...s, draft: Number(s.draft) + 1 }))}
+                className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-900 text-xl font-bold flex items-center justify-center active:bg-zinc-200">+</button>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setAdjustSheet(null)}
+                className="flex-1 h-11 rounded-xl border border-zinc-200 text-sm font-medium text-zinc-700">Cancel</button>
+              <button onClick={saveAdjust} disabled={updateInventory.isPending}
+                className="flex-1 h-11 rounded-xl bg-zinc-900 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center">
+                {updateInventory.isPending ? <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }
@@ -555,12 +604,17 @@ export default function Stock() {
   const { data: group } = useGroup(activeGroupId)
   const groupMembers = (group?.members || []).map((m) => String(m._id || m))
 
+  const { data: groups = [] } = useGroups()
+  const isBusiness = groups.find((g) => g._id === activeGroupId)?.type === 'business'
+
   const canSeeLevels      = usePermission('stock', 'levels',      'view')
   const canSeeMovements   = usePermission('stock', 'movements',   'view')
   const canSeeAdjustments = usePermission('stock', 'adjustment',  'view')
   const canAddAdjustment  = usePermission('stock', 'adjustment',  'add')
 
+  // Personal groups: no permission gating, show all tabs
   const TABS = ALL_TABS.filter((t) => {
+    if (!isBusiness) return true
     if (t.key === 'levels')      return canSeeLevels
     if (t.key === 'movements')   return canSeeMovements
     if (t.key === 'adjustments') return canSeeAdjustments
@@ -585,10 +639,12 @@ export default function Stock() {
       />
 
       <div className="px-4 pt-0 pb-4 md:px-0 md:py-0 md:pb-4 md:flex md:flex-col md:flex-1 md:min-h-0">
-        <div className="flex items-center gap-3 flex-shrink-0 py-2 sticky z-20 -mx-4 px-4 bg-[#f5f5f5] md:static md:bg-transparent md:mx-0 md:px-0 md:py-0 md:mb-4 md:justify-between" style={{ top: "calc(3.5rem + env(safe-area-inset-top, 0px))" }}>
-          <Tabs tabs={TABS} active={tab} onChange={setTab} />
-          <PageActions add={addBtn} />
-        </div>
+        {(TABS.length > 1 || addBtn) && (
+          <div className="flex items-center gap-3 flex-shrink-0 py-2 sticky z-20 -mx-4 px-4 bg-[#f5f5f5] md:static md:bg-transparent md:mx-0 md:px-0 md:py-0 md:mb-4 md:justify-between" style={{ top: "calc(3.5rem + env(safe-area-inset-top, 0px))" }}>
+            {TABS.length > 1 ? <Tabs tabs={TABS} active={tab} onChange={setTab} /> : <span />}
+            <PageActions add={addBtn} />
+          </div>
+        )}
 
         <div className="md:flex-1 md:min-h-0 md:flex md:flex-col">
           {tab === 'levels'      && <LevelsTab      mobileFiltersOpen={mobileFiltersOpen} onMobileFiltersOpenChange={setMobileFiltersOpen} groupMembers={groupMembers} />}

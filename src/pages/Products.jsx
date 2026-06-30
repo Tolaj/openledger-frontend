@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { createPortal } from 'react-dom'
-import { Plus, Tag, Heart, Package, ShoppingCart, Pencil, Trash2, ShoppingBasket, ChevronDown, Check, ClipboardList, Filter, RefreshCw, Minus, Repeat } from 'lucide-react'
+import { Plus, Tag, Heart, Package, ShoppingCart, Pencil, Trash2, ShoppingBasket, ChevronDown, Check, ClipboardList, Filter, RefreshCw, Minus, Repeat, Boxes, BellOff, Bell, BellRing } from 'lucide-react'
 import DataTable, { DataTableFilterIcon, DataTableMobileFilters } from '../components/ui/DataTable'
 import Tabs from '../components/ui/Tabs'
 import TopBar from '../components/layout/TopBar'
@@ -33,6 +33,31 @@ import useGroupStore from '../store/groupStore'
 import useWishlistStore from '../store/wishlistStore'
 import { useGroup, useGroups } from '../hooks/useGroups'
 import { usePermission } from '../hooks/usePermission'
+import { ensurePushSubscribed } from '../lib/pushNotifications'
+import { toast } from '../store/toastStore'
+
+// ── OptionCard — radio styled as a selectable card with icon ─────────────────
+function OptionCard({ register, name, value, icon: Icon, title, tag, desc }) {
+  return (
+    <label className="group/opt flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 cursor-pointer transition-colors hover:border-zinc-300 has-[:checked]:border-zinc-900 has-[:checked]:bg-zinc-50/60">
+      <span className="w-9 h-9 rounded-lg bg-zinc-100 text-zinc-500 flex items-center justify-center shrink-0 transition-colors group-has-[:checked]/opt:bg-zinc-900 group-has-[:checked]/opt:text-white">
+        <Icon size={17} />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-semibold text-zinc-900 leading-tight">
+          {title}{tag && <span className="font-normal text-zinc-400"> ({tag})</span>}
+        </span>
+        <span className="block text-xs text-zinc-400 mt-0.5 leading-snug">{desc}</span>
+      </span>
+      <input
+        type="radio"
+        value={value}
+        {...register(name)}
+        className="shrink-0 appearance-none w-5 h-5 rounded-full border-2 border-zinc-300 bg-white cursor-pointer transition-colors checked:border-zinc-900 checked:bg-zinc-900 checked:shadow-[inset_0_0_0_3px_#ffffff] focus:outline-none"
+      />
+    </label>
+  )
+}
 
 // ── InlineNumber — click to edit ─────────────────────────────────────────────
 function InlineNumber({ value, onCommit, format = (v) => v }) {
@@ -1512,7 +1537,6 @@ const PERSONAL_TABS = [
   { key: 'products',  label: 'Products',  mobileLabel: 'Items'     },
   { key: 'category',  label: 'Category',  mobileLabel: 'Category'  },
   { key: 'wishlist',  label: 'Wish List', mobileLabel: 'Wishlist'  },
-  { key: 'stock',     label: 'Stock',     mobileLabel: 'Stock'     },
   { key: 'recurring', label: 'Recurring', mobileLabel: 'Recurring' },
   { key: 'orders',    label: 'Orders',    mobileLabel: 'Orders'    },
 ]
@@ -1544,12 +1568,14 @@ function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFilter
   const [statusSheet, setStatusSheet] = useState(null)
   const [filters, setFilters]         = useState({ name: '', frequency: '', status: '' })
   const [dropSel, setDropSel]         = useState({})
+  const [times, setTimes]             = useState(['09:00'])  // times of day to run/notify
 
   const { register, handleSubmit, reset, control, watch, setValue, formState: { errors } } = useForm({
-    defaultValues: { frequency: 'monthly', status: 'active', autoCreate: false, items: [] },
+    defaultValues: { frequency: 'monthly', status: 'active', runAction: 'order', notifyMode: 'none', items: [] },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchedItems = watch('items') || []
+  const runAction = watch('runAction')
   const calcAmount = (idx) => {
     const it = watchedItems[idx] || {}
     return (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0)
@@ -1568,7 +1594,8 @@ function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFilter
 
   const openCreate = () => {
     setEditing(null)
-    reset({ frequency: 'monthly', status: 'active', autoCreate: false, items: [] })
+    reset({ frequency: 'monthly', status: 'active', runAction: 'order', notifyMode: 'none', items: [] })
+    setTimes(['09:00'])
     setSheetOpen(true)
   }
   if (onAdd) onAdd.current = openCreate
@@ -1576,11 +1603,18 @@ function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFilter
     setEditing(r)
     reset({
       ...r,
+      runAction: r.deductStock ? 'stock' : 'order',
+      notifyMode: r.notifyMode || 'none',
       nextRunDate: r.nextRunDate ? new Date(r.nextRunDate).toISOString().slice(0, 10) : '',
       items: r.items || [],
     })
+    const hhmm = r.nextRunDate ? new Date(r.nextRunDate).toTimeString().slice(0, 5) : '09:00'
+    setTimes(r.times?.length ? r.times : [hhmm])
     setSheetOpen(true)
   }
+  const addTime    = () => setTimes((t) => [...t, '18:00'])
+  const setTimeAt  = (i, v) => setTimes((t) => t.map((x, k) => (k === i ? v : x)))
+  const removeTime = (i) => setTimes((t) => (t.length > 1 ? t.filter((_, k) => k !== i) : t))
   const close = () => { setSheetOpen(false); setEditing(null) }
 
   const setFilter = (k, v) => setFilters((f) => ({ ...f, [k]: v }))
@@ -1599,8 +1633,23 @@ function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFilter
         taxRate:     parseFloat(it.taxRate) || 0,
         amount:      (parseFloat(it.qty) || 0) * (parseFloat(it.unitPrice) || 0),
       }))
-      const payload = { ...data, items, grandTotal: items.reduce((s, it) => s + it.amount, 0) }
+      const cleanTimes = [...new Set((times || []).filter(Boolean))].sort()
+      const payload = {
+        ...data,
+        items,
+        grandTotal: items.reduce((s, it) => s + it.amount, 0),
+        autoCreate:  data.runAction === 'order',
+        deductStock: data.runAction === 'stock',
+        notifyMode:  data.runAction === 'stock' ? (data.notifyMode || 'none') : 'none',
+        times:       cleanTimes.length ? cleanTimes : ['09:00'],
+      }
+      delete payload.runAction
       delete payload.recipient
+      // If this recurring wants notifications, make sure this device is subscribed to push
+      if (payload.deductStock && payload.notifyMode !== 'none') {
+        const ok = await ensurePushSubscribed()
+        if (!ok) toast.error('Enable notifications to receive recurring alerts on this device')
+      }
       if (editing) await updateRecurring.mutateAsync({ id: editing._id, data: payload })
       else         await createRecurring.mutateAsync(payload)
       close()
@@ -1640,6 +1689,7 @@ function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFilter
               <div className="flex flex-col items-end gap-1">
                 <Badge variant={REC_STATUS_VARIANT[r.status] || 'default'}>{r.status}</Badge>
                 <Badge variant="default">{REC_FREQ_LABELS[r.frequency] || r.frequency}</Badge>
+                {r.deductStock && <Badge variant="warning">Deducts stock</Badge>}
               </div>
             </div>
             <div className="flex items-center justify-between">
@@ -1716,10 +1766,34 @@ function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFilter
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-zinc-700">Next Run Date *</label>
+              <label className="text-sm font-medium text-zinc-700">Start Date *</label>
               <input type="date" {...register('nextRunDate', { required: true })}
                 className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900" />
             </div>
+          </div>
+
+          {/* Times of day */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-zinc-700">Run at</label>
+              <button type="button" onClick={addTime} className="text-xs text-zinc-500 hover:text-zinc-900 flex items-center gap-1">
+                <Plus size={13} /> Add time
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              {times.map((t, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input type="time" value={t} onChange={(e) => setTimeAt(i, e.target.value)}
+                    className="h-11 flex-1 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900" />
+                  {times.length > 1 && (
+                    <button type="button" onClick={() => removeTime(i)} className="w-9 h-9 rounded-xl text-zinc-400 hover:text-red-500 flex items-center justify-center">
+                      <Minus size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-400">Add more than one to run several times a day — e.g. a morning and an evening reminder.</p>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -1789,10 +1863,25 @@ function PersonalRecurringTab({ products = [], mobileFiltersOpen, onMobileFilter
             )}
           </div>
 
-          <div className="flex items-center gap-3 py-1">
-            <input type="checkbox" id="recAutoCreate" {...register('autoCreate')} className="w-4 h-4 rounded border-zinc-300 accent-zinc-900" />
-            <label htmlFor="recAutoCreate" className="text-sm text-zinc-700">Auto-create order on schedule</label>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400">On each run</label>
+            <OptionCard register={register} name="runAction" value="order" icon={ShoppingCart}
+              title="Create an order" tag="replenish" desc="Logs an order/expense for these items each run." />
+            <OptionCard register={register} name="runAction" value="stock" icon={Boxes}
+              title="Deduct from stock" tag="consume" desc="Subtracts these quantities from inventory each run (clamped at 0)." />
           </div>
+
+          {runAction === 'stock' && (
+            <div className="flex flex-col gap-2 rounded-2xl bg-zinc-50 border border-zinc-100 p-3">
+              <label className="text-xs font-semibold uppercase tracking-wider text-zinc-400 px-1">Notification</label>
+              <OptionCard register={register} name="notifyMode" value="none" icon={BellOff}
+                title="Deduct silently" desc="No notification — just consume the stock." />
+              <OptionCard register={register} name="notifyMode" value="notify" icon={Bell}
+                title="Notify me" tag="no confirmation" desc="Consume the stock, then send a push letting you know." />
+              <OptionCard register={register} name="notifyMode" value="confirm" icon={BellRing}
+                title="Ask first" tag="confirm via push" desc="Send a Yes / No notification — stock is deducted only if you tap Yes." />
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-zinc-700">Notes</label>

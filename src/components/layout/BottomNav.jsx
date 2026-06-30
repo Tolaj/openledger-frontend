@@ -76,6 +76,7 @@ export default function BottomNav() {
   } else {
     buttons.push({ type: 'nav', to: '/dashboard', icon: Home, exact: true })
     buttons.push({ type: 'nav', to: '/products', icon: Tag })
+    buttons.push({ type: 'nav', to: '/stock', icon: Boxes })
     buttons.push({ type: 'nav', to: '/finance', icon: CreditCard })
     buttons.push({ type: 'nav', to: '/settings', icon: Settings })
   }

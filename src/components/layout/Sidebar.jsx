@@ -12,6 +12,7 @@ import { usePagePermission } from '../../hooks/usePermission'
 const PERSONAL_NAV = [
   { to: '/',         icon: Home,       label: 'Dashboard', exact: true },
   { to: '/products', icon: Tag,        label: 'Products'               },
+  { to: '/stock',    icon: Boxes,      label: 'Stock'                  },
   { to: '/finance',  icon: CreditCard, label: 'Finance'                },
 ]
 
