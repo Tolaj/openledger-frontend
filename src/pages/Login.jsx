@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { login } from '../api/auth'
+import queryClient from '../lib/queryClient'
 import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
@@ -20,6 +21,7 @@ export default function Login() {
     onSuccess: (res) => {
       clearSession()
       clearGroup()
+      queryClient.clear()
       setSession(res.data.user, res.data.token)
       navigate('/dashboard', { replace: true })
     },

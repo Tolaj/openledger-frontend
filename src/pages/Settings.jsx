@@ -504,6 +504,7 @@ function timeAgo(date) {
 // ── Profile Tab ───────────────────────────────────────────────────────────────
 function ProfileTab({ isBusiness }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { clearSession } = useAuthStore()
   const { clearGroup } = useGroupStore()
   const { data: me, isLoading } = useMe()
@@ -529,7 +530,7 @@ function ProfileTab({ isBusiness }) {
 
   const { mutate: logoutFn, isPending: loggingOut } = useMutation({
     mutationFn: logout,
-    onSuccess: () => { clearGroup(); clearSession(); navigate('/login', { replace: true }) },
+    onSuccess: () => { clearGroup(); clearSession(); queryClient.clear(); navigate('/login', { replace: true }) },
   })
 
   const onSave    = (data) => updateUser({ id: me._id, data })
