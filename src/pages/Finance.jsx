@@ -33,6 +33,7 @@ import { useCurrencySymbol } from '../hooks/useCurrency'
 import { useIsBusiness } from '../hooks/useActiveGroupType'
 import { usePermission } from '../hooks/usePermission'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays, parseISO } from 'date-fns'
+import { useLocation } from 'react-router-dom';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PERSONAL_TABS = [
@@ -1806,10 +1807,12 @@ function DebtsTab({ groupId, symbol, currentUserId, isBusiness }) {
 
 // ── Main Finance Page ─────────────────────────────────────────────────────────
 export default function Finance() {
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useState('transactions')
   const [period, setPeriod] = useState('month')
   const [custom, setCustom] = useState({ start: '', end: '' })
-  const [showAddTxn, setShowAddTxn] = useState(false)
+
+  // console.log(useLocation().state?.openAddTransaction);ˀ
+  const [showAddTxn, setShowAddTxn] = useState(useLocation().state?.openAddTransaction || false)
   const [showAddBudget, setShowAddBudget] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
@@ -1848,6 +1851,8 @@ export default function Finance() {
 
   const filterTabs = ['overview', 'transactions']
   const activeCount = period !== 'month' ? 1 : 0
+
+  
 
   return (
     <>

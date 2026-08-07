@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes, BarChart2, Sparkles } from 'lucide-react'
+import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes, BarChart2, Sparkles, Banknote } from 'lucide-react'
 import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
 import { usePagePermission } from '../../hooks/usePermission'
@@ -75,9 +75,9 @@ export default function BottomNav() {
     buttons.push({ type: 'nav', to: '/settings', icon: Settings })
   } else {
     buttons.push({ type: 'nav', to: '/dashboard', icon: Home, exact: true })
+    buttons.push({ type: 'nav', to: '/finance', icon: Banknote})
     buttons.push({ type: 'nav', to: '/products', icon: Tag })
     buttons.push({ type: 'nav', to: '/stock', icon: Boxes })
-    buttons.push({ type: 'nav', to: '/finance', icon: CreditCard })
     buttons.push({ type: 'nav', to: '/settings', icon: Settings })
   }
   if (aiEnabled) buttons.push({ type: 'ai' })
