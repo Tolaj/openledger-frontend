@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes, BarChart2, Sparkles, Banknote } from 'lucide-react'
+import { Home, Tag, CreditCard, Settings, ShoppingCart, TrendingUp, Boxes, BarChart2, Sparkles, Wallet } from 'lucide-react'
 import useGroupStore from '../../store/groupStore'
 import { useGroups } from '../../hooks/useGroups'
 import { usePagePermission } from '../../hooks/usePermission'
@@ -17,7 +17,7 @@ function pageWidth(count) {
 }
 
 
-function NavBtn({ to, icon: Icon, exact }) {
+function NavBtn({ to, icon: Icon, exact, rotate }) {
   return (
     <NavLink to={to} end={exact}>
       {({ isActive }) => (
@@ -26,7 +26,8 @@ function NavBtn({ to, icon: Icon, exact }) {
           isActive ? 'bg-zinc-900 shadow-sm' : 'hover:bg-zinc-50 active:bg-zinc-100',
         ].join(' ')}>
           <Icon size={20} strokeWidth={isActive ? 2.2 : 1.8}
-            className={isActive ? 'text-white' : 'text-zinc-400'} />
+            className={isActive ? 'text-white' : 'text-zinc-400'}
+            style={rotate ? { transform: 'rotate(-45deg)' } : undefined} />
         </div>
       )}
     </NavLink>
@@ -75,7 +76,7 @@ export default function BottomNav() {
     buttons.push({ type: 'nav', to: '/settings', icon: Settings })
   } else {
     buttons.push({ type: 'nav', to: '/dashboard', icon: Home, exact: true })
-    buttons.push({ type: 'nav', to: '/finance', icon: Banknote})
+    buttons.push({ type: 'nav', to: '/finance', icon: Wallet })
     buttons.push({ type: 'nav', to: '/products', icon: Tag })
     buttons.push({ type: 'nav', to: '/stock', icon: Boxes })
     buttons.push({ type: 'nav', to: '/settings', icon: Settings })
@@ -97,7 +98,7 @@ export default function BottomNav() {
 
   function renderBtn(btn) {
     if (btn.type === 'ai') return <AiBtn key="ai" />
-    return <NavBtn key={btn.to} to={btn.to} icon={btn.icon} exact={btn.exact} />
+    return <NavBtn key={btn.to} to={btn.to} icon={btn.icon} exact={btn.exact} rotate={btn.rotate} />
   }
 
   return (

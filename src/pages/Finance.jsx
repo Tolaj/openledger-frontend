@@ -1289,13 +1289,12 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
   const filtered = useMemo(() => txns.filter((t) => {
     if (!inDrop('type', TYPE_META[t.type]?.label || t.type)) return false
     if (!inText('description', t.description)) return false
-    // category filter: match if ANY category on the txn matches
     if (dropSel.category?.length) {
       const cats = txnCategories(t).map((c) => c.name)
       if (!dropSel.category.some((sel) => cats.includes(sel))) return false
     }
     return true
-  }), [txns, filters, dropSel])
+  }).sort((a, b) => new Date(b.date) - new Date(a.date)), [txns, filters, dropSel])
 
   // Collect all category names for dropdown filter
   const allCategoryNames = useMemo(() => {
@@ -2070,12 +2069,12 @@ export default function Finance() {
           <div className="flex items-center">
             {tab === 'transactions' && canAddTransactions && (
               <button onClick={() => setShowAddTxn(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
-                <Plus size={20} className="text-zinc-600" />
+                <Plus size={20} />
               </button>
             )}
             {tab === 'budgets' && canAddBudgets && (
               <button onClick={() => setShowAddBudget(true)} className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-900 text-white active:bg-zinc-700 transition-colors">
-                <Plus size={20} className="text-zinc-600" />
+                <Plus size={20} />
               </button>
             )}
           </div>
