@@ -27,7 +27,7 @@ import { useSalesInvoices } from '../hooks/useSalesInvoices'
 import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
 import { useOrders } from '../hooks/useOrders'
 import { useGroups } from '../hooks/useGroups'
-import { useCategories } from '../hooks/useCategories'
+import { useCategories, useCreateCategory } from '../hooks/useCategories'
 import { useProducts } from '../hooks/useProducts'
 import { useCurrencySymbol } from '../hooks/useCurrency'
 import { useIsBusiness } from '../hooks/useActiveGroupType'
@@ -185,15 +185,142 @@ function FinanceMobileFilters({ open, period, setPeriod, custom, setCustom, type
   )
 }
 
+// ── Transaction Category Combobox ─────────────────────────────────────────────
+function TransactionCategoryCombobox({ categories = [], value, onChange, onCreate, creatingCat, hasError }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [rect, setRect] = useState(null)
+  const wrapRef = useRef(null)
+  const inputRef = useRef(null)
+
+  const selected = categories.find((c) => c._id === value)
+
+  useEffect(() => {
+    if (selected) setSearch(selected.name)
+  }, [selected])
+
+  useEffect(() => {
+    if (!open) return
+    const h = (e) => {
+      if (!wrapRef.current?.contains(e.target) && !document.getElementById('txn-cat-combo-portal')?.contains(e.target))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  const openDropdown = () => {
+    if (wrapRef.current) setRect(wrapRef.current.getBoundingClientRect())
+    setOpen(true)
+  }
+
+  const rawSearch = selected ? '' : search.trim()
+  const filtered = rawSearch
+    ? categories.filter((c) => c.name.toLowerCase().includes(rawSearch.toLowerCase()))
+    : categories
+
+  const exactMatch = rawSearch && categories.some((c) => c.name.toLowerCase() === rawSearch.toLowerCase())
+
+  const handleInput = (e) => {
+    setSearch(e.target.value)
+    if (selected) onChange('')
+    if (!open) openDropdown()
+  }
+
+  const handleSelect = (cat) => {
+    onChange(cat._id)
+    setOpen(false)
+  }
+
+  const handleCreate = () => {
+    if (!rawSearch || exactMatch) return
+    onCreate(rawSearch)
+    setOpen(false)
+  }
+
+  return (
+    <div ref={wrapRef}>
+      <div className="relative">
+        {selected?.icon && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base leading-none pointer-events-none">{selected.icon}</span>
+        )}
+        <input
+          ref={inputRef}
+          type="text"
+          value={search}
+          onChange={handleInput}
+          onFocus={openDropdown}
+          placeholder="Type or search category…"
+          className={[
+            'h-11 w-full px-3 text-sm border rounded-xl outline-none bg-white transition-colors',
+            selected?.icon ? 'pl-9' : '',
+            hasError ? 'border-red-300' : 'border-zinc-300',
+            open ? 'border-zinc-900' : '',
+          ].join(' ')}
+        />
+        {selected && (
+          <button type="button" onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { onChange(''); setSearch('') }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {open && rect && createPortal(
+        <div
+          id="txn-cat-combo-portal"
+          style={{
+            position: 'fixed',
+            left: rect.left,
+            width: rect.width,
+            zIndex: 9999,
+            maxHeight: 240,
+            ...(window.innerHeight - rect.bottom < 250
+              ? { bottom: window.innerHeight - rect.top + 4 }
+              : { top: rect.bottom + 4 }),
+          }}
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-y-auto"
+        >
+          {filtered.map((c) => (
+            <button key={c._id} type="button" onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleSelect(c)}
+              className={`w-full px-3 py-2.5 text-sm text-left hover:bg-zinc-50 flex items-center gap-2 border-b border-zinc-100 last:border-0 ${value === c._id ? 'bg-zinc-50 font-medium' : ''}`}>
+              {c.icon && <span className="text-base leading-none flex-shrink-0">{c.icon}</span>}
+              <span className="truncate">{c.name}</span>
+              {value === c._id && <CheckCircle2 size={14} className="ml-auto text-emerald-500 flex-shrink-0" />}
+            </button>
+          ))}
+          {filtered.length === 0 && !rawSearch && (
+            <p className="px-3 py-2.5 text-sm text-zinc-400">No categories yet</p>
+          )}
+          {rawSearch && !exactMatch && (
+            <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={handleCreate} disabled={creatingCat}
+              className="w-full px-3 py-2.5 text-sm text-left text-zinc-600 hover:bg-zinc-50 flex items-center gap-2 border-t border-zinc-200">
+              <Plus size={14} /> {creatingCat ? 'Creating…' : `Create "${rawSearch}"`}
+            </button>
+          )}
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 // ── Transaction Form ──────────────────────────────────────────────────────────
-function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], categories = [], symbol, isBusiness = false }) {
+function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], categories = [], symbol, isBusiness = false, currentUserId = '' }) {
   const { mutate: create, isPending: creating } = useCreateFinance()
   const { mutate: update, isPending: updating } = useUpdateFinance()
+  const { mutate: createCat, isPending: creatingCat } = useCreateCategory()
   const { data: products = [] } = useProducts()
   const { register, handleSubmit, watch, setValue, control, reset, formState: { errors } } = useForm({
-    defaultValues: { type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] },
+    defaultValues: { type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: currentUserId, splitAmong: [], items: [] },
   })
   const { fields: itemFields, append: appendItem, remove: removeItem } = useFieldArray({ control, name: 'items' })
+
+  const paidByBtnRef = useRef(null)
+  const [paidByDropOpen, setPaidByDropOpen] = useState(false)
+  const [paidByRect, setPaidByRect] = useState(null)
 
   const splitAmong = watch('splitAmong') || []
   const watchedItems = watch('items') || []
@@ -202,18 +329,28 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
   const paidBy = watch('paidBy')
   const hasItems = watchedItems.length > 0
 
-  // Auto-sum items → amount field whenever any item field changes
+  const prevItemsTotalRef = useRef(0)
+
   useEffect(() => {
-    if (!watchedItems.length) return
-    const total = watchedItems.reduce((sum, it) => {
+    if (!watchedItems.length) { prevItemsTotalRef.current = 0; return }
+    const newTotal = watchedItems.reduce((sum, it) => {
       const qty = parseFloat(it?.qty) || 0
       const unitPrice = parseFloat(it?.unitPrice) || 0
       const taxRate = parseFloat(it?.taxRate) || 0
       return sum + qty * unitPrice * (1 + taxRate / 100)
     }, 0)
-    setValue('amount', parseFloat(total.toFixed(2)), { shouldValidate: true })
+    const delta = parseFloat((newTotal - prevItemsTotalRef.current).toFixed(2))
+    prevItemsTotalRef.current = newTotal
+    if (delta !== 0) {
+      const current = parseFloat(watch('amount')) || 0
+      setValue('amount', parseFloat((current + delta).toFixed(2)), { shouldValidate: true })
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(watchedItems)])
+
+  useEffect(() => {
+    if (!open) prevItemsTotalRef.current = 0
+  }, [open])
 
   // when editing populate form
   useEffect(() => {
@@ -230,9 +367,30 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
         items: (editing.items || []).map((it) => ({ product: '', name: it.name || '', qty: it.qty || 1, unitPrice: it.amount && it.qty ? (it.amount / it.qty).toFixed(2) : it.amount || '', taxRate: 0, amount: it.amount || 0, category: it.category?._id || it.category || '' })),
       })
     } else {
-      reset({ type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: '', splitAmong: [], items: [] })
+      const defaultSplit = !isBusiness && groupMembers.length > 1
+        ? groupMembers.map((m) => ({ user: m._id, amount: 0 }))
+        : []
+      reset({ type: 'expense', amount: '', description: '', date: format(new Date(), 'yyyy-MM-dd'), category: '', paidBy: currentUserId, splitAmong: defaultSplit, items: [] })
     }
   }, [editing, open])
+
+  useEffect(() => {
+    if (!open) setPaidByDropOpen(false)
+  }, [open])
+
+  useEffect(() => {
+    if (!paidByDropOpen) return
+    const h = (e) => {
+      if (!paidByBtnRef.current?.contains(e.target) && !document.getElementById('paidby-drop-portal')?.contains(e.target)) setPaidByDropOpen(false)
+    }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [paidByDropOpen])
+
+  const openPaidByDrop = () => {
+    if (paidByBtnRef.current) setPaidByRect(paidByBtnRef.current.getBoundingClientRect())
+    setPaidByDropOpen(true)
+  }
 
   const toggleMember = (memberId) => {
     const exists = splitAmong.find((s) => s.user === memberId)
@@ -249,6 +407,14 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
     const share = amount / splitAmong.length
     setValue('splitAmong', splitAmong.map((s) => ({ ...s, amount: share })))
   }
+
+  useEffect(() => {
+    if (splitAmong.length > 0 && amount > 0) {
+      const share = amount / splitAmong.length
+      setValue('splitAmong', splitAmong.map((s) => ({ ...s, amount: share })))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amount])
 
   const onSubmit = (data) => {
     if (data.type === 'expense' && !data.category && !hasItems) {
@@ -320,35 +486,74 @@ function TransactionForm({ open, onClose, editing, groupId, groupMembers = [], c
             <label className="text-sm font-medium text-zinc-700">
               Category {watch('type') === 'expense' && <span className="text-red-500">*</span>}
             </label>
-            <select
-              value={watchedCategory || ''}
-              onChange={(e) => setValue('category', e.target.value, { shouldValidate: true })}
-              className={`h-11 px-3 rounded-xl border bg-white text-sm outline-none focus:border-zinc-900 ${watch('type') === 'expense' && !watchedCategory ? 'border-red-300' : 'border-zinc-300'}`}
-            >
-              <option value="">— Select category —</option>
-              {categories.map((c) => (
-                <option key={c._id} value={c._id}>{c.icon ? `${c.icon} ` : ''}{c.name}</option>
-              ))}
-            </select>
+            <TransactionCategoryCombobox
+              categories={categories}
+              value={watchedCategory}
+              onChange={(id) => setValue('category', id, { shouldValidate: true })}
+              onCreate={(name) => {
+                createCat({ name, icon: '📦', color: '#18181b', groupId }, {
+                  onSuccess: (res) => setValue('category', res.data._id, { shouldValidate: true }),
+                })
+              }}
+              creatingCat={creatingCat}
+              hasError={watch('type') === 'expense' && !watchedCategory}
+            />
             {watch('type') === 'expense' && !watchedCategory && (
               <p className="text-xs text-zinc-400">Category is required for expenses so budgets can track spending correctly.</p>
             )}
           </div>
         )}
 
-        {/* Paid By — personal groups only */}
-        {!isBusiness && groupMembers.length > 0 && (
-          <div className="flex flex-col gap-1.5">
+        {/* Paid By — personal groups with 2+ members */}
+        {!isBusiness && groupMembers.length > 1 && (
+          <div className="flex flex-col gap-1.5 relative">
             <label className="text-sm font-medium text-zinc-700">Paid by</label>
-            <select {...register('paidBy')} className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900">
-              <option value="">Select person</option>
-              {groupMembers.map((m) => <option key={m._id} value={m._id}>{m.name || m.email}</option>)}
-            </select>
+            <button
+              ref={paidByBtnRef}
+              type="button"
+              onClick={openPaidByDrop}
+              className={`h-11 px-3 rounded-xl border bg-white text-sm outline-none text-left flex items-center justify-between border-zinc-300 ${paidByDropOpen ? 'border-zinc-900' : ''}`}
+            >
+              <span className={paidBy ? 'text-zinc-900' : 'text-zinc-400'}>
+                {paidBy ? (() => { const m = groupMembers.find((mem) => mem._id === paidBy); return m ? (m.name || m.email) : 'Select person' })() : 'Select person'}
+              </span>
+              <ChevronDown size={14} className={`text-zinc-400 transition-transform ${paidByDropOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {paidByDropOpen && paidByRect && createPortal(
+              <div
+                id="paidby-drop-portal"
+                style={{
+                  position: 'fixed',
+                  left: paidByRect.left,
+                  width: paidByRect.width,
+                  zIndex: 9999,
+                  maxHeight: 220,
+                  ...(window.innerHeight - paidByRect.bottom < 230
+                    ? { bottom: window.innerHeight - paidByRect.top + 4 }
+                    : { top: paidByRect.bottom + 4 }),
+                }}
+                className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-y-auto"
+              >
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setValue('paidBy', ''); setPaidByDropOpen(false) }}
+                  className="w-full px-3 py-2.5 text-sm text-left text-zinc-400 hover:bg-zinc-50 border-b border-zinc-100">
+                  Select person
+                </button>
+                {groupMembers.map((m) => (
+                  <button key={m._id} type="button" onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { setValue('paidBy', m._id); setPaidByDropOpen(false) }}
+                    className={`w-full px-3 py-2.5 text-sm text-left hover:bg-zinc-50 flex items-center gap-2 border-b border-zinc-100 last:border-0 ${paidBy === m._id ? 'bg-zinc-50 font-medium' : ''}`}>
+                    <span className="truncate">{m.name || m.email}</span>
+                    {paidBy === m._id && <CheckCircle2 size={14} className="ml-auto text-emerald-500 flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>,
+              document.body
+            )}
           </div>
         )}
 
-        {/* Split Among — personal groups only */}
-        {!isBusiness && groupMembers.length > 0 && (
+        {/* Split Among — personal groups with 2+ members */}
+        {!isBusiness && groupMembers.length > 1 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium text-zinc-700">Split among</label>
@@ -991,7 +1196,7 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
 }
 
 // ── Transactions Tab ──────────────────────────────────────────────────────────
-function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen, isBusiness }) {
+function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen, isBusiness, currentUserId }) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [filters, setFilters] = useState({})
@@ -1329,7 +1534,7 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
 
       <TransactionForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }}
         editing={editing} groupId={groupId} groupMembers={isBusiness ? [] : groupMembers}
-        categories={categories} symbol={symbol} isBusiness={isBusiness} />
+        categories={categories} symbol={symbol} isBusiness={isBusiness} currentUserId={currentUserId} />
     </div>
   )
 }
@@ -1900,7 +2105,7 @@ export default function Finance() {
             <TransactionsTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} groupMembers={groupMembers} categories={categories}
               externalOpen={showAddTxn} onExternalClose={() => setShowAddTxn(false)}
-              mobileFiltersOpen={mobileFiltersOpen} isBusiness={isBusiness} />
+              mobileFiltersOpen={mobileFiltersOpen} isBusiness={isBusiness} currentUserId={me?._id || ''} />
           )}
           {tab === 'budgets' && (
             <BudgetsTab groupId={activeGroupId} symbol={symbol} budgets={budgets} isLoading={budgetsLoading}
