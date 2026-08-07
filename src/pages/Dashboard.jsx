@@ -316,15 +316,21 @@ export default function Dashboard() {
                     <p className="text-sm font-semibold text-red-400">{fmt(summary?.expense, symbol)}</p>
                   </div>
                 </div>
-                <button onClick={() => navigate('/finance')}
+                {/* <button onClick={() => navigate('/finance')}
                   className="w-full flex items-center justify-center gap-2 bg-white/15 hover:bg-white/20 active:bg-white/25 rounded-2xl py-3 text-sm font-semibold text-white transition-colors">
                   <ReceiptText size={15} /> View Transactions
+                </button> */}
+
+
+                <button onClick={() => navigate('/finance', { state: { openAddTransaction: true } })}
+                  className="w-full flex items-center justify-center gap-2 bg-white/15 hover:bg-white/20 active:bg-white/25 rounded-2xl py-3 text-sm font-semibold text-white transition-colors mt-2">
+                  <ReceiptText size={15} /> Add Transactions
                 </button>
               </div>
             )}
 
             {/* Stats grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: 'Products', value: products.length, icon: Package, color: 'bg-zinc-100', to: '/products' },
                 { label: 'Orders', value: orders.length, icon: ShoppingCart, color: 'bg-zinc-100', to: '/products' },
@@ -343,10 +349,10 @@ export default function Dashboard() {
                   <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
                 </button>
               ))}
-            </div>
+            </div> */}
 
             {/* Recent Orders + Low Stock */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-4">
                 <SectionHeader title="Recent Orders" to="/products" navigate={navigate} />
                 {recentOrders.length === 0
@@ -397,7 +403,7 @@ export default function Dashboard() {
                     </div>
                   )}
               </div>
-            </div>
+            </div> */}
 
             {/* Recent Finance transactions */}
             {recentFinance.length > 0 && (
