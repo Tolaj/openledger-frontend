@@ -1544,7 +1544,9 @@ const PERSONAL_TABS = [
 // ── Recurring Tab (personal groups) ──────────────────────────────────────────
 const REC_FREQ_LABELS = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly' }
 const REC_STATUS_VARIANT = { active: 'success', paused: 'warning', cancelled: 'danger' }
-const fmtRecDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+// nextRunDate is a date-only field stored at UTC midnight — format in UTC so it
+// shows the same calendar day regardless of the viewer's timezone.
+const fmtRecDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—'
 
 const RECURRING_COLS = [
   { key: 'name',        label: 'Name',      filterable: true  },
