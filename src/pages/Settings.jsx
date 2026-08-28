@@ -911,7 +911,8 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
       )}
 
       {rows.length === 0 ? (
-        <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email to collaborate on workspaces' : 'Add friends using their email to share groups and split expenses'} />
+        <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email to collaborate on workspaces' : 'Add friends using their email to share groups and split expenses'}
+          action={<Button size="sm" onClick={() => setShowAddForm(true)}><Plus size={16} /> {isBusiness ? 'Invite Colleague' : 'Add Friend'}</Button>} />
       ) : null}
 
       {rows.length > 0 && <DataTable
@@ -976,7 +977,8 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {rows.length === 0
-          ? <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email' : 'Send a request using their email'} />
+          ? <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email' : 'Send a request using their email'}
+              action={<Button size="sm" onClick={() => setShowAddForm(true)}><Plus size={16} /> {isBusiness ? 'Invite Colleague' : 'Add Friend'}</Button>} />
           : rows.map((r) => (
               <FriendCard
                 key={r.id}
@@ -1058,7 +1060,7 @@ function GroupMobileCard({ g, onEdit, onDelete, cantDelete }) {
 
 function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness, canEdit = true, canDelete = true }) {
   const { data: me } = useMe()
-  const { data: groups = [], isLoading } = useGroups()
+  const { data: groups = [], isLoading, isFetching } = useGroups()
   const { mutate: deleteGroup } = useDeleteGroup()
   const [groupForm, setGroupForm] = useState(false)
   const [editingGroup, setEditingGroup] = useState(null)
@@ -1086,14 +1088,15 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
     .filter((g) => (g.displayName || g.name).toLowerCase().includes(nameFilter.toLowerCase()))
     .filter((g) => groupDropSel.length === 0 || groupDropSel.includes(g.displayName || g.name))
 
-  if (isLoading) return <Spinner className="py-12" />
+  if (isLoading || (isFetching && groups.length === 0)) return <Spinner className="py-12" />
 
   return (
     <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
       <DataTableMobileFilters columns={[{ key: 'name', label: 'name', filterable: true }]} filters={{ name: nameFilter }} onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }} dropOpts={{ name: groupNameOpts }} dropSel={{ name: groupDropSel }} onDropChange={(key, vals) => { if (key === 'name') setGroupDropSel(vals) }} open={mobileFiltersOpen} />
 
       {sharedGroups.length === 0 ? (
-        <EmptyState icon={Users} title={isBusiness ? 'No workspaces yet' : 'No groups yet'} description={isBusiness ? 'Create a workspace to collaborate with your team' : 'Create a group to share expenses and manage inventory with others'} />
+        <EmptyState icon={Users} title={isBusiness ? 'No workspaces yet' : 'No groups yet'} description={isBusiness ? 'Create a workspace to collaborate with your team' : 'Create a group to share expenses and manage inventory with others'}
+          action={<Button size="sm" onClick={() => setGroupForm(true)}><Plus size={16} /> {isBusiness ? 'Create Workspace' : 'Create Group'}</Button>} />
       ) : null}
 
       {sharedGroups.length > 0 && <DataTable
@@ -1176,7 +1179,8 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {sharedGroups.length === 0 ? (
-          <EmptyState icon={Users} title={isBusiness ? 'No workspaces yet' : 'No shared groups'} description={isBusiness ? 'Create a workspace to collaborate with your team' : 'Create a group to share expenses with friends'} />
+          <EmptyState icon={Users} title={isBusiness ? 'No workspaces yet' : 'No shared groups'} description={isBusiness ? 'Create a workspace to collaborate with your team' : 'Create a group to share expenses with friends'}
+            action={<Button size="sm" onClick={() => setGroupForm(true)}><Plus size={16} /> {isBusiness ? 'Create Workspace' : 'Create Group'}</Button>} />
         ) : sharedGroups.map((g) => {
           const isCreator = g.createdBy === String(myId) || g.createdBy?._id === String(myId) || !g.createdBy
           const cantDelete = allGroups.length <= 1 || g._id === activeGroupId || !isCreator
@@ -1381,9 +1385,28 @@ function ConfigurationTab({ canEdit = true }) {
     })
   }
 
+  const DASHBOARD_WIDGETS = [
+    { key: 'statsGrid',       label: 'Stats Grid',         desc: 'Products, orders, wishlist & low stock counts' },
+    { key: 'recentOrders',    label: 'Recent Orders',      desc: 'Latest shopping orders and low stock alerts' },
+  ]
+
+  const DASH_PREFS_KEY = `openledger_dashPrefs_${activeGroupId}`
+  const [dashPrefs, setDashPrefs] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(DASH_PREFS_KEY)) || {}
+    } catch { return {} }
+  })
+
+  const toggleDashWidget = (key) => {
+    const next = { ...dashPrefs, [key]: !dashPrefs[key] }
+    setDashPrefs(next)
+    localStorage.setItem(DASH_PREFS_KEY, JSON.stringify(next))
+  }
+
   const navSections = [
     isBusiness && { id: 'business',     emoji: '🏢', label: 'Business Info' },
     isBusiness && { id: 'appearance',   emoji: '🎨', label: 'Invoice Template' },
+                  { id: 'dashboard',    emoji: '📊',  label: 'Dashboard'    },
                   { id: 'preferences',  emoji: '⚙️',  label: 'Preferences'  },
                   { id: 'email',        emoji: '✉️',  label: 'Email'         },
                   { id: 'ai',           emoji: '✨',  label: 'AI (Gemini)'   },
@@ -1630,6 +1653,32 @@ function ConfigurationTab({ canEdit = true }) {
                   )
                 })()}
               </div>
+            </div>
+          )}
+
+          {/* ── Dashboard ──────────────────────────────────── */}
+          {activeSection === 'dashboard' && (
+            <div className="p-6 flex flex-col gap-5 max-w-sm">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900">Dashboard Widgets</h2>
+                <p className="text-xs text-zinc-400 mt-0.5">Choose which sections appear on your dashboard.</p>
+              </div>
+              <div className="flex flex-col gap-3">
+                {DASHBOARD_WIDGETS.map((w) => (
+                  <div key={w.key} className="flex items-center gap-4 px-4 py-3 rounded-xl border border-zinc-200 bg-zinc-50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900">{w.label}</p>
+                      <p className="text-xs text-zinc-400 mt-0.5">{w.desc}</p>
+                    </div>
+                    <button
+                      onClick={() => toggleDashWidget(w.key)}
+                      className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ${dashPrefs[w.key] ? 'bg-zinc-900' : 'bg-zinc-300'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${dashPrefs[w.key] ? 'translate-x-6' : ''}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-zinc-400">Finance hero, recent transactions, and AI insights are always shown.</p>
             </div>
           )}
 
@@ -3003,7 +3052,8 @@ function RolesTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, ca
 
       {/* Desktop DataTable */}
       {roles.length === 0 ? (
-        <EmptyState icon={ShieldCheck} title="No roles yet" description="Create roles to define what your team members can access" />
+        <EmptyState icon={ShieldCheck} title="No roles yet" description="Create roles to define what your team members can access"
+          action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create Role</Button>} />
       ) : (
         <DataTable
           leadingCol
@@ -3077,7 +3127,8 @@ function RolesTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, ca
       {/* Mobile cards */}
       <div className="flex flex-col gap-3 md:hidden">
         {filtered.length === 0
-          ? <EmptyState icon={ShieldCheck} title="No roles yet" description="Create roles to define what your team members can access" />
+          ? <EmptyState icon={ShieldCheck} title="No roles yet" description="Create roles to define what your team members can access"
+              action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create Role</Button>} />
           : filtered.map((r) => (
               <RoleMobileCard key={r._id} role={r} onEdit={openEdit} onDelete={handleDelete} />
             ))

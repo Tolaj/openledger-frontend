@@ -122,7 +122,7 @@ function RecipientsTab({ mobileFiltersOpen, onAdd }) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {recipients.length === 0 ? (
-        <EmptyState title="No recipients" description="Add payees and payers to get started"
+        <EmptyState icon={Users} title="No recipients" description="Add payees and payers to get started"
           action={canAdd ? <Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recipient</Button> : null} />
       ) : (
       <DataTable
@@ -288,7 +288,7 @@ function OrdersTab({ mobileFiltersOpen, onAdd, recipients, products, sym }) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {orders.length === 0 ? (
-        <EmptyState title="No general orders" description="Create your first general order"
+        <EmptyState icon={FileText} title="No general orders" description="Create your first general order"
           action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create GO</Button>} />
       ) : (
         <DataTable
@@ -709,7 +709,7 @@ function InvoicesTab({ mobileFiltersOpen, onAdd, recipients, orders, products, s
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {invoices.length === 0 ? (
-        <EmptyState title="No invoices" description="Create your first general invoice"
+        <EmptyState icon={FileText} title="No invoices" description="Create your first general invoice"
           action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Create Invoice</Button>} />
       ) : (
         <DataTable
@@ -1038,7 +1038,7 @@ function RecurringTab({ mobileFiltersOpen, onAdd, recipients, sym }) {
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {recurrings.length === 0 ? (
-        <EmptyState title="No recurring entries" description="Set up subscriptions and renewals"
+        <EmptyState icon={Repeat} title="No recurring entries" description="Set up subscriptions and renewals"
           action={<Button size="sm" onClick={openCreate}><Plus size={16} /> Add Recurring</Button>} />
       ) : (
         <DataTable

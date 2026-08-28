@@ -1347,8 +1347,13 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
 
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
 
+      {!isLoading && txns.length === 0 && (
+        <EmptyState icon={CircleDollarSign} title="No transactions" description="Add your first transaction"
+          action={<Button size="sm" onClick={() => setShowForm(true)}><Plus size={16} /> Add Transaction</Button>} />
+      )}
+
       {/* Desktop DataTable */}
-      {!isLoading && (
+      {!isLoading && txns.length > 0 && (
         <DataTable
           columns={columns}
           data={filtered}
@@ -1449,10 +1454,10 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
       )}
 
       {/* Mobile cards */}
-      {!isLoading && (
+      {!isLoading && txns.length > 0 && (
         <div className="md:hidden flex flex-col gap-2">
           {filtered.length === 0 && (
-            <EmptyState icon={CircleDollarSign} title="No transactions" description="Add your first transaction" />
+            <EmptyState icon={CircleDollarSign} title="No transactions" description="No transactions match the filter" />
           )}
           {filtered.map((t) => {
             const meta = TYPE_META[t.type] || TYPE_META.expense
@@ -1568,8 +1573,13 @@ function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, on
     <div className="flex flex-col gap-3 md:flex-1 md:min-h-0 md:flex md:flex-col">
       {isLoading && <div className="flex justify-center py-8"><Spinner /></div>}
 
+      {!isLoading && budgets.length === 0 && (
+        <EmptyState icon={Wallet} title="No budgets" description="Create a budget to track your spending"
+          action={<Button size="sm" onClick={() => setShowForm(true)}><Plus size={16} /> Create Budget</Button>} />
+      )}
+
       {/* Desktop DataTable */}
-      {!isLoading && (
+      {!isLoading && budgets.length > 0 && (
         <DataTable
           columns={BUDGET_COLS}
           data={filtered}
@@ -1680,10 +1690,10 @@ function BudgetsTab({ groupId, symbol, budgets = [], isLoading, externalOpen, on
       )}
 
       {/* Mobile cards */}
-      {!isLoading && (
+      {!isLoading && budgets.length > 0 && (
         <div className="md:hidden flex flex-col gap-3">
           {filtered.length === 0 && (
-            <EmptyState icon={Wallet} title="No budgets" description="Create a budget to track your spending" />
+            <EmptyState icon={Wallet} title="No budgets" description="No budgets match the filter" />
           )}
           {filtered.map((b) => {
             const pct = b.totalAmount > 0 ? Math.min((b.amountSpent / b.totalAmount) * 100, 100) : 0

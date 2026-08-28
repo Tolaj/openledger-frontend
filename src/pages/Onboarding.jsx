@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getTemplates, applyTemplate } from '../api/templates'
 import api from '../lib/axios'
 import useAuthStore from '../store/authStore'
@@ -32,6 +32,7 @@ const ACCOUNT_TYPES = [
 
 export default function Onboarding() {
   const navigate  = useNavigate()
+  const queryClient = useQueryClient()
   const { user }  = useAuthStore()
   const { initGroup } = useGroupStore()
 
@@ -74,6 +75,7 @@ export default function Onboarding() {
     onSuccess: (res, variables) => {
       const group = res.data
       initGroup(group._id)
+      queryClient.invalidateQueries({ queryKey: ['groups'] })
       if (selectedTemplate && !variables._skip) {
         applyTemplateMutation({ templateId: selectedTemplate, groupId: group._id })
       } else {

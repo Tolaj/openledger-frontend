@@ -169,7 +169,7 @@ function SplitDropdown({ members = [], splitAmong, onChange }) {
 }
 
 // ── Products List tab ─────────────────────────────────────────────────────────
-function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness, canEdit = true, canDelete = true, canCart = true }) {
+function ProductsListTab({ products, categories, loading, onEdit, onDelete, groupMembers, groupMemberObjects, mobileFiltersOpen, onMobileFiltersOpenChange, isBusiness, canEdit = true, canDelete = true, canCart = true, onAdd }) {
   const { addItem, items } = useCartStore()
   const sym = useCurrencySymbol()
   const [qty, setQty] = useState({})
@@ -220,7 +220,8 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
 
   if (loading) return <Spinner className="py-12" />
   if (products.length === 0) return (
-    <EmptyState icon={Tag} title="No products yet" description="Add your first product" />
+    <EmptyState icon={Tag} title="No products yet" description="Add your first product"
+      action={onAdd && <Button size="sm" onClick={onAdd}><Plus size={16} /> Add Product</Button>} />
   )
 
   // ── Mobile: expandable cards ───────────────────────────────────────────────
@@ -506,7 +507,7 @@ function ProductsListTab({ products, categories, loading, onEdit, onDelete, grou
 }
 
 // ── Category tab ──────────────────────────────────────────────────────────────
-function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange, canEdit = true, canDelete = true }) {
+function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFiltersOpen, onMobileFiltersOpenChange, canEdit = true, canDelete = true, onAdd }) {
   const [filters, setFilters] = useState({ name: '' })
   const [dropSel, setDropSel] = useState({})
   const [expanded, setExpanded] = useState({})
@@ -517,7 +518,8 @@ function CategoryTab({ categories, products, loading, onEdit, onDelete, mobileFi
 
   if (loading) return <Spinner className="py-12" />
   if (categories.length === 0) return (
-    <EmptyState icon={Tag} title="No categories yet" description="Create a category to organise your products" />
+    <EmptyState icon={Tag} title="No categories yet" description="Create a category to organise your products"
+      action={onAdd && <Button size="sm" onClick={onAdd}><Plus size={16} /> Add Category</Button>} />
   )
 
   const dropOpts = { name: [...new Set(categories.map((c) => c.name).filter(Boolean))] }
@@ -2251,6 +2253,7 @@ export default function Products() {
               canEdit={canEditProduct}
               canDelete={canDelProduct}
               canCart={canCartProduct}
+              onAdd={canAddProduct ? openAddProduct : null}
             />
           )}
 
@@ -2265,6 +2268,7 @@ export default function Products() {
               onMobileFiltersOpenChange={setMobileFiltersOpen}
               canEdit={canEditCategory}
               canDelete={canDelCategory}
+              onAdd={canAddCategory ? openAddCategory : null}
             />
           )}
 

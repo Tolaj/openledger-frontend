@@ -22,6 +22,7 @@ import { useSalesOrders } from '../hooks/useSalesOrders'
 import { usePurchaseInvoices } from '../hooks/usePurchaseInvoices'
 import { useSalesInvoices } from '../hooks/useSalesInvoices'
 import { useActiveGroupType } from '../hooks/useActiveGroupType'
+import { useGroups } from '../hooks/useGroups'
 import { startOfMonth, endOfMonth, format } from 'date-fns'
 import AIInsights from '../components/features/AIInsights'
 import AppLogo from '../components/ui/AppLogo'
@@ -73,8 +74,11 @@ export default function Dashboard() {
   const firstName = me?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'there'
   const { activeGroupId } = useGroupStore()
   const symbol = useCurrencySymbol()
+  const { data: allGroupsData = [] } = useGroups()
   const groupType = useActiveGroupType()   // 'personal' | 'business'
   const isBusiness = groupType === 'business'
+  const activeGroup = allGroupsData.find((g) => g._id === activeGroupId)
+  const aiEnabled = !!activeGroup?.aiEnabled
 
   const now = new Date()
 
@@ -99,6 +103,12 @@ export default function Dashboard() {
   const recentOrders = [...orders]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 5)
+
+  // Dashboard widget preferences (stored per group in localStorage)
+  const dashPrefs = (() => {
+    try { return JSON.parse(localStorage.getItem(`openledger_dashPrefs_${activeGroupId}`)) || {} }
+    catch { return {} }
+  })()
 
   // ── Business-only hooks ────────────────────────────────────────────────────
   const { data: purchaseOrders = [] } = usePurchaseOrders()
@@ -329,81 +339,93 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Stats grid */}
-            {/* <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: 'Products', value: products.length, icon: Package, color: 'bg-zinc-100', to: '/products' },
-                { label: 'Orders', value: orders.length, icon: ShoppingCart, color: 'bg-zinc-100', to: '/products' },
-                { label: 'Wishlist', value: wishlists.length, icon: Heart, color: 'bg-pink-50', to: '/products' },
-                {
-                  label: 'Low Stock', value: lowStock.length, icon: AlertTriangle,
-                  color: lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100', to: '/products'
-                },
-              ].map(({ label, value, icon: Icon, color, to }) => (
-                <button key={label} onClick={() => navigate(to)}
-                  className="bg-white rounded-2xl p-4 text-left active:scale-[0.97] transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
-                  <div className={`w-8 h-8 rounded-xl ${color} flex items-center justify-center mb-3`}>
-                    <Icon size={16} className="text-zinc-700" />
-                  </div>
-                  <p className="text-2xl font-bold text-zinc-900">{value}</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
-                </button>
-              ))}
-            </div> */}
-
-            {/* Recent Orders + Low Stock */}
-            {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-4">
-                <SectionHeader title="Recent Orders" to="/products" navigate={navigate} />
-                {recentOrders.length === 0
-                  ? <p className="text-sm text-zinc-400">No orders yet — start a shopping trip</p>
-                  : (
-                    <div className="flex flex-col divide-y divide-zinc-100">
-                      {recentOrders.map((o) => (
-                        <div key={o._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                          <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
-                            <ShoppingCart size={14} className="text-white" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-zinc-900 truncate">{o.name}</p>
-                            <p className="text-xs text-zinc-400">{fmtDate(o.date)} · {o.paidBy?.name || o.paidBy?.email || '—'}</p>
-                          </div>
-                          <p className="text-sm font-semibold text-zinc-900 flex-shrink-0">{symbol}{o.totalPrice}</p>
-                        </div>
-                      ))}
+            {/* Stats grid — toggled via Settings > Configuration > Dashboard */}
+            {dashPrefs.statsGrid && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Products', value: products.length, icon: Package, color: 'bg-zinc-100', to: '/products' },
+                  { label: 'Orders', value: orders.length, icon: ShoppingCart, color: 'bg-zinc-100', to: '/products' },
+                  { label: 'Wishlist', value: wishlists.length, icon: Heart, color: 'bg-pink-50', to: '/products' },
+                  {
+                    label: 'Low Stock', value: lowStock.length, icon: AlertTriangle,
+                    color: lowStock.length > 0 ? 'bg-amber-50' : 'bg-zinc-100', to: '/products'
+                  },
+                ].map(({ label, value, icon: Icon, color, to }) => (
+                  <button key={label} onClick={() => navigate(to)}
+                    className="bg-white rounded-2xl p-4 text-left active:scale-[0.97] transition-transform shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+                    <div className={`w-8 h-8 rounded-xl ${color} flex items-center justify-center mb-3`}>
+                      <Icon size={16} className="text-zinc-700" />
                     </div>
-                  )}
+                    <p className="text-2xl font-bold text-zinc-900">{value}</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">{label}</p>
+                  </button>
+                ))}
               </div>
+            )}
 
-              <div className="bg-white rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
-                <SectionHeader title="Low Stock" to="/products" navigate={navigate} />
-                {lowStock.length === 0
-                  ? <p className="text-sm text-zinc-400">All items well stocked</p>
-                  : (
-                    <div className="flex flex-col divide-y divide-zinc-100">
-                      {lowStock.slice(0, 5).map((inv) => {
-                        const p = inv.product || {}
-                        const iconBg = p.category?.color ? `${p.category.color}22` : '#f4f4f5'
-                        return (
-                          <div key={inv._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
-                            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0" style={{ backgroundColor: iconBg }}>
-                              {p.category?.icon || '📦'}
+            {/* Recent Orders + Low Stock — toggled via Settings > Configuration > Dashboard */}
+            {dashPrefs.recentOrders && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="md:col-span-2 bg-white rounded-2xl border border-zinc-200 p-4">
+                  <SectionHeader title="Recent Orders" to="/products" navigate={navigate} />
+                  {recentOrders.length === 0
+                    ? <p className="text-sm text-zinc-400">No orders yet — start a shopping trip</p>
+                    : (
+                      <div className="flex flex-col divide-y divide-zinc-100">
+                        {recentOrders.map((o) => (
+                          <div key={o._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                            <div className="w-8 h-8 rounded-xl bg-zinc-900 flex items-center justify-center flex-shrink-0">
+                              <ShoppingCart size={14} className="text-white" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-zinc-900 truncate">{p.name || '—'}</p>
-                              <p className="text-xs text-zinc-400">{p.unit || '—'}</p>
+                              <p className="text-sm font-medium text-zinc-900 truncate">{o.name}</p>
+                              <p className="text-xs text-zinc-400">{fmtDate(o.date)} · {o.paidBy?.name || o.paidBy?.email || '—'}</p>
                             </div>
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
-                              }`}>
-                              {inv.quantityAvailable} left
-                            </span>
+                            <p className="text-sm font-semibold text-zinc-900 flex-shrink-0">{symbol}{o.totalPrice}</p>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.07)]">
+                  <SectionHeader title="Low Stock" to="/products" navigate={navigate} />
+                  {lowStock.length === 0
+                    ? <p className="text-sm text-zinc-400">All items well stocked</p>
+                    : (
+                      <div className="flex flex-col divide-y divide-zinc-100">
+                        {lowStock.slice(0, 5).map((inv) => {
+                          const p = inv.product || {}
+                          const iconBg = p.category?.color ? `${p.category.color}22` : '#f4f4f5'
+                          return (
+                            <div key={inv._id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0" style={{ backgroundColor: iconBg }}>
+                                {p.category?.icon || '📦'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-zinc-900 truncate">{p.name || '—'}</p>
+                                <p className="text-xs text-zinc-400">{p.unit || '—'}</p>
+                              </div>
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${inv.quantityAvailable === 0 ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600'
+                                }`}>
+                                {inv.quantityAvailable} left
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                </div>
               </div>
-            </div> */}
+            )}
+
+            {/* Empty state — no transactions at all */}
+            {recentFinance.length === 0 && !dashPrefs.statsGrid && !dashPrefs.recentOrders && !aiEnabled && (
+              <div className="text-center py-12">
+                <p className="text-sm text-zinc-500 font-medium">Start adding transactions to see your spending overview here.</p>
+                <p className="text-xs text-zinc-400 mt-1">You can enable more widgets in Settings → Configuration → Dashboard.</p>
+              </div>
+            )}
 
             {/* Recent Finance transactions */}
             {recentFinance.length > 0 && (
@@ -430,11 +452,16 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+
+            {/* Widgets hint — below transactions when no extra widgets enabled */}
+            {recentFinance.length > 0 && !dashPrefs.statsGrid && !dashPrefs.recentOrders && !aiEnabled && (
+              <p className="text-xs text-zinc-400 text-center">You can enable more widgets in Settings → Configuration → Dashboard.</p>
+            )}
           </>
         )}
 
-        {/* ── AI Insights (both personal and business) ──────────────────── */}
-        <AIInsights />
+        {/* ── AI Insights (only when AI is enabled for this group) ──────── */}
+        {aiEnabled && <AIInsights />}
 
       </div>
     </>

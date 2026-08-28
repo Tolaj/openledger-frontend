@@ -23,7 +23,8 @@ export default function GroupSwitcher({ compact = false, height = '' }) {
   const btnRef = useRef(null)
   const dropRef = useRef(null)
 
-  const { data: groups = [], isLoading } = useGroups()
+  const { data: groups = [], isLoading, isFetching } = useGroups()
+  const loading = isLoading || (isFetching && groups.length === 0)
   const { activeGroupId, setActiveGroup } = useGroupStore()
   const { hydrate } = useCartStore()
 
@@ -77,7 +78,7 @@ export default function GroupSwitcher({ compact = false, height = '' }) {
           height || (compact ? 'h-7' : 'h-9'),
         ].join(' ')}
       >
-        {isLoading ? (
+        {loading ? (
           <span className="h-3 w-20 bg-zinc-200 rounded animate-pulse" />
         ) : (
           <>
@@ -94,7 +95,12 @@ export default function GroupSwitcher({ compact = false, height = '' }) {
           style={{ position: 'fixed', top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right), minWidth: Math.max(rect.width, 200), zIndex: 9999 }}
           className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden py-1"
         >
-          {allGroups.length === 0 ? (
+          {loading ? (
+            <div className="px-4 py-3 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-zinc-100 animate-pulse flex-shrink-0" />
+              <div className="h-3 w-24 bg-zinc-100 rounded animate-pulse" />
+            </div>
+          ) : allGroups.length === 0 ? (
             <p className="px-4 py-3 text-sm text-zinc-400">No groups yet</p>
           ) : allGroups.map((g) => (
             <button
