@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
@@ -8,11 +9,13 @@ import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import AppLogo from '../components/ui/AppLogo'
+import GoogleSignInButton from '../components/ui/GoogleSignInButton'
 
 export default function Login() {
   const navigate = useNavigate()
   const { setSession, clearSession } = useAuthStore()
   const { clearGroup } = useGroupStore()
+  const [googleError, setGoogleError] = useState(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm()
 
@@ -65,6 +68,20 @@ export default function Login() {
           Sign in
         </Button>
       </form>
+
+      <div className="flex items-center gap-3 my-5">
+        <div className="flex-1 h-px bg-zinc-200" />
+        <span className="text-xs text-zinc-400 uppercase">or</span>
+        <div className="flex-1 h-px bg-zinc-200" />
+      </div>
+
+      <div className="flex justify-center">
+        <GoogleSignInButton onError={setGoogleError} />
+      </div>
+
+      {googleError && (
+        <p className="text-sm text-red-500 text-center mt-2">{googleError}</p>
+      )}
 
       <p className="text-sm text-center text-zinc-500 mt-6">
         No account?{' '}

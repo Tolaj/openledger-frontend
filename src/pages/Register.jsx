@@ -8,6 +8,7 @@ import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import AppLogo from '../components/ui/AppLogo'
+import GoogleSignInButton from '../components/ui/GoogleSignInButton'
 import { COUNTRIES, currencyForCountry, CURRENCY_META } from '../lib/countries'
 
 function FieldLabel({ children, sub }) {
@@ -68,6 +69,8 @@ export default function Register() {
   useEffect(() => {
     setValue('currency', currencyForCountry(selectedCountry))
   }, [selectedCountry])
+
+  const [googleError, setGoogleError] = useState(null)
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: registerApi,
@@ -194,6 +197,20 @@ export default function Register() {
             Create account
           </Button>
         </form>
+
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px bg-zinc-200" />
+          <span className="text-xs text-zinc-400 uppercase">or</span>
+          <div className="flex-1 h-px bg-zinc-200" />
+        </div>
+
+        <div className="flex justify-center">
+          <GoogleSignInButton onError={setGoogleError} />
+        </div>
+
+        {googleError && (
+          <p className="text-sm text-red-500 text-center mt-2">{googleError}</p>
+        )}
 
         <p className="text-sm text-center text-zinc-500 mt-6">
           Already have an account?{' '}
