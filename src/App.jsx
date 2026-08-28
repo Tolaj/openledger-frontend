@@ -62,13 +62,16 @@ function SessionLoader({ children }) {
   const { hydrate } = useCartStore()
 
   useEffect(() => {
+    const token = localStorage.getItem('openledger_token')
+    if (!token) {
+      clearSession()
+      return
+    }
     getSession()
       .then((res) => {
         const user = res.data.user
         setSession(user)
-        // initialise active group — prefers stored value, falls back to user's isolated group
         initGroup(user?.groupId)
-        // hydrate cart for the resolved active group
         const activeGroupId = localStorage.getItem('openledger_activeGroup') || user?.groupId
         if (activeGroupId) hydrate(activeGroupId)
       })

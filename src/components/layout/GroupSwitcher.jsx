@@ -23,7 +23,7 @@ export default function GroupSwitcher({ compact = false, height = '' }) {
   const btnRef = useRef(null)
   const dropRef = useRef(null)
 
-  const { data: groups = [] } = useGroups()
+  const { data: groups = [], isLoading } = useGroups()
   const { activeGroupId, setActiveGroup } = useGroupStore()
   const { hydrate } = useCartStore()
 
@@ -77,8 +77,14 @@ export default function GroupSwitcher({ compact = false, height = '' }) {
           height || (compact ? 'h-7' : 'h-9'),
         ].join(' ')}
       >
-        <GroupIcon type={active?.type} size={iconSize} className={boxSize} />
-        <span className="font-medium truncate max-w-[120px]">{active?.name ?? '—'}</span>
+        {isLoading ? (
+          <span className="h-3 w-20 bg-zinc-200 rounded animate-pulse" />
+        ) : (
+          <>
+            <GroupIcon type={active?.type} size={iconSize} className={boxSize} />
+            <span className="font-medium truncate max-w-[120px]">{active?.name ?? '—'}</span>
+          </>
+        )}
         <ChevronDown size={iconSize} className={`text-zinc-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
       </button>
 

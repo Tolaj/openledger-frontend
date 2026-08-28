@@ -1,13 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import * as api from '../api/groups'
 import { toast } from '../store/toastStore'
+import useAuthStore from '../store/authStore'
 
 const errMsg = (err) => err?.response?.data?.error || err?.message || 'Something went wrong'
 
 export function useGroups() {
+  const { token } = useAuthStore()
   return useQuery({
     queryKey: ['groups'],
     queryFn: () => api.getGroups().then((r) => r.data),
+    enabled: !!token,
   })
 }
 

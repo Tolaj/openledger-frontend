@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getTemplates, applyTemplate } from '../api/templates'
@@ -8,9 +8,10 @@ import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Spinner from '../components/ui/Spinner'
-import { Home, Briefcase, Check } from 'lucide-react'
+import { Home, Briefcase, Check, Globe } from 'lucide-react'
+import { COUNTRIES, currencyForCountry, CURRENCY_META } from '../lib/countries'
 
-const STEPS = ['type', 'name', 'template']
+const STEPS = ['region', 'type', 'name', 'template']
 
 const ACCOUNT_TYPES = [
   {
@@ -35,26 +36,45 @@ export default function Onboarding() {
   const { initGroup } = useGroupStore()
 
   const [step, setStep]               = useState(0)
+  const [country, setCountry]         = useState(user?.country || 'IN')
+  const [currency, setCurrency]       = useState(user?.currency || 'INR')
   const [accountType, setAccountType] = useState(null)         // 'personal' | 'business'
   const [spaceName, setSpaceName]     = useState('')
   const [businessName, setBusinessName] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState(null)
 
+  useEffect(() => {
+    fetch('https://api.country.is/')
+      .then(r => r.json())
+      .then(data => {
+        const code = data.country
+        if (code && COUNTRIES.find(c => c.code === code)) {
+          setCountry(code)
+          setCurrency(currencyForCountry(code))
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    setCurrency(currencyForCountry(country))
+  }, [country])
+
   // Fetch templates filtered by chosen account type
   const { data: templatesData, isLoading: templatesLoading } = useQuery({
     queryKey: ['templates', accountType],
     queryFn: () => getTemplates(user?._id, accountType).then((r) => r.data || r),
-    enabled: step === 2,
+    enabled: step === 3,
   })
   const templates = Array.isArray(templatesData) ? templatesData : []
 
   // Create primary group during onboarding, then optionally apply template
   const { mutate: setup, isPending: settingUp } = useMutation({
     mutationFn: (data) => api.post('/groups/setup', data),
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       const group = res.data
       initGroup(group._id)
-      if (selectedTemplate) {
+      if (selectedTemplate && !variables._skip) {
         applyTemplateMutation({ templateId: selectedTemplate, groupId: group._id })
       } else {
         navigate('/dashboard', { replace: true })
@@ -72,16 +92,20 @@ export default function Onboarding() {
   const canProceedName = spaceName.trim().length >= 2 &&
     (accountType === 'personal' || businessName.trim().length >= 2)
 
-  const handleFinish = () => {
+  const handleFinish = (skip) => {
     setup({
       displayName:  spaceName.trim(),
       groupType:    accountType,
       accountType,
       businessName: accountType === 'business' ? businessName.trim() : undefined,
+      country,
+      currency,
+      _skip: skip,
     })
   }
 
-  const stepLabel = ['Account type', 'Name your space', 'Starter template']
+  const stepLabel = ['Your region', 'Account type', 'Name your space', 'Starter template']
+  const currencyMeta = CURRENCY_META[currency]
 
   return (
     <div className="h-dvh flex flex-col max-w-md mx-auto overflow-hidden">
@@ -98,8 +122,64 @@ export default function Onboarding() {
           <span className="ml-auto text-xs text-zinc-400">{step + 1} / {STEPS.length}</span>
         </div>
 
-        {/* ── Step 0: Account type ─────────────────────────────────────────── */}
+        {/* ── Step 0: Region ───────────────────────────────────────────────── */}
         {step === 0 && (
+          <>
+            <div className="mb-8">
+              <h1 className="text-2xl font-bold text-zinc-900">Where are you based?</h1>
+              <p className="text-sm text-zinc-500 mt-1">This sets your default currency for transactions.</p>
+            </div>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-zinc-700">Country</label>
+                <select
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  className="h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 w-full"
+                >
+                  {COUNTRIES.map(c => (
+                    <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium text-zinc-700">Currency</label>
+                <div className="flex gap-2">
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="flex-1 h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 min-w-0"
+                  >
+                    {[...COUNTRIES]
+                      .sort((a, b) => {
+                        if (a.code === country) return -1
+                        if (b.code === country) return 1
+                        return a.currency.localeCompare(b.currency)
+                      })
+                      .filter((c, i, arr) => arr.findIndex(x => x.currency === c.currency) === i)
+                      .map(c => {
+                        const meta = CURRENCY_META[c.currency]
+                        return (
+                          <option key={c.currency} value={c.currency}>
+                            {meta?.symbol} {c.currency} — {meta?.name}
+                          </option>
+                        )
+                      })
+                    }
+                  </select>
+                  {currencyMeta && (
+                    <div className="h-11 w-11 rounded-xl border border-zinc-200 bg-zinc-50 flex items-center justify-center text-base font-semibold text-zinc-700 select-none flex-shrink-0">
+                      {currencyMeta.symbol}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ── Step 1: Account type ─────────────────────────────────────────── */}
+        {step === 1 && (
           <>
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-zinc-900">How will you use OpenLedger?</h1>
@@ -139,8 +219,8 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* ── Step 1: Name your space ──────────────────────────────────────── */}
-        {step === 1 && (
+        {/* ── Step 2: Name your space ──────────────────────────────────────── */}
+        {step === 2 && (
           <>
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-zinc-900">
@@ -171,8 +251,8 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* ── Step 2: Template ─────────────────────────────────────────────── */}
-        {step === 2 && (
+        {/* ── Step 3: Template ─────────────────────────────────────────────── */}
+        {step === 3 && (
           <>
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-zinc-900">Pick a starter</h1>
@@ -217,22 +297,35 @@ export default function Onboarding() {
       </div>
 
       {/* Pinned buttons — always visible, never scrolls away */}
-      <div className="flex-shrink-0 px-5 pt-3 pb-6 bg-white border-t border-zinc-100"
+      <div className="flex-shrink-0 px-5 pt-3 pb-6 border-t border-zinc-200"
         style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
         {step === 0 && (
-          <Button fullWidth disabled={!accountType} onClick={() => setStep(1)}>Continue</Button>
+          <Button fullWidth onClick={() => setStep(1)}>Continue</Button>
         )}
         {step === 1 && (
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep(0)} className="flex-1">Back</Button>
-            <Button disabled={!canProceedName} onClick={() => setStep(2)} className="flex-1">Continue</Button>
+            <Button fullWidth disabled={!accountType} onClick={() => {
+              if (accountType === 'personal') {
+                setSpaceName('My Ledger')
+                setStep(3)
+              } else {
+                setStep(2)
+              }
+            }} className="flex-1">Continue</Button>
           </div>
         )}
         {step === 2 && (
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => setStep(1)} className="flex-1">Back</Button>
-            <Button variant="outline" onClick={handleFinish} loading={isLoading} className="flex-1">Skip</Button>
-            <Button disabled={!selectedTemplate} loading={isLoading} onClick={handleFinish} className="flex-1">Apply & Finish</Button>
+            <Button disabled={!canProceedName} onClick={() => setStep(3)} className="flex-1">Continue</Button>
+          </div>
+        )}
+        {step === 3 && (
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setStep(accountType === 'personal' ? 1 : 2)} className="flex-1">Back</Button>
+            <Button variant="outline" onClick={() => handleFinish(true)} loading={isLoading} className="flex-1">Skip</Button>
+            <Button disabled={!selectedTemplate} loading={isLoading} onClick={() => handleFinish(false)} className="flex-1">Apply & Finish</Button>
           </div>
         )}
       </div>
