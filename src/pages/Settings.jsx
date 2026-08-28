@@ -51,45 +51,96 @@ function friendRow(f, myId) {
 }
 
 // ── MembersDropdown ────────────────────────────────────────────────────────────
-function MembersDropdown({ friends = [], value = [], onChange, isBusiness, ...props }) {
+function MembersDropdown({ friends = [], value = [], onChange, emailMembers = [], onEmailMembersChange, isBusiness }) {
   const [open, setOpen] = useState(false)
-  const btnRef = useRef(null)
-  const dropRef = useRef(null)
+  const [search, setSearch] = useState('')
   const [rect, setRect] = useState(null)
+  const wrapRef = useRef(null)
+  const inputRef = useRef(null)
+  const dropRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
-      if (!btnRef.current?.contains(e.target) && !dropRef.current?.contains(e.target)) setOpen(false)
+      if (!wrapRef.current?.contains(e.target) && !dropRef.current?.contains(e.target)) setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  const toggle = () => {
-    if (!open && btnRef.current) setRect(btnRef.current.getBoundingClientRect())
-    setOpen((o) => !o)
+  const openDrop = () => {
+    if (wrapRef.current) setRect(wrapRef.current.getBoundingClientRect())
+    setOpen(true)
   }
 
   const toggleMember = (id) => {
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id])
   }
 
-  const label = value.length === 0
-    ? 'Select members…'
-    : `${value.length} member${value.length > 1 ? 's' : ''} selected`
+  const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
+
+  const addByEmail = (email) => {
+    const trimmed = email.trim().toLowerCase()
+    if (!isValidEmail(trimmed)) return
+    const existingFriend = friends.find((f) => f.email.toLowerCase() === trimmed)
+    if (existingFriend) {
+      if (!value.includes(existingFriend.id)) onChange([...value, existingFriend.id])
+    } else {
+      if (!emailMembers.includes(trimmed)) onEmailMembersChange([...emailMembers, trimmed])
+    }
+    setSearch('')
+  }
+
+  const removeEmail = (email) => {
+    onEmailMembersChange(emailMembers.filter((e) => e !== email))
+  }
+
+  const filtered = search.trim()
+    ? friends.filter((f) =>
+        f.name.toLowerCase().includes(search.toLowerCase()) ||
+        f.email.toLowerCase().includes(search.toLowerCase())
+      )
+    : friends
+
+  const searchIsNewEmail = search.trim() && isValidEmail(search.trim()) &&
+    !friends.some((f) => f.email.toLowerCase() === search.trim().toLowerCase()) &&
+    !emailMembers.includes(search.trim().toLowerCase())
+
+  const selectedFriends = friends.filter((f) => value.includes(f.id))
+  const hasChips = selectedFriends.length > 0 || emailMembers.length > 0
 
   return (
-    <>
-      <button
-        type="button"
-        ref={btnRef}
-        onClick={toggle}
-        className="w-full h-11 flex items-center justify-between px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
-      >
-        <span className={value.length === 0 ? 'text-zinc-400' : 'text-zinc-900'}>{label}</span>
-        <ChevronDown size={16} className={`text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
+    <div ref={wrapRef}>
+      {hasChips && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {selectedFriends.map((f) => (
+            <span key={f.id} className="inline-flex items-center gap-1 pl-2 pr-1 py-1 bg-zinc-100 rounded-lg text-xs text-zinc-700">
+              {f.name || f.email}
+              <button type="button" onClick={() => toggleMember(f.id)} className="p-0.5 hover:text-red-500"><X size={11} /></button>
+            </span>
+          ))}
+          {emailMembers.map((email) => (
+            <span key={email} className="inline-flex items-center gap-1 pl-2 pr-1 py-1 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+              {email}
+              <button type="button" onClick={() => removeEmail(email)} className="p-0.5 hover:text-red-500"><X size={11} /></button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      <input
+        ref={inputRef}
+        type="text"
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); if (!open) openDrop() }}
+        onFocus={openDrop}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); addByEmail(search) }
+        }}
+        placeholder={hasChips ? 'Add more by name or email…' : 'Type name or email to add members…'}
+        className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 transition-colors"
+      />
+
       {open && rect && createPortal(
         <div
           ref={dropRef}
@@ -97,38 +148,51 @@ function MembersDropdown({ friends = [], value = [], onChange, isBusiness, ...pr
             position: 'fixed',
             left: rect.left,
             width: rect.width,
-            top: rect.bottom + 4,
             zIndex: 9999,
+            maxHeight: 220,
+            ...(window.innerHeight - rect.bottom < 230
+              ? { bottom: window.innerHeight - rect.top + 4 }
+              : { top: rect.bottom + 4 }),
           }}
-          className="bg-white border border-zinc-200 rounded-2xl shadow-xl overflow-hidden max-h-52 overflow-y-auto"
+          className="bg-white border border-zinc-200 rounded-xl shadow-xl overflow-y-auto"
         >
-          {friends.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-zinc-400">{isBusiness ? 'No accepted colleagues yet' : 'No accepted friends yet'}</p>
-          ) : (
-            friends.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => toggleMember(f.id)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-50 transition-colors"
-              >
-                <span className={[
-                  'w-4 h-4 rounded flex items-center justify-center border flex-shrink-0',
-                  value.includes(f.id) ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300',
-                ].join(' ')}>
-                  {value.includes(f.id) && <Check size={10} className="text-white" />}
-                </span>
-                <div className="text-left min-w-0">
-                  <p className="text-sm text-zinc-900 truncate">{f.name}</p>
-                  <p className="text-xs text-zinc-500 truncate">{f.email}</p>
-                </div>
-              </button>
-            ))
+          {filtered.length > 0 && filtered.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { toggleMember(f.id); setSearch('') }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50 transition-colors border-b border-zinc-100 last:border-0"
+            >
+              <span className={[
+                'w-4 h-4 rounded flex items-center justify-center border flex-shrink-0',
+                value.includes(f.id) ? 'bg-zinc-900 border-zinc-900' : 'border-zinc-300',
+              ].join(' ')}>
+                {value.includes(f.id) && <Check size={10} className="text-white" />}
+              </span>
+              <div className="text-left min-w-0">
+                <p className="text-sm text-zinc-900 truncate">{f.name}</p>
+                <p className="text-xs text-zinc-500 truncate">{f.email}</p>
+              </div>
+            </button>
+          ))}
+          {filtered.length === 0 && !searchIsNewEmail && search.trim() && (
+            <p className="px-3 py-2.5 text-sm text-zinc-400">No matches — type a full email and press Enter</p>
+          )}
+          {searchIsNewEmail && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => addByEmail(search)}
+              className="w-full px-3 py-2.5 text-sm text-left text-zinc-600 hover:bg-zinc-50 flex items-center gap-2 border-t border-zinc-200"
+            >
+              <Plus size={14} /> Add "{search.trim()}" by email
+            </button>
           )}
         </div>,
         document.body
       )}
-    </>
+    </div>
   )
 }
 
@@ -140,6 +204,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
 
   const [createdGroupId, setCreatedGroupId] = useState(null)
   const [createdMembers, setCreatedMembers] = useState([])
+  const [emailMembers, setEmailMembers] = useState([])
   const phase2 = !!createdGroupId
 
   const { activeGroupId } = useGroupStore()
@@ -205,6 +270,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
     setTransferAdminTo('')
     setCreatedGroupId(null)
     setCreatedMembers([])
+    setEmailMembers([])
   }, [editing, open])
 
   const [submitting, setSubmitting] = useState(false)
@@ -239,18 +305,32 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
       const memberIds = [...new Set([String(myId), ...data.members])]
       if (iAmAdmin && transferAdminTo && !memberIds.includes(transferAdminTo)) return
       const memberRolesArr = buildMemberRolesArray(memberIds)
-      update({ id: editing._id, data: { displayName: data.name, members: memberIds, memberRoles: memberRolesArr } }, { onSuccess: onClose })
+
+      // Send friend requests for new email members
+      for (const email of emailMembers) {
+        try { await api.post('/friends/send', { _id: myId, friendEmail: email }) } catch {}
+      }
+
+      update({ id: editing._id, data: { displayName: data.name, members: memberIds, inviteEmails: emailMembers, memberRoles: memberRolesArr } }, {
+        onSuccess: () => { qc.invalidateQueries({ queryKey: ['me'] }); onClose() },
+      })
       return
     }
 
     // ── Create mode ─────────────────────────────────────────────
     setSubmitting(true)
     try {
+      // Send friend requests for new email members
+      for (const email of emailMembers) {
+        try { await api.post('/friends/send', { _id: myId, friendEmail: email }) } catch {}
+      }
+
       const groupRes = await api.post('/groups', {
         name: data.name,
         displayName: data.name,
         type: data.type,
         members: data.members,
+        inviteEmails: emailMembers,
         userId: myId,
       })
       const group = groupRes.data
@@ -262,7 +342,6 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
         await api.post('/apply-template', { templateId: data.templateId, groupId })
       }
 
-      // Save role assignments if any were selected
       if (data.type === 'business' && Object.keys(memberRoles).length > 0) {
         const memberIds = [...new Set([String(myId), ...data.members])]
         const memberRolesArr = memberIds
@@ -274,6 +353,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
       }
 
       await qc.invalidateQueries({ queryKey: ['groups'] })
+      await qc.invalidateQueries({ queryKey: ['me'] })
       await qc.invalidateQueries({ queryKey: ['products', groupId] })
       await qc.invalidateQueries({ queryKey: ['categories', groupId] })
 
@@ -348,11 +428,13 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
                 friends={acceptedFriends}
                 value={field.value}
                 onChange={field.onChange}
+                emailMembers={emailMembers}
+                onEmailMembersChange={setEmailMembers}
                 isBusiness={groupType === 'business'}
               />
             )}
           />
-          <p className="text-xs text-zinc-400">{groupType === 'business' ? 'You are always included as the owner.' : 'You are always included as a member.'}</p>
+          <p className="text-xs text-zinc-400">{groupType === 'business' ? 'You are always included as the owner. Type an email to invite someone new.' : 'You are always included. Type an email to invite someone new.'}</p>
 
           {/* Role assignment — business groups, whenever members are selected */}
           {groupType === 'business' && (
@@ -375,8 +457,8 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
 
                     {/* Member rows */}
                     {field.value.map((memberId, i) => {
-                      const friend = acceptedFriends.find((f) => f.id === memberId)
-                      if (!friend) return null
+                      const friend = acceptedFriends.find((f) => f.id === memberId) || { id: memberId, name: '', email: memberId }
+
                       const isThisAdmin = memberId === currentAdminMemberId
                       const isMe = memberId === String(myId)
 
@@ -427,8 +509,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
                             <option value="">— Keep Admin role —</option>
                             {field.value.map((memberId) => {
                               if (memberId === String(myId)) return null
-                              const friend = acceptedFriends.find((f) => f.id === memberId)
-                              if (!friend) return null
+                              const friend = acceptedFriends.find((f) => f.id === memberId) || { id: memberId, name: '', email: memberId }
                               return <option key={memberId} value={memberId}>{friend.name || friend.email}</option>
                             })}
                           </select>
