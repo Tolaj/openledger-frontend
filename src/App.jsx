@@ -29,6 +29,8 @@ import Purchases from './pages/Purchases'
 import Sales from './pages/Sales'
 import General from './pages/General'
 import Stock from './pages/Stock'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TermsOfService from './pages/TermsOfService'
 
 /** True when running as an installed PWA (standalone window, no browser chrome) */
 const isPwa = () =>
@@ -95,6 +97,8 @@ export default function App() {
             <Route path="/features" element={<Features />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
 
             <Route
               path="/onboarding"

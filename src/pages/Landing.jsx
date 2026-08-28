@@ -695,6 +695,8 @@ export default function Landing() {
             <a href="#pricing" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Pricing</a>
             <Link to="/docs" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Docs</Link>
             <Link to="/login" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Sign in</Link>
+            <Link to="/privacy" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Privacy</Link>
+            <Link to="/terms" className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors">Terms</Link>
           </div>
         </div>
       </footer>
