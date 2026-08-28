@@ -62,7 +62,10 @@ function MembersDropdown({ friends = [], value = [], onChange, emailMembers = []
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
-      if (!wrapRef.current?.contains(e.target) && !dropRef.current?.contains(e.target)) setOpen(false)
+      if (!wrapRef.current?.contains(e.target) && !dropRef.current?.contains(e.target)) {
+        setOpen(false)
+        inputRef.current?.blur()
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -134,11 +137,12 @@ function MembersDropdown({ friends = [], value = [], onChange, emailMembers = []
         value={search}
         onChange={(e) => { setSearch(e.target.value); if (!open) openDrop() }}
         onFocus={openDrop}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
           if (e.key === 'Enter') { e.preventDefault(); addByEmail(search) }
         }}
         placeholder={hasChips ? 'Add more by name or email…' : 'Type name or email to add members…'}
-        className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm outline-none focus:border-zinc-900 transition-colors"
+        className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
       />
 
       {open && rect && createPortal(
