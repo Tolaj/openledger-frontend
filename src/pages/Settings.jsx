@@ -416,13 +416,16 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
               Create group
             </Button>
           )}
-          {editing && !isCreator && (
+          {editing && (
             <Button
               fullWidth
               variant="outline"
               loading={leaveGroup.isPending}
               onClick={() => {
-                if (confirm(`Leave "${editing.displayName || editing.name}"?`))
+                const msg = isCreator
+                  ? `Leave "${editing.displayName || editing.name}"? Admin will transfer to the next member.`
+                  : `Leave "${editing.displayName || editing.name}"?`
+                if (confirm(msg))
                   leaveGroup.mutate(editing._id, { onSuccess: onClose })
               }}
               className="!text-red-600 !border-red-200 hover:!bg-red-50"
