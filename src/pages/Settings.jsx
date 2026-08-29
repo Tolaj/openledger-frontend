@@ -20,7 +20,8 @@ import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import { useMe, useUpdateUser } from '../hooks/useUser'
 import { useSendFriendRequest, useRespondFriendRequest } from '../hooks/useFriends'
-import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup } from '../hooks/useGroups'
+import { usePendingInvites, useAcceptInvite, useDeclineInvite, usePendingForGroup } from '../hooks/useInvites'
+import { useGroups, useCreateGroup, useDeleteGroup, useUpdateGroup, useLeaveGroup } from '../hooks/useGroups'
 import { useRoles, useCreateRole, useUpdateRole, useDeleteRole } from '../hooks/useRoles'
 import { usePermission, getPermissionForGroup } from '../hooks/usePermission'
 
@@ -50,8 +51,20 @@ function friendRow(f, myId) {
   }
 }
 
+function PendingInviteBadges({ groupId }) {
+  const { data: pending = [] } = usePendingForGroup(groupId)
+  if (pending.length === 0) return null
+  return pending.map((inv) => (
+    <span key={inv._id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-xs text-amber-700 border border-amber-200">
+      <span className="w-4 h-4 rounded-full bg-amber-200 flex items-center justify-center text-[10px] font-bold text-amber-700">?</span>
+      {inv.email}
+      <span className="text-[10px] px-1 py-0.5 rounded-full bg-amber-100 text-amber-600 font-semibold">Pending</span>
+    </span>
+  ))
+}
+
 // ── MembersDropdown ────────────────────────────────────────────────────────────
-function MembersDropdown({ friends = [], value = [], onChange, emailMembers = [], onEmailMembersChange, isBusiness }) {
+function MembersDropdown({ friends = [], value = [], onChange, emailMembers = [], onEmailMembersChange, isBusiness, readOnly = false }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [rect, setRect] = useState(null)
@@ -119,19 +132,19 @@ function MembersDropdown({ friends = [], value = [], onChange, emailMembers = []
           {selectedFriends.map((f) => (
             <span key={f.id} className="inline-flex items-center gap-1 pl-2 pr-1 py-1 bg-zinc-100 rounded-lg text-xs text-zinc-700">
               {f.name || f.email}
-              <button type="button" onClick={() => toggleMember(f.id)} className="p-0.5 hover:text-red-500"><X size={11} /></button>
+              {!readOnly && <button type="button" onClick={() => toggleMember(f.id)} className="p-0.5 hover:text-red-500"><X size={11} /></button>}
             </span>
           ))}
           {emailMembers.map((email) => (
             <span key={email} className="inline-flex items-center gap-1 pl-2 pr-1 py-1 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
               {email}
-              <button type="button" onClick={() => removeEmail(email)} className="p-0.5 hover:text-red-500"><X size={11} /></button>
+              {!readOnly && <button type="button" onClick={() => removeEmail(email)} className="p-0.5 hover:text-red-500"><X size={11} /></button>}
             </span>
           ))}
         </div>
       )}
 
-      <input
+      {!readOnly && <input
         ref={inputRef}
         type="text"
         value={search}
@@ -143,7 +156,7 @@ function MembersDropdown({ friends = [], value = [], onChange, emailMembers = []
         }}
         placeholder={hasChips ? 'Add more by name or email…' : 'Type name or email to add members…'}
         className="w-full h-11 px-3 rounded-xl border border-zinc-300 bg-white text-sm text-zinc-900 placeholder:text-zinc-400 outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
-      />
+      />}
 
       {open && rect && createPortal(
         <div
@@ -205,6 +218,22 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
   const { mutate: update, isPending: updating } = useUpdateGroup()
   const { setActiveGroup } = useGroupStore()
   const qc = useQueryClient()
+
+  const isCreator = editing && (String(editing.createdBy?._id || editing.createdBy) === String(myId))
+  const leaveGroup = useLeaveGroup()
+
+  // Merge actual group members into friends list so they show in dropdown when editing
+  const allMembers = (() => {
+    if (!editing) return acceptedFriends
+    const friendIds = new Set(acceptedFriends.map(f => f.id))
+    const extras = (editing.members || [])
+      .filter(m => {
+        const id = String(m?._id || m)
+        return id !== String(myId) && !friendIds.has(id)
+      })
+      .map(m => ({ id: String(m._id || m), name: m.name || m.email || 'Unknown', email: m.email || '' }))
+    return [...acceptedFriends, ...extras]
+  })()
 
   const [createdGroupId, setCreatedGroupId] = useState(null)
   const [createdMembers, setCreatedMembers] = useState([])
@@ -374,11 +403,34 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
       open={open}
       onClose={onClose}
       locked={submitting}
-      title={editing ? 'Edit Workspace' : phase2 ? 'Setting up…' : 'New Group'}
+      title={editing ? (isCreator ? 'Edit Workspace' : 'Group Details') : phase2 ? 'Setting up…' : 'New Group'}
       footer={
-        <Button type="submit" form="group-form" fullWidth loading={submitting || updating}>
-          {editing ? 'Save changes' : 'Create group'}
-        </Button>
+        <div className="flex flex-col gap-2">
+          {isCreator && (
+            <Button type="submit" form="group-form" fullWidth loading={submitting || updating}>
+              Save changes
+            </Button>
+          )}
+          {!editing && (
+            <Button type="submit" form="group-form" fullWidth loading={submitting}>
+              Create group
+            </Button>
+          )}
+          {editing && !isCreator && (
+            <Button
+              fullWidth
+              variant="outline"
+              loading={leaveGroup.isPending}
+              onClick={() => {
+                if (confirm(`Leave "${editing.displayName || editing.name}"?`))
+                  leaveGroup.mutate(editing._id, { onSuccess: onClose })
+              }}
+              className="!text-red-600 !border-red-200 hover:!bg-red-50"
+            >
+              <LogOut size={14} /> Leave Group
+            </Button>
+          )}
+        </div>
       }
     >
       <form id="group-form" onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -419,6 +471,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
           label={groupType === 'business' ? 'Workspace name' : 'Group name'}
           placeholder={groupType === 'business' ? 'e.g. The Corner Store' : 'e.g. Family, Flatmates'}
           error={errors.name?.message}
+          readOnly={editing && !isCreator}
           {...register('name', { required: 'Name is required' })}
         />
 
@@ -429,12 +482,13 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
             control={control}
             render={({ field }) => (
               <MembersDropdown
-                friends={acceptedFriends}
+                friends={allMembers}
                 value={field.value}
-                onChange={field.onChange}
+                onChange={isCreator || !editing ? field.onChange : () => {}}
                 emailMembers={emailMembers}
-                onEmailMembersChange={setEmailMembers}
+                onEmailMembersChange={isCreator || !editing ? setEmailMembers : () => {}}
                 isBusiness={groupType === 'business'}
+                readOnly={editing && !isCreator}
               />
             )}
           />
@@ -461,7 +515,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
 
                     {/* Member rows */}
                     {field.value.map((memberId, i) => {
-                      const friend = acceptedFriends.find((f) => f.id === memberId) || { id: memberId, name: '', email: memberId }
+                      const friend = allMembers.find((f) => f.id === memberId) || { id: memberId, name: '', email: memberId }
 
                       const isThisAdmin = memberId === currentAdminMemberId
                       const isMe = memberId === String(myId)
@@ -513,7 +567,7 @@ function GroupForm({ open, onClose, editing, myId, acceptedFriends }) {
                             <option value="">— Keep Admin role —</option>
                             {field.value.map((memberId) => {
                               if (memberId === String(myId)) return null
-                              const friend = acceptedFriends.find((f) => f.id === memberId) || { id: memberId, name: '', email: memberId }
+                              const friend = allMembers.find((f) => f.id === memberId) || { id: memberId, name: '', email: memberId }
                               return <option key={memberId} value={memberId}>{friend.name || friend.email}</option>
                             })}
                           </select>
@@ -856,7 +910,6 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
   const [dropSel, setDropSel] = useState({})
   const getDrop = (key) => dropSel[key] || []
   const setDrop = (key, vals) => setDropSel((prev) => ({ ...prev, [key]: vals }))
-
   const myId = me?._id
 
   const onSend = (data) => {
@@ -951,15 +1004,15 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
             <td className="px-4 py-3">
               <div className="flex items-center gap-2">
                 {(() => {
-                  const cr = !sharesGroup(groups, r.id)
+                  const shares = sharesGroup(groups, r.id)
                   return r.status === 'PENDING' ? (
                     <>
                       {canEdit && <button onClick={() => respond({ userId: myId, friendId: r.id, action: 'ACCEPTED' })} className="p-1.5 rounded-lg bg-zinc-900 text-white active:bg-zinc-700" title="Accept"><Check size={13} /></button>}
-                      {canEdit && <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
+                      {canEdit && <RejectBtn canReject={true} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
                     </>
                   ) : r.status === 'ACCEPTED' ? (
                     <>
-                      {canEdit && <RejectBtn canReject={cr} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
+                      {canEdit && <RejectBtn canReject={!shares} onClick={() => respond({ userId: myId, friendId: r.id, action: 'REJECTED' })} />}
                       {canDelete && <button onClick={() => { if (confirm(isBusiness ? 'Remove colleague?' : 'Remove friend?')) respond({ userId: myId, friendId: r.id, action: 'DELETE' }) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100" title="Remove"><Trash2 size={14} /></button>}
                     </>
                   ) : (
@@ -989,7 +1042,7 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
                 r={r}
                 myId={myId}
                 respond={respond}
-                canReject={!sharesGroup(groups, r.id)}
+                canReject={r.status === 'PENDING' ? true : !sharesGroup(groups, r.id)}
                 isBusiness={isBusiness}
                 canEdit={canEdit}
                 canDelete={canDelete}
@@ -1053,6 +1106,7 @@ function GroupMobileCard({ g, onEdit, onDelete, cantDelete }) {
                 {g.members.map((m) => (
                   <span key={m._id || m} className="text-sm text-zinc-900">{m.name || m.email || String(m)}</span>
                 ))}
+                <PendingInviteBadges groupId={g._id} />
               </div>
             </div>
           )}
@@ -1066,6 +1120,9 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
   const { data: me } = useMe()
   const { data: groups = [], isLoading, isFetching } = useGroups()
   const { mutate: deleteGroup } = useDeleteGroup()
+  const { data: pendingInvites = [] } = usePendingInvites()
+  const acceptInvite = useAcceptInvite()
+  const declineInvite = useDeclineInvite()
   const [groupForm, setGroupForm] = useState(false)
   const [editingGroup, setEditingGroup] = useState(null)
 
@@ -1097,6 +1154,39 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
   return (
     <div className="flex flex-col gap-4 md:flex-1 md:min-h-0">
       <DataTableMobileFilters columns={[{ key: 'name', label: 'name', filterable: true }]} filters={{ name: nameFilter }} onFilterChange={(key, val) => { if (key === 'name') setNameFilter(val) }} dropOpts={{ name: groupNameOpts }} dropSel={{ name: groupDropSel }} onDropChange={(key, vals) => { if (key === 'name') setGroupDropSel(vals) }} open={mobileFiltersOpen} />
+
+      {pendingInvites.length > 0 && (
+        <div className="bg-white rounded-2xl border border-amber-200 p-4 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-zinc-900">Pending Group Invites</p>
+          {pendingInvites.map(inv => (
+            <div key={inv._id} className="flex items-center gap-3 py-2 border-b border-zinc-100 last:border-b-0">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
+                <Users size={14} className="text-amber-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-zinc-900 truncate">{inv.groupId?.displayName || inv.groupId?.name || inv.groupName}</p>
+                <p className="text-xs text-zinc-500 truncate">Invited by {inv.invitedBy?.name || 'someone'}</p>
+              </div>
+              <div className="flex gap-1.5 shrink-0">
+                <button
+                  onClick={() => acceptInvite.mutate(inv._id)}
+                  disabled={acceptInvite.isPending}
+                  className="h-7 px-2.5 rounded-lg bg-zinc-900 text-white text-xs font-medium hover:bg-zinc-800 transition-colors flex items-center gap-1"
+                >
+                  <Check size={12} /> Accept
+                </button>
+                <button
+                  onClick={() => declineInvite.mutate(inv._id)}
+                  disabled={declineInvite.isPending}
+                  className="h-7 px-2.5 rounded-lg border border-zinc-200 text-zinc-600 text-xs font-medium hover:bg-zinc-50 transition-colors flex items-center gap-1"
+                >
+                  <X size={12} /> Decline
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {sharedGroups.length === 0 ? (
         <EmptyState icon={Users} title={isBusiness ? 'No workspaces yet' : 'No groups yet'} description={isBusiness ? 'Create a workspace to collaborate with your team' : 'Create a group to share expenses and manage inventory with others'}
@@ -1151,13 +1241,12 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
                 {(g.members?.length || 0) > 4 && (
                   <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-xs text-zinc-500">+{g.members.length - 4} more</span>
                 )}
+                <PendingInviteBadges groupId={g._id} />
               </div>
             </td>
             <td className="px-4 py-3">
               <div className="flex items-center gap-2">
-                {getPermissionForGroup(g, myId, 'settings', 'workspace', 'edit') && (
-                  <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title="Edit"><Pencil size={14} /></button>
-                )}
+                <button onClick={() => openEdit(g)} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100" title={getPermissionForGroup(g, myId, 'settings', 'workspace', 'edit') ? 'Edit' : 'View'}><Pencil size={14} /></button>
                 {getPermissionForGroup(g, myId, 'settings', 'workspace', 'delete') && (() => {
                   const isCreator = g.createdBy === String(myId) || g.createdBy?._id === String(myId) || !g.createdBy
                   const cantDelete = allGroups.length <= 1 || g._id === activeGroupId || !isCreator
@@ -1194,7 +1283,7 @@ function GroupsTab({ openAddRef, mobileFiltersOpen, onMobileFiltersOpenChange, i
             <GroupMobileCard
               key={g._id}
               g={g}
-              onEdit={rowCanEdit ? openEdit : null}
+              onEdit={openEdit}
               onDelete={rowCanDelete ? (g) => { if (!cantDelete && confirm(`Delete "${g.displayName || g.name}"?`)) deleteGroup(g._id) } : null}
               cantDelete={cantDelete}
             />
@@ -3177,7 +3266,7 @@ export default function Settings() {
   const TABS = [
     { key: 'profile', label: 'My Profile', mobileLabel: 'Profile', icon: User },
     ...(!isBusiness || canViewTeam
-      ? [{ key: 'friends', label: isBusiness ? 'Team' : 'Friends', mobileLabel: isBusiness ? 'Team' : 'Friends' }]
+      ? [{ key: 'friends', label: isBusiness ? 'Team' : 'People', mobileLabel: isBusiness ? 'Team' : 'People' }]
       : []),
     ...(isBusiness && canViewRoles
       ? [{ key: 'roles', label: 'Roles', mobileLabel: 'Roles' }]

@@ -20,6 +20,7 @@ import Docs from './pages/Docs'
 import Features from './pages/Features'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import AuthCallback from './pages/AuthCallback'
 import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Products from './pages/Products'
@@ -100,6 +101,7 @@ export default function App() {
             <Route path="/features" element={<Features />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
 

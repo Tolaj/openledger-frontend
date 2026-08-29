@@ -48,3 +48,12 @@ export function useDeleteGroup() {
     onError: (err) => toast.error(errMsg(err)),
   })
 }
+
+export function useLeaveGroup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.leaveGroup,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['groups'] }); qc.invalidateQueries({ queryKey: ['me'] }); toast.success('You left the group') },
+    onError: (err) => toast.error(errMsg(err)),
+  })
+}

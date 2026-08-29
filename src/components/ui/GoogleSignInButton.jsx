@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -8,10 +9,12 @@ import useGroupStore from '../../store/groupStore'
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
-function GoogleButton({ onError }) {
+function GoogleButton({ onError, loginHint, autoTrigger }) {
   const navigate = useNavigate()
   const { setSession, clearSession } = useAuthStore()
   const { clearGroup } = useGroupStore()
+  const triggered = useRef(false)
+  const [autoTriggered, setAutoTriggered] = useState(false)
 
   const { mutate, isPending } = useMutation({
     mutationFn: (credential) => googleLogin(credential),
@@ -28,11 +31,33 @@ function GoogleButton({ onError }) {
     },
   })
 
+  const handleCredential = (response) => {
+    if (response.credential) mutate(response.credential)
+  }
+
+  useEffect(() => {
+    if (!autoTrigger || !loginHint || triggered.current || !clientId) return
+    if (!window.google?.accounts?.id) return
+    triggered.current = true
+    setAutoTriggered(true)
+
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleCredential,
+      login_hint: loginHint,
+      auto_select: true,
+    })
+    window.google.accounts.id.prompt((notification) => {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        setAutoTriggered(false)
+      }
+    })
+  }, [autoTrigger, loginHint])
+
   return (
     <div className="relative w-full h-11">
-      {/* Our styled button (visual only, no pointer events) */}
       <div className="absolute inset-0 flex items-center justify-center gap-3 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-900 pointer-events-none">
-        {isPending ? (
+        {isPending || autoTriggered ? (
           <span className="h-4 w-4 border-2 border-zinc-900 border-t-transparent rounded-full animate-spin" />
         ) : (
           <>
@@ -46,7 +71,6 @@ function GoogleButton({ onError }) {
           </>
         )}
       </div>
-      {/* Google's real button stretched to fill, invisible on top */}
       <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0">
         <GoogleLogin
           onSuccess={(res) => mutate(res.credential)}
@@ -60,7 +84,7 @@ function GoogleButton({ onError }) {
   )
 }
 
-export default function GoogleSignInButton({ onError }) {
+export default function GoogleSignInButton({ onError, loginHint, autoTrigger }) {
   if (!clientId) return null
-  return <GoogleButton onError={onError} />
+  return <GoogleButton onError={onError} loginHint={loginHint} autoTrigger={autoTrigger} />
 }

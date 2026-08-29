@@ -1,8 +1,9 @@
 import { useEffect, useState, forwardRef } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { register as registerApi } from '../api/auth'
+import { getInviteByToken } from '../api/invites'
 import useAuthStore from '../store/authStore'
 import useGroupStore from '../store/groupStore'
 import Button from '../components/ui/Button'
@@ -41,6 +42,9 @@ export default function Register() {
   const navigate = useNavigate()
   const { setSession, clearSession } = useAuthStore()
   const { clearGroup } = useGroupStore()
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get('invite')
+  const [inviteInfo, setInviteInfo] = useState(null)
   const [detectedCountry, setDetectedCountry] = useState(false)
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm({
@@ -49,6 +53,17 @@ export default function Register() {
 
   const selectedCountry = watch('country')
   const selectedCurrency = watch('currency')
+
+  useEffect(() => {
+    if (inviteToken) {
+      getInviteByToken(inviteToken)
+        .then(res => {
+          setInviteInfo(res.data)
+          if (res.data.email) setValue('email', res.data.email)
+        })
+        .catch(() => {})
+    }
+  }, [inviteToken])
 
   // Auto-detect country by IP — using api.country.is (CORS-friendly, free, no key)
   useEffect(() => {
@@ -93,6 +108,16 @@ export default function Register() {
           </Link>
           <h1 className="text-2xl font-bold text-zinc-900">Create account</h1>
           <p className="text-sm text-zinc-500 mt-1">Start managing your household</p>
+          {inviteToken && (
+            <div className="mt-3 px-3 py-2.5 rounded-xl bg-zinc-100 border border-zinc-200">
+              <p className="text-sm text-zinc-700 font-medium">
+                {inviteInfo
+                  ? <>{inviteInfo.inviterName} invited you to join <strong>{inviteInfo.groupName}</strong></>
+                  : 'You\'ve been invited to join a group on OpenLedger'}
+              </p>
+              <p className="text-xs text-zinc-500 mt-0.5">Create an account to accept the invite and get started.</p>
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit((d) => mutate(d))} className="flex flex-col gap-5">
@@ -205,7 +230,11 @@ export default function Register() {
         </div>
 
         <div className="flex justify-center">
-          <GoogleSignInButton onError={setGoogleError} />
+          <GoogleSignInButton
+            onError={setGoogleError}
+            loginHint={inviteInfo?.email}
+            autoTrigger={!!inviteToken}
+          />
         </div>
 
         {googleError && (

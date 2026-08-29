@@ -3,7 +3,6 @@ import BottomNav from './BottomNav'
 import Sidebar from './Sidebar'
 import CartPanel from '../features/CartPanel'
 import WishlistCartPanel from '../features/WishlistCartPanel'
-
 export default function AppShell() {
   return (
     <div className="flex-1 flex flex-col bg-[#f5f5f5] overflow-hidden">
