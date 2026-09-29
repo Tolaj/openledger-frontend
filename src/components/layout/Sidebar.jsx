@@ -10,14 +10,14 @@ import { useGroups } from '../../hooks/useGroups'
 import { usePagePermission } from '../../hooks/usePermission'
 
 const PERSONAL_NAV = [
-  { to: '/',         icon: Home,       label: 'Dashboard', exact: true },
+  { to: '/dashboard', icon: Home,       label: 'Dashboard', exact: true },
   { to: '/finance',  icon: Banknote, label: 'Transactions'                },
   { to: '/products', icon: Tag,        label: 'Products'               },
   { to: '/stock',    icon: Boxes,      label: 'Stock'                  },
 ]
 
 const BUSINESS_NAV = [
-  { to: '/',          icon: Home,         label: 'Dashboard', exact: true,  pageKey: 'dashboard'      },
+  { to: '/dashboard', icon: Home,         label: 'Dashboard', exact: true,  pageKey: 'dashboard'      },
   { divider: true, label: 'Catalog' },
   { to: '/products',  icon: Tag,          label: 'Products',               pageKey: 'products'        },
   { to: '/stock',     icon: Boxes,        label: 'Stock',                  pageKey: 'stock'           },
