@@ -1197,16 +1197,14 @@ function OverviewTab({ groupId, period, setPeriod, custom, setCustom, symbol, bu
 
 // ── Transactions Tab ──────────────────────────────────────────────────────────
 function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol, groupMembers, categories, externalOpen, onExternalClose, mobileFiltersOpen, isBusiness, currentUserId }) {
-  const [showForm, setShowForm] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [filters, setFilters] = useState({})
   const [dropSel, setDropSel] = useState({})
   const [expanded, setExpanded] = useState(null)
   const { mutate: del } = useDeleteFinance()
 
-  useEffect(() => {
-    if (externalOpen) { setShowForm(true); onExternalClose?.() }
-  }, [externalOpen])
+  const showForm = internalOpen || externalOpen
 
   const dates = getPeriodDates(period, custom)
   const { data: txns = [], isLoading } = useFinance({ groupId, ...dates })
@@ -1349,7 +1347,7 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
 
       {!isLoading && txns.length === 0 && (
         <EmptyState icon={CircleDollarSign} title="No transactions" description="Add your first transaction"
-          action={<Button size="sm" onClick={() => setShowForm(true)}><Plus size={16} /> Add Transaction</Button>} />
+          action={<Button size="sm" onClick={() => setInternalOpen(true)}><Plus size={16} /> Add Transaction</Button>} />
       )}
 
       {/* Desktop DataTable */}
@@ -1407,7 +1405,7 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
                   <td className={`px-3 py-3 text-sm font-semibold text-right border-r border-zinc-100 ${meta.color}`}>{fmt(t.amount, symbol)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
+                      <button onClick={() => { setEditing(t); setInternalOpen(true) }} className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 active:bg-zinc-100"><Pencil size={14} /></button>
                       <button onClick={() => del(t._id)} className="p-1.5 rounded-lg text-zinc-400 hover:text-red-500 active:bg-zinc-100"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -1527,7 +1525,7 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
                   </>
                 )}
                 <div className="flex justify-end gap-1 mt-2 pt-2 border-t border-zinc-50">
-                  <button onClick={() => { setEditing(t); setShowForm(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
+                  <button onClick={() => { setEditing(t); setInternalOpen(true) }} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Pencil size={15} /></button>
                   <button onClick={() => del(t._id)} className="p-1 rounded-xl text-zinc-400 active:bg-zinc-100"><Trash2 size={15} /></button>
                 </div>
               </div>
@@ -1536,7 +1534,7 @@ function TransactionsTab({ groupId, period, setPeriod, custom, setCustom, symbol
         </div>
       )}
 
-      <TransactionForm open={showForm} onClose={() => { setShowForm(false); setEditing(null) }}
+      <TransactionForm open={showForm} onClose={() => { setInternalOpen(false); setEditing(null); onExternalClose?.() }}
         editing={editing} groupId={groupId} groupMembers={isBusiness ? [] : groupMembers}
         categories={categories} symbol={symbol} isBusiness={isBusiness} currentUserId={currentUserId} />
     </div>
@@ -2027,18 +2025,9 @@ export default function Finance() {
 
   const location = useLocation()
   const navigate = useNavigate()
-  const openFromNav = useRef(!!location.state?.openAddTransaction)
   const [showAddTxn, setShowAddTxn] = useState(false)
   const [showAddBudget, setShowAddBudget] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
-
-  useEffect(() => {
-    if (openFromNav.current) {
-      openFromNav.current = false
-      setShowAddTxn(true)
-      navigate(location.pathname, { replace: true, state: {} })
-    }
-  }, [])
 
   const handleTabChange = (key) => { setTab(key); setMobileFiltersOpen(false) }
 
@@ -2123,7 +2112,8 @@ export default function Finance() {
           {tab === 'transactions' && (
             <TransactionsTab groupId={activeGroupId} period={period} setPeriod={setPeriod}
               custom={custom} setCustom={setCustom} symbol={symbol} groupMembers={groupMembers} categories={categories}
-              externalOpen={showAddTxn} onExternalClose={() => setShowAddTxn(false)}
+              externalOpen={showAddTxn || !!location.state?.openAddTransaction}
+              onExternalClose={() => { setShowAddTxn(false); navigate(location.pathname, { replace: true, state: {} }) }}
               mobileFiltersOpen={mobileFiltersOpen} isBusiness={isBusiness} currentUserId={me?._id || ''} />
           )}
           {tab === 'budgets' && (

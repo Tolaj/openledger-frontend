@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
 export default function BottomSheet({ open, onClose, title, children, footer, locked = false }) {
@@ -14,7 +13,7 @@ export default function BottomSheet({ open, onClose, title, children, footer, lo
 
   if (!open) return null
 
-  return createPortal(
+  return (
     <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center md:p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
@@ -56,7 +55,6 @@ export default function BottomSheet({ open, onClose, title, children, footer, lo
           </div>
         )}
       </div>
-    </div>,
-    document.body
+    </div>
   )
 }
