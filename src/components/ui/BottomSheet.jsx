@@ -18,7 +18,7 @@ export default function BottomSheet({ open, onClose, title, children, footer, lo
     <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center md:p-4">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={locked ? undefined : onClose}
+        onPointerDown={locked ? undefined : onClose}
       />
 
       <div className="relative bg-white w-full rounded-t-3xl md:rounded-2xl max-h-[92vh] flex flex-col shadow-2xl md:max-w-md animate-[slideUp_0.25s_ease-out] overflow-hidden">

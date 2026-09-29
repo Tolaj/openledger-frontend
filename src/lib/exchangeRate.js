@@ -11,7 +11,8 @@
 export async function getRate(fromCurrency, toCurrency) {
   if (fromCurrency === toCurrency) return 1
 
-  const res = await fetch(`/api/exchange-rate?from=${fromCurrency}&to=${toCurrency}`)
+  const baseUrl = import.meta.env.VITE_API_URL || '/api'
+  const res = await fetch(`${baseUrl}/exchange-rate?from=${fromCurrency}&to=${toCurrency}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.error || `Failed to fetch exchange rate (${res.status})`)
