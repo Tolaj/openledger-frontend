@@ -2027,16 +2027,18 @@ export default function Finance() {
 
   const location = useLocation()
   const navigate = useNavigate()
+  const openFromNav = useRef(!!location.state?.openAddTransaction)
   const [showAddTxn, setShowAddTxn] = useState(false)
   const [showAddBudget, setShowAddBudget] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   useEffect(() => {
-    if (location.state?.openAddTransaction) {
+    if (openFromNav.current) {
+      openFromNav.current = false
       setShowAddTxn(true)
       navigate(location.pathname, { replace: true, state: {} })
     }
-  }, [location.state])
+  }, [])
 
   const handleTabChange = (key) => { setTab(key); setMobileFiltersOpen(false) }
 
