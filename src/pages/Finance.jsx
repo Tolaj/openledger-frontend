@@ -33,7 +33,7 @@ import { useCurrencySymbol } from '../hooks/useCurrency'
 import { useIsBusiness } from '../hooks/useActiveGroupType'
 import { usePermission } from '../hooks/usePermission'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, differenceInDays, parseISO } from 'date-fns'
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PERSONAL_TABS = [
@@ -2025,10 +2025,18 @@ export default function Finance() {
   const [period, setPeriod] = useState('month')
   const [custom, setCustom] = useState({ start: '', end: '' })
 
-  // console.log(useLocation().state?.openAddTransaction);ˀ
-  const [showAddTxn, setShowAddTxn] = useState(useLocation().state?.openAddTransaction || false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [showAddTxn, setShowAddTxn] = useState(false)
   const [showAddBudget, setShowAddBudget] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.openAddTransaction) {
+      setShowAddTxn(true)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state])
 
   const handleTabChange = (key) => { setTab(key); setMobileFiltersOpen(false) }
 
