@@ -971,8 +971,10 @@ function FriendsTab({ showAddForm, setShowAddForm, mobileFiltersOpen, onMobileFi
       )}
 
       {rows.length === 0 ? (
-        <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email to collaborate on workspaces' : 'Add friends using their email to share groups and split expenses'}
-          action={<Button size="sm" onClick={() => setShowAddForm(true)}><Plus size={16} /> {isBusiness ? 'Invite Colleague' : 'Add Friend'}</Button>} />
+        <div className="hidden md:block">
+          <EmptyState icon={Users} title={isBusiness ? 'No colleagues yet' : 'No friends yet'} description={isBusiness ? 'Invite colleagues by email to collaborate on workspaces' : 'Add friends using their email to share groups and split expenses'}
+            action={<Button size="sm" onClick={() => setShowAddForm(true)}><Plus size={16} /> {isBusiness ? 'Invite Colleague' : 'Add Friend'}</Button>} />
+        </div>
       ) : null}
 
       {rows.length > 0 && <DataTable
